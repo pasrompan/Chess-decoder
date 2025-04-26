@@ -2,27 +2,44 @@ package main
 
 import (
 	"fmt"
+	_ "image/jpeg"
+	_ "image/png"
 	"log"
 	"os"
 	"strings"
 )
 
 func main() {
-	// Check if the input file path is provided
-	if len(os.Args) < 2 {
-		log.Fatal("Usage: go run main.go <path_to_input_file>")
-	}
 
-	inputFilePath := os.Args[1]
+	imagePath := "data/IMG_4585.png"
+	apiKey := "dummy_api_key" // os.Args[2]
 
-	// Read the content of the input file
-	inputContent, err := os.ReadFile(inputFilePath)
+	// Load the image
+	img, err := LoadImage(imagePath)
 	if err != nil {
-		log.Fatalf("Failed to read the input file: %s", err)
+		log.Fatalf("Failed to load image: %s", err)
 	}
+
+	// Resize the image if necessary
+	img = ResizeImage(img, 1024, 1024)
+
+	// Convert the image to bytes
+	imageBytes, err := ImageToBytes(img)
+	if err != nil {
+		log.Fatalf("Failed to convert image to bytes: %s", err)
+	}
+
+	// Extract text from the image using OpenAI
+	text, err := ExtractTextFromImage(apiKey, imageBytes)
+	if err != nil {
+		log.Fatalf("Failed to extract text from image: %s", err)
+	}
+
+	fmt.Println("Extracted Text:")
+	fmt.Println(text)
 
 	// Convert the Greek chess moves to English
-	englishMoves, err := ConvertGreekMovesToEnglish(strings.Split(string(inputContent), "\n"))
+	englishMoves, err := ConvertGreekMovesToEnglish(strings.Split(text, "\n"))
 	if err != nil {
 		log.Fatalf("Failed to convert Greek moves to English: %s", err)
 	}
