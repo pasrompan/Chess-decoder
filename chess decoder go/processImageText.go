@@ -61,7 +61,7 @@ func ExtractTextFromImage(apiKey string, imageBytes []byte, language string) (st
 	}
 
 	// Build the prompt with the valid characters
-	promptText := "You are an OCR engine. Transcribe all visible handwriting or printed text from this image exactly as it appears, but only include characters that are valid in a Greek-written chess game. The valid characters are: "
+	promptText := "You are an OCR engine. Transcribe all visible handwriting or printed text from this image exactly as it appears, but only include characters that are valid in a chess game. The valid characters are: "
 
 	// Add each valid character to the prompt
 	for i, char := range validChars {
@@ -104,7 +104,22 @@ func ExtractTextFromImage(apiKey string, imageBytes []byte, language string) (st
 	}
 
 	if len(resp.Choices) > 0 {
-		return resp.Choices[0].Message.Content, nil
+		content := resp.Choices[0].Message.Content
+
+		// Extract text between ``` and the end of content if no end marker
+		startMarker := "```"
+
+		startIndex := -1
+
+		if startIdx := bytes.Index([]byte(content), []byte(startMarker)); startIdx != -1 {
+			startIndex = startIdx + len(startMarker)
+
+			// No end marker, return from start marker to end
+			return content[startIndex:], nil
+		}
+
+		// Fall back to original content if no markers found
+		return content, nil
 	}
 
 	return "", nil

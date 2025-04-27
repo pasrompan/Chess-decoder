@@ -6,6 +6,7 @@ import (
 	_ "image/png"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/joho/godotenv"
@@ -24,7 +25,7 @@ func main() {
 		log.Fatal("OPENAI_API_KEY environment variable is not set")
 	}
 
-	imagePath := "data/IMG_8273.jpg"
+	imagePath := "data/IMG_8283.jpg"
 
 	// Load the image
 	img, err := LoadImage(imagePath)
@@ -51,7 +52,12 @@ func main() {
 	fmt.Println("Extracted Text:")
 	fmt.Println(text)
 
-	englishMoves := []string{}
+	// Save extracted text to debug file
+	if err := SaveExtractedText(text, imagePath); err != nil {
+		log.Printf("Warning: Failed to save extracted text: %s", err)
+	}
+
+	var englishMoves []string
 	// Convert the Greek chess moves to English
 	if language == "Greek" {
 		fmt.Println("Converting Greek chess moves to English...")
@@ -189,19 +195,24 @@ func WritePGNFile(moves []string, outputPath string) error {
 	return nil
 }
 
-// Helper function to format moves into a more PGN friendly format.
-// This might include adding '=' for pawn promotions, '#' for checkmates, etc.
-// Currently, it's a placeholder that simply returns the input moves.
-func formatMovesForPGN(moves []string) []string {
-	formattedMoves := make([]string, len(moves))
-	for i, move := range moves {
-		// Example transformation: If a move ends with "Q", it might be a pawn promotion. This is oversimplified.
-		// Real implementation would need to parse the move and apply the correct transformation.
-		if strings.HasSuffix(move, "Q") {
-			formattedMoves[i] = move + "="
-		} else {
-			formattedMoves[i] = move
-		}
+func SaveExtractedText(text string, imagePath string) error {
+	// Create data/debug_files directory if it doesn't exist
+	debugDir := "data/debug_files"
+	if err := os.MkdirAll(debugDir, 0755); err != nil {
+		return fmt.Errorf("failed to create debug directory: %w", err)
 	}
-	return formattedMoves
+
+	// Get the base filename from the image path
+	baseFilename := strings.TrimSuffix(filepath.Base(imagePath), filepath.Ext(imagePath))
+
+	// Create the debug file path
+	debugFilePath := filepath.Join(debugDir, baseFilename+"_extracted.txt")
+
+	// Write the text to the file
+	if err := os.WriteFile(debugFilePath, []byte(text), 0644); err != nil {
+		return fmt.Errorf("failed to write extracted text to file: %w", err)
+	}
+
+	fmt.Printf("Extracted text saved to: %s\n", debugFilePath)
+	return nil
 }
