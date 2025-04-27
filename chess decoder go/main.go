@@ -7,12 +7,24 @@ import (
 	"log"
 	"os"
 	"strings"
+
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	// Load .env file
+	err := godotenv.Load()
+	if err != nil {
+		log.Println("Warning: Error loading .env file:", err)
+	}
+
+	// Get API key from environment variable
+	apiKey := os.Getenv("OPENAI_API_KEY")
+	if apiKey == "" {
+		log.Fatal("OPENAI_API_KEY environment variable is not set")
+	}
 
 	imagePath := "data/IMG_4585.png"
-	apiKey := "dummy_api_key" // os.Args[2]
 
 	// Load the image
 	img, err := LoadImage(imagePath)

@@ -2,13 +2,17 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"encoding/base64"
 	"image"
 	_ "image/jpeg"
 	"image/png"
 	_ "image/png"
 	"os"
+	"time"
 
 	"github.com/nfnt/resize"
+	"github.com/sashabaranov/go-openai"
 )
 
 // LoadImage loads an image file and returns its decoded image.Image object.
@@ -42,21 +46,52 @@ func ImageToBytes(img image.Image) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// ExtractTextFromImage uses OpenAI's API to extract text from an image.
+// ExtractTextFromImage uses OpenAI's vision model to extract text from an image.
 func ExtractTextFromImage(apiKey string, imageBytes []byte) (string, error) {
-	//client := openai.NewClient(apiKey)
+	// Create an OpenAI client with the provided API key
+	client := openai.NewClient(apiKey)
 
-	/*req := openai.ImageRequest{
-		Prompt: "Extract text from this image",
-		Size:   "1024x1024",
-		// Note: The go-openai library does not support direct image uploads in this way.
-		// You may need to use a different API endpoint or library for image-to-text functionality.
-	}*/
-	// Placeholder: Replace this with the correct API call for image-to-text functionality.
-	//resp, err := client.CreateImage(req)
-	/*if err != nil {
+	// Convert image bytes to base64
+	base64Image := base64.StdEncoding.EncodeToString(imageBytes)
+
+	// Create a context with a timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Create the chat completion request with the image
+	resp, err := client.CreateChatCompletion(
+		ctx,
+		openai.ChatCompletionRequest{
+			Model: openai.GPT4VisionPreview,
+			Messages: []openai.ChatCompletionMessage{
+				{
+					Role: openai.ChatMessageRoleUser,
+					MultiContent: []openai.ChatMessagePart{
+						{
+							Type: openai.ChatMessagePartTypeText,
+							Text: "Extract and return only the text visible in this image. If it's a chess notation or move, just return the exact notation without any explanation.",
+						},
+						{
+							Type: openai.ChatMessagePartTypeImageURL,
+							ImageURL: &openai.ChatMessageImageURL{
+								URL: "data:image/png;base64," + base64Image,
+							},
+						},
+					},
+				},
+			},
+			MaxTokens: 300,
+		},
+	)
+
+	if err != nil {
 		return "", err
-	}*/
+	}
 
-	return "e4", nil
+	// Extract the text from the response
+	if len(resp.Choices) > 0 {
+		return resp.Choices[0].Message.Content, nil
+	}
+
+	return "", nil
 }
