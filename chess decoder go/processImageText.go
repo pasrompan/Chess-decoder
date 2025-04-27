@@ -46,30 +46,44 @@ func ImageToBytes(img image.Image) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// ExtractTextFromImage uses OpenAI's vision model to extract text from an image.
-func ExtractTextFromImage(apiKey string, imageBytes []byte) (string, error) {
-	// Create an OpenAI client with the provided API key
+func ExtractTextFromImage(apiKey string, imageBytes []byte, language string) (string, error) {
 	client := openai.NewClient(apiKey)
 
-	// Convert image bytes to base64
 	base64Image := base64.StdEncoding.EncodeToString(imageBytes)
 
-	// Create a context with a timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Create the chat completion request with the image
+	// Get the valid Greek chess characters
+	validChars := GetChessNotationCharacters(language)
+	if len(validChars) == 0 {
+		return "", nil // No valid characters found
+	}
+
+	// Build the prompt with the valid characters
+	promptText := "You are an OCR engine. Transcribe all visible handwriting or printed text from this image exactly as it appears, but only include characters that are valid in a Greek-written chess game. The valid characters are: "
+
+	// Add each valid character to the prompt
+	for i, char := range validChars {
+		if i > 0 {
+			promptText += ", "
+		}
+		promptText += char
+	}
+
+	promptText += ". Do not include any other characters, and preserve any misspellings, punctuation, or line breaks. Return only the raw text."
+
 	resp, err := client.CreateChatCompletion(
 		ctx,
 		openai.ChatCompletionRequest{
-			Model: openai.GPT4VisionPreview,
+			Model: openai.GPT4oLatest,
 			Messages: []openai.ChatCompletionMessage{
 				{
 					Role: openai.ChatMessageRoleUser,
 					MultiContent: []openai.ChatMessagePart{
 						{
 							Type: openai.ChatMessagePartTypeText,
-							Text: "Extract and return only the text visible in this image. If it's a chess notation or move, just return the exact notation without any explanation.",
+							Text: promptText,
 						},
 						{
 							Type: openai.ChatMessagePartTypeImageURL,
@@ -80,7 +94,8 @@ func ExtractTextFromImage(apiKey string, imageBytes []byte) (string, error) {
 					},
 				},
 			},
-			MaxTokens: 300,
+			MaxTokens:   300,
+			Temperature: 0,
 		},
 	)
 
@@ -88,10 +103,33 @@ func ExtractTextFromImage(apiKey string, imageBytes []byte) (string, error) {
 		return "", err
 	}
 
-	// Extract the text from the response
 	if len(resp.Choices) > 0 {
 		return resp.Choices[0].Message.Content, nil
 	}
 
 	return "", nil
+
+}
+
+// GetValidGreekChessCharacters returns a list of valid characters in a Greek-written chess game.
+// GetChessNotationCharacters returns a list of valid characters in chess notation for the specified language.
+func GetChessNotationCharacters(language string) []string {
+	switch language {
+	case "Greek":
+		return []string{
+			"Π", "Α", "Β", "Ι", "Ρ", // Greek piece names
+			"0", "O", "x", "+", "#", // Special symbols
+			"α", "β", "γ", "δ", "ε", "ζ", "η", "θ", // Greek file letters
+			"1", "2", "3", "4", "5", "6", "7", "8", // Rank numbers
+		}
+	case "English":
+		return []string{
+			"R", "N", "B", "Q", "K", // English piece names
+			"x", "+", "#", "0", "=", // Special symbols
+			"a", "b", "c", "d", "e", "f", "g", "h", // File letters
+			"1", "2", "3", "4", "5", "6", "7", "8", // Rank numbers
+		}
+	default:
+		return []string{} // Return empty slice for unsupported languages
+	}
 }

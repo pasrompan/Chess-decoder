@@ -24,7 +24,7 @@ func main() {
 		log.Fatal("OPENAI_API_KEY environment variable is not set")
 	}
 
-	imagePath := "data/IMG_4585.png"
+	imagePath := "data/IMG_8273.jpg"
 
 	// Load the image
 	img, err := LoadImage(imagePath)
@@ -42,7 +42,8 @@ func main() {
 	}
 
 	// Extract text from the image using OpenAI
-	text, err := ExtractTextFromImage(apiKey, imageBytes)
+	language := "English"
+	text, err := ExtractTextFromImage(apiKey, imageBytes, language)
 	if err != nil {
 		log.Fatalf("Failed to extract text from image: %s", err)
 	}
@@ -50,10 +51,16 @@ func main() {
 	fmt.Println("Extracted Text:")
 	fmt.Println(text)
 
+	englishMoves := []string{}
 	// Convert the Greek chess moves to English
-	englishMoves, err := ConvertGreekMovesToEnglish(strings.Split(text, "\n"))
-	if err != nil {
-		log.Fatalf("Failed to convert Greek moves to English: %s", err)
+	if language == "Greek" {
+		fmt.Println("Converting Greek chess moves to English...")
+		englishMoves, err = ConvertGreekMovesToEnglish(strings.Split(text, "\n"))
+		if err != nil {
+			log.Fatalf("Failed to convert Greek moves to English: %s", err)
+		}
+	} else {
+		englishMoves = strings.Split(text, "\n")
 	}
 
 	// Define the output file path
