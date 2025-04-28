@@ -1,0 +1,45 @@
+
+e7
+Nf3
+Bg4
+Bd7
+exg5
+Ne1
+Nc6
+c3
+Beb
+Bb6
+Bc7
+Bd2
+a3
+Bxe7
+Nxc5
+Nxc5
+000 000
+Be9
+h3
+Be4
+Bf9
+Bh2
+Qg9
+Ne5
+Nc6
+Beb
+Be6
+Bc7
+Bc7
+Be7
+Nxc5
+0 0 0
+Qb5
+Rb5
+Rb5
+Rc5
+c3
+Nxh6
+Nxh6
+c4
+Qb6
+```
+
+Let me know if you need any further help!

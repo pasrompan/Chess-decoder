@@ -25,7 +25,7 @@ func main() {
 		log.Fatal("OPENAI_API_KEY environment variable is not set")
 	}
 
-	imagePath := "data/IMG_8283.jpg"
+	imagePath := "data/IMG_8273.jpg"
 
 	// Load the image
 	img, err := LoadImage(imagePath)
@@ -34,7 +34,7 @@ func main() {
 	}
 
 	// Resize the image if necessary
-	img = ResizeImage(img, 1024, 1024)
+	//img = ResizeImage(img, 1024, 1024)
 
 	// Convert the image to bytes
 	imageBytes, err := ImageToBytes(img)

@@ -1,3 +1,4 @@
 chess decoder go/.env
 # Ignore all PGN files
 *.pgn
+chess decoder go/chess-decoder-service/.env
