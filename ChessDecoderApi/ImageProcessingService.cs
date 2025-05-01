@@ -49,7 +49,7 @@ namespace ChessDecoderApi.Services
             }
 
             // Extract text from the image using OpenAI
-            string apiKey = "Environment.GetEnvironmentVariable("OPENAI_API_KEY") "?? 
+            string apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY") ?? 
                 _configuration["OPENAI_API_KEY"] ?? 
                 throw new UnauthorizedAccessException("OPENAI_API_KEY environment variable not set");
 
@@ -75,7 +75,7 @@ namespace ChessDecoderApi.Services
         {
             try
             {
-                string apiKey = "Environment.GetEnvironmentVariable("OPENAI_API_KEY") "?? 
+                string apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY") ?? 
                     _configuration["OPENAI_API_KEY"] ?? 
                     throw new UnauthorizedAccessException("OPENAI_API_KEY environment variable not set");
 

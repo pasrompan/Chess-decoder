@@ -20,6 +20,13 @@ namespace ChessDecoderApi.Controllers
             _logger = logger;
         }
 
+        [HttpGet("health")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        public IActionResult CheckHealth()
+        {
+            return Ok(new { status = "Healthy", timestamp = DateTime.UtcNow });
+        }
+
         [HttpPost("upload")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
