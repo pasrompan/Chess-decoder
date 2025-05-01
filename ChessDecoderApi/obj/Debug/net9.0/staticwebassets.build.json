@@ -1,0 +1,12 @@
+{
+  "Version": 1,
+  "Hash": "45n4mqoLEJLrQsozWOVSsm92y1I+RkyASfIyYOMvitQ=",
+  "Source": "ChessDecoderApi",
+  "BasePath": "_content/ChessDecoderApi",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [],
+  "Assets": [],
+  "Endpoints": []
+}

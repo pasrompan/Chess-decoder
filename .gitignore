@@ -1,4 +1,10 @@
-chess decoder go/.env
-# Ignore all PGN files
+*.env
 *.pgn
-chess decoder go/chess-decoder-service/.env
+*.dll
+*.pdb
+*.exe
+*.obj
+*.cache
+*.log
+*.Up2Date
+ChessDecoderApi/obj/Debug/net9.0/apphost
