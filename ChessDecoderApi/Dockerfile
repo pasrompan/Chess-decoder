@@ -14,14 +14,12 @@ FROM mcr.microsoft.com/dotnet/aspnet:9.0
 WORKDIR /app
 COPY --from=build /app/out .
 
-# Expose the port your application uses
-EXPOSE 80
-EXPOSE 443
-EXPOSE 5000
+# Configure ASP.NET Core to use the environment-provided PORT
+ENV ASPNETCORE_URLS=http://+:${PORT:-8080}
+ENV ASPNETCORE_ENVIRONMENT=Production
 
-# Add these before the ENTRYPOINT
-ENV ASPNETCORE_URLS=http://+:80;http://+:5000
-ENV ASPNETCORE_ENVIRONMENT=Development
+# Expose port 8080
+EXPOSE 8080
 
 # Set the entry point for the application
 ENTRYPOINT ["dotnet", "ChessDecoderApi.dll"] 
