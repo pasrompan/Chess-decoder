@@ -160,7 +160,7 @@ namespace ChessDecoderApi.Services
                 var choices = jsonDoc.RootElement.GetProperty("choices");
                 var messageContent = choices[0].GetProperty("message").GetProperty("content").GetString();
                 
-                return messageContent ?? string.Empty;
+                return messageContent?.Replace("`", "") ?? string.Empty;
             }
             catch (Exception ex)
             {

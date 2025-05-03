@@ -21,6 +21,21 @@ builder.Configuration.AddEnvironmentVariables();
 
 builder.Logging.ClearProviders().AddConsole().SetMinimumLevel(LogLevel.Information);
 
+// Configure CORS
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("CorsPolicy", policy =>
+    {
+        policy.WithOrigins(
+                builder.Configuration.GetSection("AllowedOrigins").Get<string[]>() ?? 
+                new[] { "https://chess-scribe-convert.lovable.app" }
+            )
+            .AllowAnyMethod()
+            .AllowAnyHeader()
+            .AllowCredentials();
+    });
+});
+
 var app = builder.Build();
 
 // Configure middleware
@@ -31,6 +46,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+app.UseCors("CorsPolicy");
+
 app.UseAuthorization();
 
 // Global exception handler
