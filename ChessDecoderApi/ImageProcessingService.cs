@@ -49,11 +49,14 @@ namespace ChessDecoderApi.Services
             }
 
             // Extract text from the image using OpenAI
-            string apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY") ?? 
-                _configuration["OPENAI_API_KEY"] ?? 
-                throw new UnauthorizedAccessException("OPENAI_API_KEY environment variable not set");
+            var apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY") ?? 
+                _configuration["OPENAI_API_KEY"];
+                if (string.IsNullOrEmpty(apiKey))
+                {
+                    _logger.LogInformation("API Key available: {available}", !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("OPENAI_API_KEY")));
+                    throw new UnauthorizedAccessException("OPENAI_API_KEY environment variable not set");}
 
-            _logger.LogInformation("API Key available: {available}", !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("OPENAI_API_KEY")));
+    
 
             string language = "English"; // Default to English language
             string text = await ExtractTextFromImageAsync(imageBytes, language);

@@ -19,6 +19,8 @@ builder.Services.AddHttpClient();
 // Load environment variables - includes both .env and system environment variables
 builder.Configuration.AddEnvironmentVariables();
 
+builder.Logging.ClearProviders().AddConsole().SetMinimumLevel(LogLevel.Information);
+
 var app = builder.Build();
 
 // Configure middleware
