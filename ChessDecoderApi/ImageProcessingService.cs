@@ -89,6 +89,24 @@ namespace ChessDecoderApi.Services
                 
                 var base64Image = Convert.ToBase64String(imageBytes);
 
+                // Get valid characters for the specified language
+                var validChars = GetChessNotationCharacters(language);
+                
+                // Build the prompt with the valid characters
+                var promptText = "You are an OCR engine. Transcribe all visible chess moves from this image exactly as they appear, but only include characters that are valid in a chess game. The valid characters are: ";
+                
+                // Add each valid character to the prompt
+                for (int i = 0; i < validChars.Length; i++)
+                {
+                    if (i > 0)
+                    {
+                        promptText += ", ";
+                    }
+                    promptText += validChars[i];
+                }
+                
+                promptText += ". Do not include any other characters, and preserve any misspellings, punctuation, or line breaks. Return only the raw text with one move per line.";
+
                 var requestData = new
                 {
                     model = "chatgpt-4o-latest",
@@ -102,7 +120,7 @@ namespace ChessDecoderApi.Services
                                 new
                                 {
                                     type = "text",
-                                    text = $"Extract the chess moves from this image. Return just the moves in standard notation, one per line."
+                                    text = promptText
                                 },
                                 new
                                 {
@@ -156,6 +174,33 @@ namespace ChessDecoderApi.Services
             await Task.Yield(); // Makes the method truly asynchronous
             // Rest of the implementation
             return greekMoves;
+        }
+
+        /// <summary>
+        /// Returns a list of valid characters in chess notation for the specified language.
+        /// </summary>
+        /// <param name="language">The language of chess notation (e.g., "Greek", "English")</param>
+        /// <returns>An array of valid characters for the specified language</returns>
+        private string[] GetChessNotationCharacters(string language)
+        {
+            return language switch
+            {
+                "Greek" => new[]
+                {
+                    "Π", "Α", "Β", "Ι", "Ρ", // Greek piece names
+                    "0", "O", "x", "+", "#", // Special symbols
+                    "α", "β", "γ", "δ", "ε", "ζ", "η", "θ", // Greek file letters
+                    "1", "2", "3", "4", "5", "6", "7", "8", // Rank numbers
+                },
+                "English" => new[]
+                {
+                    "R", "N", "B", "Q", "K", // English piece names
+                    "x", "+", "#", "0", "=", // Special symbols
+                    "a", "b", "c", "d", "e", "f", "g", "h", // File letters
+                    "1", "2", "3", "4", "5", "6", "7", "8", // Rank numbers
+                },
+                _ => Array.Empty<string>() // Return empty array for unsupported languages
+            };
         }
 
         public async Task<string> GeneratePGNContentAsync(IEnumerable<string> moves)
