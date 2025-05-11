@@ -81,7 +81,7 @@ namespace ChessDecoderApi.Services
 
     
 
-            string language = "Greek"; // Default to English language
+            string language = "English"; // Default to English language
             string text = await ExtractTextFromImageAsync(imageBytes, language);
 
             // Convert the extracted text to PGN format
