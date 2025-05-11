@@ -3,6 +3,7 @@ using SixLabors.ImageSharp.Processing;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Collections.Generic;
 
 namespace ChessDecoderApi.Services
 {
@@ -11,6 +12,28 @@ namespace ChessDecoderApi.Services
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IConfiguration _configuration;
         private readonly ILogger<ImageProcessingService> _logger;
+
+        private static readonly Dictionary<string, string> GreekToEnglishMap = new()
+        {
+            { "Π", "R" }, // Πύργος (Rook)
+            { "Α", "B" }, // Αλογο (Knight)
+            { "Β", "Q" }, // Βασίλισσα (Queen)
+            { "Ι", "N" }, // Ιππος (Knight)
+            { "Ρ", "K" }, // Ρήγας (King)
+            { "0", "0" }, // Castling short
+            { "O", "0" }, // Castling short
+            { "x", "x" }, // Capture
+            { "+", "+" }, // Check
+            { "#", "#" }, // Checkmate
+            { "α", "a" }, // File letters
+            { "β", "b" },
+            { "γ", "c" },
+            { "δ", "d" },
+            { "ε", "e" },
+            { "ζ", "f" },
+            { "η", "g" },
+            { "θ", "h" }
+        };
 
         public ImageProcessingService(
             IHttpClientFactory httpClientFactory,
@@ -58,7 +81,7 @@ namespace ChessDecoderApi.Services
 
     
 
-            string language = "English"; // Default to English language
+            string language = "Greek"; // Default to English language
             string text = await ExtractTextFromImageAsync(imageBytes, language);
 
             // Convert the extracted text to PGN format
@@ -276,9 +299,44 @@ namespace ChessDecoderApi.Services
 
         private async Task<string[]> ConvertGreekMovesToEnglishAsync(string[] greekMoves)
         {
-            await Task.Yield(); // Makes the method truly asynchronous
-            // Rest of the implementation
-            return greekMoves;
+            var englishMoves = new string[greekMoves.Length];
+
+            for (int i = 0; i < greekMoves.Length; i++)
+            {
+                string englishMove = greekMoves[i];
+
+                // Replace Greek piece names and file letters with English equivalents
+                foreach (var (greek, english) in GreekToEnglishMap)
+                {
+                    englishMove = englishMove.Replace(greek, english);
+                }
+
+                // Handle special cases
+                englishMove = HandleSpecialCases(englishMove);
+
+                englishMoves[i] = englishMove;
+            }
+
+            return englishMoves;
+        }
+
+        private string HandleSpecialCases(string move)
+        {
+            // Handle castling notation
+            move = move.Replace("0-0", "O-O");  // Kingside castling
+            move = move.Replace("0-0-0", "O-O-O");  // Queenside castling
+
+            // Handle pawn promotion if present
+            if (move.Contains("="))
+            {
+                // Ensure the promotion piece is in English notation
+                foreach (var (greek, english) in GreekToEnglishMap)
+                {
+                    move = move.Replace($"={greek}", $"={english}");
+                }
+            }
+
+            return move;
         }
 
         /// <summary>
