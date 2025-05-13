@@ -403,5 +403,94 @@ namespace ChessDecoderApi.Services
             sb.AppendLine(string.Join(" ", moveList) + " *");
             return sb.ToString();
         }
+
+        public async Task<string> DebugUploadAsync(string imagePath, string promptText)
+        {
+            // Check if file exists
+            if (!File.Exists(imagePath))
+            {
+                throw new FileNotFoundException("Image file not found", imagePath);
+            }
+
+            // Load and process the image
+            using var image = await Image.LoadAsync(imagePath);
+            image.Mutate(x => x.Resize(new ResizeOptions
+            {
+                Size = new Size(1024, 1024),
+                Mode = ResizeMode.Max
+            }));
+
+            // Convert the image to bytes
+            byte[] imageBytes;
+            using (var ms = new MemoryStream())
+            {
+                await image.SaveAsJpegAsync(ms);
+                imageBytes = ms.ToArray();
+            }
+
+            string apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY") ?? 
+                _configuration["OPENAI_API_KEY"] ?? 
+                throw new UnauthorizedAccessException("OPENAI_API_KEY environment variable not set");
+
+            var client = _httpClientFactory.CreateClient();
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+            
+            var base64Image = Convert.ToBase64String(imageBytes);
+
+            var requestData = new
+            {
+                model = "chatgpt-4o-latest",
+                messages = new[]
+                {
+                    new
+                    {
+                        role = "user",
+                        content = new object[]
+                        {
+                            new
+                            {
+                                type = "text",
+                                text = promptText
+                            },
+                            new
+                            {
+                                type = "image_url",
+                                image_url = new
+                                {
+                                    url = $"data:image/jpeg;base64,{base64Image}"
+                                }
+                            }
+                        }
+                    }
+                },
+                max_tokens = 300
+            };
+
+            var content = new StringContent(
+                JsonSerializer.Serialize(requestData),
+                Encoding.UTF8,
+                "application/json");
+
+            var response = await client.PostAsync("https://api.openai.com/v1/chat/completions", content);
+            
+            if (!response.IsSuccessStatusCode)
+            {
+                if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                {
+                    throw new UnauthorizedAccessException("Invalid API key");
+                }
+                
+                var errorContent = await response.Content.ReadAsStringAsync();
+                throw new Exception($"OpenAI API error: {response.StatusCode} - {errorContent}");
+            }
+
+            var responseContent = await response.Content.ReadAsStringAsync();
+            using var jsonDoc = JsonDocument.Parse(responseContent);
+            
+            var choices = jsonDoc.RootElement.GetProperty("choices");
+            var messageContent = choices[0].GetProperty("message").GetProperty("content").GetString();
+            
+            return messageContent?.Replace("`", "") ?? string.Empty;
+        }
     }
 }
