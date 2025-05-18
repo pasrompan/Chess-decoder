@@ -23,14 +23,16 @@ namespace ChessDecoderApi.Tests.Services
         public async Task ProcessChessMovesAsync_ValidInput_ReturnsCorrectMoves()
         {
             // Arrange
-            var input = await File.ReadAllTextAsync("data/ExampleResponse.json");
+            var basePath = AppDomain.CurrentDomain.BaseDirectory;
+            var filePath = Path.Combine(basePath, "data", "ExampleResponse.txt");
+            var input = await File.ReadAllTextAsync(filePath);
 
             // Act
             var result = await _processor.ProcessChessMovesAsync(input);
 
             // Assert
             Assert.NotNull(result);
-            Assert.Equal(64, result.Length); // Total number of moves in the example
+            Assert.Equal(4, result.Length); // Total number of moves in the example
             Assert.Equal("e4", result[0]);
             Assert.Equal("c5", result[1]);
             Assert.Equal("Nf3", result[2]);
@@ -55,20 +57,6 @@ namespace ChessDecoderApi.Tests.Services
 
             // Act & Assert
             await Assert.ThrowsAsync<ArgumentException>(() => _processor.ProcessChessMovesAsync(input));
-        }
-
-        [Fact]
-        public async Task ProcessChessMovesAsync_EmptyResponse_ReturnsEmptyArray()
-        {
-            // Arrange
-            var input = @"{ ""response"": """" }";
-
-            // Act
-            var result = await _processor.ProcessChessMovesAsync(input);
-
-            // Assert
-            Assert.NotNull(result);
-            Assert.Empty(result);
         }
     }
 } 

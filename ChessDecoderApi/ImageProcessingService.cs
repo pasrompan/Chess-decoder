@@ -96,7 +96,8 @@ namespace ChessDecoderApi.Services
                 if (language == "Greek")
                 {
                     _logger.LogInformation("Processing Greek chess notation");
-                    moves = await ConvertGreekMovesToEnglishAsync(text.Split('\n'));
+                    string[] greekMoves = await _chessMoveProcessor.ProcessChessMovesAsync(text);
+                    moves = await ConvertGreekMovesToEnglishAsync(greekMoves);
                 }
                 else
                 {
@@ -137,9 +138,10 @@ namespace ChessDecoderApi.Services
 
                 // Get valid characters for the specified language
                 var validChars = GetChessNotationCharacters(language);
-                
+
                 // Build the prompt with the valid characters
-                var promptText = "You are an OCR engine. Transcribe all visible chess moves from this image exactly as they appear, but only include characters that are valid in a chess game. The valid characters are: ";
+                var promptText = "You are an OCR engine. Transcribe all visible chess moves from this image exactly as they appear, but only include characters that are valid in a chess game.";
+                promptText += $"The characters are written in {language}, valid characters are: ";
                 
                 // Add each valid character to the prompt
                 for (int i = 0; i < validChars.Length; i++)
@@ -151,7 +153,7 @@ namespace ChessDecoderApi.Services
                     promptText += validChars[i];
                 }
                 
-                promptText += ". Do not include any other characters, and preserve any misspellings, punctuation, or line breaks. Return only the raw text with one move per line.";
+                promptText += ". Do not include any other characters, and preserve any misspellings or punctuation errors. \n Return the raw text as a json list having all the moves.";
 
                 var requestData = new
                 {
@@ -179,7 +181,7 @@ namespace ChessDecoderApi.Services
                             }
                         }
                     },
-                    max_tokens = 300
+                    max_tokens = 1000
                 };
 
                 var content = new StringContent(
@@ -206,7 +208,7 @@ namespace ChessDecoderApi.Services
                 var choices = jsonDoc.RootElement.GetProperty("choices");
                 var messageContent = choices[0].GetProperty("message").GetProperty("content").GetString();
                 
-                return messageContent?.Replace("`", "") ?? string.Empty;
+                return messageContent ?? string.Empty;
             }
             catch (Exception ex)
             {

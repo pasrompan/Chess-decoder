@@ -30,4 +30,11 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="data/ExampleResponse.txt">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="data/**" CopyToOutputDirectory="Always" />
+  </ItemGroup>
+
 </Project>

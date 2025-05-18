@@ -27,22 +27,20 @@ namespace ChessDecoderApi.Services
             {
                 _logger.LogDebug("Attempting to parse chess moves from input");
                 
-                // Parse the JSON response
-                var response = JsonSerializer.Deserialize<ChessResponse>(rawText);
-                
-                if (response?.response == null)
+                // Find the content after "json" and newline
+                rawText = rawText.Trim('`');
+                var jsonStartIndex = rawText.IndexOf("json\n");
+                if (jsonStartIndex == -1)
                 {
-                    _logger.LogError("Invalid response format: Response property is null");
-                    throw new ArgumentException("Invalid response format: Response property is null");
+                    _logger.LogError("Invalid response format: 'json' indicator not found");
+                    throw new ArgumentException("Invalid response format: 'json' indicator not found");
                 }
 
-                // Split the response into moves and clean them
-                var moves = response.response
-                    .Split('\n')
-                    .SelectMany(line => line.Split(','))
-                    .Select(move => move.Trim().Trim('"', ' ', '[', ']'))
-                    .Where(move => !string.IsNullOrWhiteSpace(move))
-                    .ToArray();
+                // Extract the JSON array part after the "json" indicator and newline
+                var jsonPart = rawText.Substring(jsonStartIndex + 5); // 5 is length of "json\n"
+                
+                // Parse the inner JSON array
+                var moves = JsonSerializer.Deserialize<string[]>(jsonPart);
 
                 _logger.LogInformation("Successfully processed {MoveCount} chess moves", moves.Length);
                 _logger.LogDebug("Processed moves: {Moves}", string.Join(", ", moves));
@@ -62,7 +60,7 @@ namespace ChessDecoderApi.Services
         }
     }
 
-    public class ChessResponse
+    public class OuterResponse
     {
         public string response { get; set; }
     }
