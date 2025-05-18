@@ -12,6 +12,8 @@ namespace ChessDecoderApi.Services
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IConfiguration _configuration;
         private readonly ILogger<ImageProcessingService> _logger;
+        private readonly ILoggerFactory _loggerFactory;
+        private readonly ChessMoveProcessor _chessMoveProcessor;
 
         private static readonly Dictionary<string, string> GreekToEnglishMap = new()
         {
@@ -38,11 +40,14 @@ namespace ChessDecoderApi.Services
         public ImageProcessingService(
             IHttpClientFactory httpClientFactory,
             IConfiguration configuration,
-            ILogger<ImageProcessingService> logger)
+            ILogger<ImageProcessingService> logger,
+            ILoggerFactory loggerFactory)
         {
-            _httpClientFactory = httpClientFactory;
-            _configuration = configuration;
-            _logger = logger;
+            _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
+            _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
+            _chessMoveProcessor = new ChessMoveProcessor(loggerFactory.CreateLogger<ChessMoveProcessor>());
         }
 
         public async Task<string> ProcessImageAsync(string imagePath, string language = "English")
@@ -86,13 +91,32 @@ namespace ChessDecoderApi.Services
 
             // Convert the extracted text to PGN format
             string[] moves;
-            if (language == "Greek")
+            try
             {
-                moves = await ConvertGreekMovesToEnglishAsync(text.Split('\n'));
+                if (language == "Greek")
+                {
+                    _logger.LogInformation("Processing Greek chess notation");
+                    string[] greekMoves = await _chessMoveProcessor.ProcessChessMovesAsync(text);
+                    moves = await ConvertGreekMovesToEnglishAsync(greekMoves);
+                }
+                else
+                {
+                    _logger.LogInformation("Processing standard chess notation");
+                    moves = await _chessMoveProcessor.ProcessChessMovesAsync(text);
+                }
+
+                if (moves == null || moves.Length == 0)
+                {
+                    _logger.LogWarning("No valid moves were extracted from the image");
+                    throw new InvalidOperationException("No valid moves were extracted from the image");
+                }
+
+                _logger.LogInformation("Successfully processed {MoveCount} moves", moves.Length);
             }
-            else
+            catch (Exception ex)
             {
-                moves = text.Split('\n');
+                _logger.LogError(ex, "Error processing chess moves for language: {Language}", language);
+                throw;
             }
 
             // Generate the PGN content
@@ -114,9 +138,10 @@ namespace ChessDecoderApi.Services
 
                 // Get valid characters for the specified language
                 var validChars = GetChessNotationCharacters(language);
-                
+
                 // Build the prompt with the valid characters
-                var promptText = "You are an OCR engine. Transcribe all visible chess moves from this image exactly as they appear, but only include characters that are valid in a chess game. The valid characters are: ";
+                var promptText = "You are an OCR engine. Transcribe all visible chess moves from this image exactly as they appear, but only include characters that are valid in a chess game.";
+                promptText += $"The characters are written in {language}, valid characters are: ";
                 
                 // Add each valid character to the prompt
                 for (int i = 0; i < validChars.Length; i++)
@@ -128,7 +153,7 @@ namespace ChessDecoderApi.Services
                     promptText += validChars[i];
                 }
                 
-                promptText += ". Do not include any other characters, and preserve any misspellings, punctuation, or line breaks. Return only the raw text with one move per line.";
+                promptText += ". Do not include any other characters, and preserve any misspellings or punctuation errors. \n Return the raw text as a json list having all the moves.";
 
                 var requestData = new
                 {
@@ -156,7 +181,7 @@ namespace ChessDecoderApi.Services
                             }
                         }
                     },
-                    max_tokens = 300
+                    max_tokens = 1000
                 };
 
                 var content = new StringContent(
@@ -183,7 +208,7 @@ namespace ChessDecoderApi.Services
                 var choices = jsonDoc.RootElement.GetProperty("choices");
                 var messageContent = choices[0].GetProperty("message").GetProperty("content").GetString();
                 
-                return messageContent?.Replace("`", "") ?? string.Empty;
+                return messageContent ?? string.Empty;
             }
             catch (Exception ex)
             {
@@ -366,9 +391,8 @@ namespace ChessDecoderApi.Services
             };
         }
 
-        public async Task<string> GeneratePGNContentAsync(IEnumerable<string> moves)
+        public Task<string> GeneratePGNContentAsync(IEnumerable<string> moves)
         {
-            await Task.Yield(); // Makes the method truly asynchronous
             // Basic PGN structure
             var sb = new StringBuilder();
             sb.AppendLine("[Event \"??\"]");
@@ -401,7 +425,7 @@ namespace ChessDecoderApi.Services
             }
 
             sb.AppendLine(string.Join(" ", moveList) + " *");
-            return sb.ToString();
+            return Task.FromResult(sb.ToString());
         }
 
         public async Task<string> DebugUploadAsync(string imagePath, string promptText)
@@ -463,7 +487,7 @@ namespace ChessDecoderApi.Services
                         }
                     }
                 },
-                max_tokens = 300
+                max_tokens = 1000
             };
 
             var content = new StringContent(
