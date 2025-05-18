@@ -12,6 +12,8 @@ namespace ChessDecoderApi.Services
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IConfiguration _configuration;
         private readonly ILogger<ImageProcessingService> _logger;
+        private readonly ILoggerFactory _loggerFactory;
+        private readonly ChessMoveProcessor _chessMoveProcessor;
 
         private static readonly Dictionary<string, string> GreekToEnglishMap = new()
         {
@@ -38,11 +40,14 @@ namespace ChessDecoderApi.Services
         public ImageProcessingService(
             IHttpClientFactory httpClientFactory,
             IConfiguration configuration,
-            ILogger<ImageProcessingService> logger)
+            ILogger<ImageProcessingService> logger,
+            ILoggerFactory loggerFactory)
         {
-            _httpClientFactory = httpClientFactory;
-            _configuration = configuration;
-            _logger = logger;
+            _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
+            _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
+            _chessMoveProcessor = new ChessMoveProcessor(loggerFactory.CreateLogger<ChessMoveProcessor>());
         }
 
         public async Task<string> ProcessImageAsync(string imagePath, string language = "English")
@@ -86,13 +91,31 @@ namespace ChessDecoderApi.Services
 
             // Convert the extracted text to PGN format
             string[] moves;
-            if (language == "Greek")
+            try
             {
-                moves = await ConvertGreekMovesToEnglishAsync(text.Split('\n'));
+                if (language == "Greek")
+                {
+                    _logger.LogInformation("Processing Greek chess notation");
+                    moves = await ConvertGreekMovesToEnglishAsync(text.Split('\n'));
+                }
+                else
+                {
+                    _logger.LogInformation("Processing standard chess notation");
+                    moves = await _chessMoveProcessor.ProcessChessMovesAsync(text);
+                }
+
+                if (moves == null || moves.Length == 0)
+                {
+                    _logger.LogWarning("No valid moves were extracted from the image");
+                    throw new InvalidOperationException("No valid moves were extracted from the image");
+                }
+
+                _logger.LogInformation("Successfully processed {MoveCount} moves", moves.Length);
             }
-            else
+            catch (Exception ex)
             {
-                moves = text.Split('\n');
+                _logger.LogError(ex, "Error processing chess moves for language: {Language}", language);
+                throw;
             }
 
             // Generate the PGN content
@@ -366,9 +389,8 @@ namespace ChessDecoderApi.Services
             };
         }
 
-        public async Task<string> GeneratePGNContentAsync(IEnumerable<string> moves)
+        public Task<string> GeneratePGNContentAsync(IEnumerable<string> moves)
         {
-            await Task.Yield(); // Makes the method truly asynchronous
             // Basic PGN structure
             var sb = new StringBuilder();
             sb.AppendLine("[Event \"??\"]");
@@ -401,7 +423,7 @@ namespace ChessDecoderApi.Services
             }
 
             sb.AppendLine(string.Join(" ", moveList) + " *");
-            return sb.ToString();
+            return Task.FromResult(sb.ToString());
         }
 
         public async Task<string> DebugUploadAsync(string imagePath, string promptText)
@@ -463,7 +485,7 @@ namespace ChessDecoderApi.Services
                         }
                     }
                 },
-                max_tokens = 300
+                max_tokens = 1000
             };
 
             var content = new StringContent(

@@ -18,6 +18,12 @@
           }
         }
       },
+      "coverlet.collector/6.0.0": {
+        "type": "package",
+        "build": {
+          "build/netstandard1.0/coverlet.collector.targets": {}
+        }
+      },
       "DotNetEnv/3.1.1": {
         "type": "package",
         "dependencies": {
@@ -284,7 +290,7 @@
           }
         }
       },
-      "Microsoft.CodeCoverage/17.13.0": {
+      "Microsoft.CodeCoverage/17.9.0": {
         "type": "package",
         "compile": {
           "lib/netcoreapp3.1/Microsoft.VisualStudio.CodeCoverage.Shim.dll": {}
@@ -300,12 +306,10 @@
       "Microsoft.Extensions.ApiDescription.Server/6.0.5": {
         "type": "package",
         "build": {
-          "build/Microsoft.Extensions.ApiDescription.Server.props": {},
-          "build/Microsoft.Extensions.ApiDescription.Server.targets": {}
+          "build/_._": {}
         },
         "buildMultiTargeting": {
-          "buildMultiTargeting/Microsoft.Extensions.ApiDescription.Server.props": {},
-          "buildMultiTargeting/Microsoft.Extensions.ApiDescription.Server.targets": {}
+          "buildMultiTargeting/_._": {}
         }
       },
       "Microsoft.Extensions.Configuration/1.1.2": {
@@ -391,11 +395,11 @@
           }
         }
       },
-      "Microsoft.NET.Test.Sdk/17.13.0": {
+      "Microsoft.NET.Test.Sdk/17.9.0": {
         "type": "package",
         "dependencies": {
-          "Microsoft.CodeCoverage": "17.13.0",
-          "Microsoft.TestPlatform.TestHost": "17.13.0"
+          "Microsoft.CodeCoverage": "17.9.0",
+          "Microsoft.TestPlatform.TestHost": "17.9.0"
         },
         "compile": {
           "lib/netcoreapp3.1/_._": {}
@@ -442,7 +446,7 @@
           }
         }
       },
-      "Microsoft.TestPlatform.ObjectModel/17.13.0": {
+      "Microsoft.TestPlatform.ObjectModel/17.9.0": {
         "type": "package",
         "dependencies": {
           "System.Reflection.Metadata": "1.6.0"
@@ -538,10 +542,10 @@
           }
         }
       },
-      "Microsoft.TestPlatform.TestHost/17.13.0": {
+      "Microsoft.TestPlatform.TestHost/17.9.0": {
         "type": "package",
         "dependencies": {
-          "Microsoft.TestPlatform.ObjectModel": "17.13.0",
+          "Microsoft.TestPlatform.ObjectModel": "17.9.0",
           "Newtonsoft.Json": "13.0.1"
         },
         "compile": {
@@ -962,7 +966,7 @@
           }
         },
         "build": {
-          "build/SixLabors.ImageSharp.props": {}
+          "build/_._": {}
         }
       },
       "Sprache/2.3.1": {
@@ -994,10 +998,10 @@
           "Swashbuckle.AspNetCore.SwaggerUI": "8.1.1"
         },
         "build": {
-          "build/Swashbuckle.AspNetCore.props": {}
+          "build/_._": {}
         },
         "buildMultiTargeting": {
-          "buildMultiTargeting/Swashbuckle.AspNetCore.props": {}
+          "buildMultiTargeting/_._": {}
         }
       },
       "Swashbuckle.AspNetCore.Swagger/8.1.1": {
@@ -2270,7 +2274,7 @@
           }
         }
       },
-      "xunit.runner.visualstudio/2.5.7": {
+      "xunit.runner.visualstudio/2.5.6": {
         "type": "package",
         "compile": {
           "lib/net6.0/_._": {}
@@ -2281,6 +2285,28 @@
         "build": {
           "build/net6.0/xunit.runner.visualstudio.props": {}
         }
+      },
+      "ChessDecoderApi/1.0.0": {
+        "type": "project",
+        "framework": ".NETCoreApp,Version=v9.0",
+        "dependencies": {
+          "DotNetEnv": "3.1.1",
+          "Google.Cloud.Vision.V1": "3.7.0",
+          "Microsoft.AspNetCore.OpenApi": "9.0.4",
+          "SixLabors.ImageSharp": "3.1.8",
+          "Swashbuckle.AspNetCore": "8.1.1",
+          "xunit": "2.6.6",
+          "xunit.runner.visualstudio": "2.5.6"
+        },
+        "compile": {
+          "bin/placeholder/ChessDecoderApi.dll": {}
+        },
+        "runtime": {
+          "bin/placeholder/ChessDecoderApi.dll": {}
+        },
+        "frameworkReferences": [
+          "Microsoft.AspNetCore.App"
+        ]
       }
     }
   },
@@ -2307,6 +2333,59 @@
         "lib/netstandard2.1/Castle.Core.dll",
         "lib/netstandard2.1/Castle.Core.xml",
         "readme.txt"
+      ]
+    },
+    "coverlet.collector/6.0.0": {
+      "sha512": "tW3lsNS+dAEII6YGUX/VMoJjBS1QvsxqJeqLaJXub08y1FSjasFPtQ4UBUsudE9PNrzLjooClMsPtY2cZLdXpQ==",
+      "type": "package",
+      "path": "coverlet.collector/6.0.0",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "build/netstandard1.0/Microsoft.Bcl.AsyncInterfaces.dll",
+        "build/netstandard1.0/Microsoft.CSharp.dll",
+        "build/netstandard1.0/Microsoft.DotNet.PlatformAbstractions.dll",
+        "build/netstandard1.0/Microsoft.Extensions.DependencyInjection.Abstractions.dll",
+        "build/netstandard1.0/Microsoft.Extensions.DependencyInjection.dll",
+        "build/netstandard1.0/Microsoft.Extensions.DependencyModel.dll",
+        "build/netstandard1.0/Microsoft.Extensions.FileSystemGlobbing.dll",
+        "build/netstandard1.0/Microsoft.TestPlatform.CoreUtilities.dll",
+        "build/netstandard1.0/Microsoft.TestPlatform.PlatformAbstractions.dll",
+        "build/netstandard1.0/Microsoft.VisualStudio.TestPlatform.ObjectModel.dll",
+        "build/netstandard1.0/Mono.Cecil.Mdb.dll",
+        "build/netstandard1.0/Mono.Cecil.Pdb.dll",
+        "build/netstandard1.0/Mono.Cecil.Rocks.dll",
+        "build/netstandard1.0/Mono.Cecil.dll",
+        "build/netstandard1.0/Newtonsoft.Json.dll",
+        "build/netstandard1.0/NuGet.Frameworks.dll",
+        "build/netstandard1.0/System.AppContext.dll",
+        "build/netstandard1.0/System.Collections.Immutable.dll",
+        "build/netstandard1.0/System.Dynamic.Runtime.dll",
+        "build/netstandard1.0/System.IO.FileSystem.Primitives.dll",
+        "build/netstandard1.0/System.Linq.Expressions.dll",
+        "build/netstandard1.0/System.Linq.dll",
+        "build/netstandard1.0/System.ObjectModel.dll",
+        "build/netstandard1.0/System.Reflection.Emit.ILGeneration.dll",
+        "build/netstandard1.0/System.Reflection.Emit.Lightweight.dll",
+        "build/netstandard1.0/System.Reflection.Emit.dll",
+        "build/netstandard1.0/System.Reflection.Metadata.dll",
+        "build/netstandard1.0/System.Reflection.TypeExtensions.dll",
+        "build/netstandard1.0/System.Runtime.CompilerServices.Unsafe.dll",
+        "build/netstandard1.0/System.Runtime.Serialization.Primitives.dll",
+        "build/netstandard1.0/System.Text.RegularExpressions.dll",
+        "build/netstandard1.0/System.Threading.Tasks.Extensions.dll",
+        "build/netstandard1.0/System.Threading.dll",
+        "build/netstandard1.0/System.Xml.ReaderWriter.dll",
+        "build/netstandard1.0/System.Xml.XDocument.dll",
+        "build/netstandard1.0/coverlet.collector.deps.json",
+        "build/netstandard1.0/coverlet.collector.dll",
+        "build/netstandard1.0/coverlet.collector.pdb",
+        "build/netstandard1.0/coverlet.collector.targets",
+        "build/netstandard1.0/coverlet.core.dll",
+        "build/netstandard1.0/coverlet.core.pdb",
+        "coverlet-icon.png",
+        "coverlet.collector.6.0.0.nupkg.sha512",
+        "coverlet.collector.nuspec"
       ]
     },
     "DotNetEnv/3.1.1": {
@@ -2700,31 +2779,43 @@
         "useSharedDesignerContext.txt"
       ]
     },
-    "Microsoft.CodeCoverage/17.13.0": {
-      "sha512": "9LIUy0y+DvUmEPtbRDw6Bay3rzwqFV8P4efTrK4CZhQle3M/QwLPjISghfcolmEGAPWxuJi6m98ZEfk4VR4Lfg==",
+    "Microsoft.CodeCoverage/17.9.0": {
+      "sha512": "RGD37ZSrratfScYXm7M0HjvxMxZyWZL4jm+XgMZbkIY1UPgjUpbNA/t+WTGj/rC/0Hm9A3IrH3ywbKZkOCnoZA==",
       "type": "package",
-      "path": "microsoft.codecoverage/17.13.0",
+      "path": "microsoft.codecoverage/17.9.0",
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
         "Icon.png",
+        "LICENSE_MIT.txt",
         "ThirdPartyNotices.txt",
         "build/netstandard2.0/CodeCoverage/CodeCoverage.config",
         "build/netstandard2.0/CodeCoverage/CodeCoverage.exe",
-        "build/netstandard2.0/CodeCoverage/Cov_x86.config",
+        "build/netstandard2.0/CodeCoverage/VanguardInstrumentationProfiler_x86.config",
         "build/netstandard2.0/CodeCoverage/amd64/CodeCoverage.exe",
-        "build/netstandard2.0/CodeCoverage/amd64/Cov_x64.config",
+        "build/netstandard2.0/CodeCoverage/amd64/VanguardInstrumentationProfiler_x64.config",
         "build/netstandard2.0/CodeCoverage/amd64/covrun64.dll",
         "build/netstandard2.0/CodeCoverage/amd64/msdia140.dll",
-        "build/netstandard2.0/CodeCoverage/arm64/Cov_arm64.config",
+        "build/netstandard2.0/CodeCoverage/arm64/VanguardInstrumentationProfiler_arm64.config",
         "build/netstandard2.0/CodeCoverage/arm64/covrunarm64.dll",
         "build/netstandard2.0/CodeCoverage/arm64/msdia140.dll",
         "build/netstandard2.0/CodeCoverage/codecoveragemessages.dll",
         "build/netstandard2.0/CodeCoverage/coreclr/Microsoft.VisualStudio.CodeCoverage.Shim.dll",
         "build/netstandard2.0/CodeCoverage/covrun32.dll",
         "build/netstandard2.0/CodeCoverage/msdia140.dll",
+        "build/netstandard2.0/InstrumentationEngine/alpine/x64/VanguardInstrumentationProfiler_x64.config",
+        "build/netstandard2.0/InstrumentationEngine/alpine/x64/libCoverageInstrumentationMethod.so",
+        "build/netstandard2.0/InstrumentationEngine/alpine/x64/libInstrumentationEngine.so",
+        "build/netstandard2.0/InstrumentationEngine/arm64/MicrosoftInstrumentationEngine_arm64.dll",
+        "build/netstandard2.0/InstrumentationEngine/macos/x64/VanguardInstrumentationProfiler_x64.config",
+        "build/netstandard2.0/InstrumentationEngine/macos/x64/libCoverageInstrumentationMethod.dylib",
+        "build/netstandard2.0/InstrumentationEngine/macos/x64/libInstrumentationEngine.dylib",
+        "build/netstandard2.0/InstrumentationEngine/ubuntu/x64/VanguardInstrumentationProfiler_x64.config",
+        "build/netstandard2.0/InstrumentationEngine/ubuntu/x64/libCoverageInstrumentationMethod.so",
+        "build/netstandard2.0/InstrumentationEngine/ubuntu/x64/libInstrumentationEngine.so",
+        "build/netstandard2.0/InstrumentationEngine/x64/MicrosoftInstrumentationEngine_x64.dll",
+        "build/netstandard2.0/InstrumentationEngine/x86/MicrosoftInstrumentationEngine_x86.dll",
         "build/netstandard2.0/Microsoft.CodeCoverage.Core.dll",
-        "build/netstandard2.0/Microsoft.CodeCoverage.Instrumentation.Core.dll",
         "build/netstandard2.0/Microsoft.CodeCoverage.Instrumentation.dll",
         "build/netstandard2.0/Microsoft.CodeCoverage.Interprocess.dll",
         "build/netstandard2.0/Microsoft.CodeCoverage.props",
@@ -2735,10 +2826,6 @@
         "build/netstandard2.0/Mono.Cecil.Rocks.dll",
         "build/netstandard2.0/Mono.Cecil.dll",
         "build/netstandard2.0/ThirdPartyNotices.txt",
-        "build/netstandard2.0/alpine/x64/Cov_x64.config",
-        "build/netstandard2.0/alpine/x64/libCoverageInstrumentationMethod.so",
-        "build/netstandard2.0/alpine/x64/libInstrumentationEngine.so",
-        "build/netstandard2.0/arm64/MicrosoftInstrumentationEngine_arm64.dll",
         "build/netstandard2.0/cs/Microsoft.VisualStudio.TraceDataCollector.resources.dll",
         "build/netstandard2.0/de/Microsoft.VisualStudio.TraceDataCollector.resources.dll",
         "build/netstandard2.0/es/Microsoft.VisualStudio.TraceDataCollector.resources.dll",
@@ -2746,23 +2833,15 @@
         "build/netstandard2.0/it/Microsoft.VisualStudio.TraceDataCollector.resources.dll",
         "build/netstandard2.0/ja/Microsoft.VisualStudio.TraceDataCollector.resources.dll",
         "build/netstandard2.0/ko/Microsoft.VisualStudio.TraceDataCollector.resources.dll",
-        "build/netstandard2.0/macos/x64/Cov_x64.config",
-        "build/netstandard2.0/macos/x64/libCoverageInstrumentationMethod.dylib",
-        "build/netstandard2.0/macos/x64/libInstrumentationEngine.dylib",
         "build/netstandard2.0/pl/Microsoft.VisualStudio.TraceDataCollector.resources.dll",
         "build/netstandard2.0/pt-BR/Microsoft.VisualStudio.TraceDataCollector.resources.dll",
         "build/netstandard2.0/ru/Microsoft.VisualStudio.TraceDataCollector.resources.dll",
         "build/netstandard2.0/tr/Microsoft.VisualStudio.TraceDataCollector.resources.dll",
-        "build/netstandard2.0/ubuntu/x64/Cov_x64.config",
-        "build/netstandard2.0/ubuntu/x64/libCoverageInstrumentationMethod.so",
-        "build/netstandard2.0/ubuntu/x64/libInstrumentationEngine.so",
-        "build/netstandard2.0/x64/MicrosoftInstrumentationEngine_x64.dll",
-        "build/netstandard2.0/x86/MicrosoftInstrumentationEngine_x86.dll",
         "build/netstandard2.0/zh-Hans/Microsoft.VisualStudio.TraceDataCollector.resources.dll",
         "build/netstandard2.0/zh-Hant/Microsoft.VisualStudio.TraceDataCollector.resources.dll",
         "lib/net462/Microsoft.VisualStudio.CodeCoverage.Shim.dll",
         "lib/netcoreapp3.1/Microsoft.VisualStudio.CodeCoverage.Shim.dll",
-        "microsoft.codecoverage.17.13.0.nupkg.sha512",
+        "microsoft.codecoverage.17.9.0.nupkg.sha512",
         "microsoft.codecoverage.nuspec"
       ]
     },
@@ -3113,14 +3192,15 @@
         "microsoft.extensions.primitives.nuspec"
       ]
     },
-    "Microsoft.NET.Test.Sdk/17.13.0": {
-      "sha512": "W19wCPizaIC9Zh47w8wWI/yxuqR7/dtABwOrc8r2jX/8mUNxM2vw4fXDh+DJTeogxV+KzKwg5jNNGQVwf3LXyA==",
+    "Microsoft.NET.Test.Sdk/17.9.0": {
+      "sha512": "7GUNAUbJYn644jzwLm5BD3a2p9C1dmP8Hr6fDPDxgItQk9hBs1Svdxzz07KQ/UphMSmgza9AbijBJGmw5D658A==",
       "type": "package",
-      "path": "microsoft.net.test.sdk/17.13.0",
+      "path": "microsoft.net.test.sdk/17.9.0",
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
         "Icon.png",
+        "LICENSE_MIT.txt",
         "build/net462/Microsoft.NET.Test.Sdk.props",
         "build/net462/Microsoft.NET.Test.Sdk.targets",
         "build/netcoreapp3.1/Microsoft.NET.Test.Sdk.Program.cs",
@@ -3131,7 +3211,7 @@
         "buildMultiTargeting/Microsoft.NET.Test.Sdk.props",
         "lib/net462/_._",
         "lib/netcoreapp3.1/_._",
-        "microsoft.net.test.sdk.17.13.0.nupkg.sha512",
+        "microsoft.net.test.sdk.17.9.0.nupkg.sha512",
         "microsoft.net.test.sdk.nuspec"
       ]
     },
@@ -3180,14 +3260,15 @@
         "microsoft.openapi.nuspec"
       ]
     },
-    "Microsoft.TestPlatform.ObjectModel/17.13.0": {
-      "sha512": "bt0E0Dx+iqW97o4A59RCmUmz/5NarJ7LRL+jXbSHod72ibL5XdNm1Ke+UO5tFhBG4VwHLcSjqq9BUSblGNWamw==",
+    "Microsoft.TestPlatform.ObjectModel/17.9.0": {
+      "sha512": "1ilw/8vgmjLyKU+2SKXKXaOqpYFJCQfGqGz+x0cosl981VzjrY74Sv6qAJv+neZMZ9ZMxF3ArN6kotaQ4uvEBw==",
       "type": "package",
-      "path": "microsoft.testplatform.objectmodel/17.13.0",
+      "path": "microsoft.testplatform.objectmodel/17.9.0",
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
         "Icon.png",
+        "LICENSE_MIT.txt",
         "lib/net462/Microsoft.TestPlatform.CoreUtilities.dll",
         "lib/net462/Microsoft.TestPlatform.PlatformAbstractions.dll",
         "lib/net462/Microsoft.VisualStudio.TestPlatform.ObjectModel.dll",
@@ -3275,18 +3356,19 @@
         "lib/netstandard2.0/zh-Hans/Microsoft.VisualStudio.TestPlatform.ObjectModel.resources.dll",
         "lib/netstandard2.0/zh-Hant/Microsoft.TestPlatform.CoreUtilities.resources.dll",
         "lib/netstandard2.0/zh-Hant/Microsoft.VisualStudio.TestPlatform.ObjectModel.resources.dll",
-        "microsoft.testplatform.objectmodel.17.13.0.nupkg.sha512",
+        "microsoft.testplatform.objectmodel.17.9.0.nupkg.sha512",
         "microsoft.testplatform.objectmodel.nuspec"
       ]
     },
-    "Microsoft.TestPlatform.TestHost/17.13.0": {
-      "sha512": "9GGw08Dc3AXspjekdyTdZ/wYWFlxbgcF0s7BKxzVX+hzAwpifDOdxM+ceVaaJSQOwqt3jtuNlHn3XTpKUS9x9Q==",
+    "Microsoft.TestPlatform.TestHost/17.9.0": {
+      "sha512": "Spmg7Wx49Ya3SxBjyeAR+nQpjMTKZwTwpZ7KyeOTIqI/WHNPnBU4HUvl5kuHPQAwGWqMy4FGZja1HvEwvoaDiA==",
       "type": "package",
-      "path": "microsoft.testplatform.testhost/17.13.0",
+      "path": "microsoft.testplatform.testhost/17.9.0",
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
         "Icon.png",
+        "LICENSE_MIT.txt",
         "ThirdPartyNotices.txt",
         "build/netcoreapp3.1/Microsoft.TestPlatform.TestHost.props",
         "build/netcoreapp3.1/x64/testhost.dll",
@@ -3344,7 +3426,7 @@
         "lib/netcoreapp3.1/zh-Hant/Microsoft.TestPlatform.CommunicationUtilities.resources.dll",
         "lib/netcoreapp3.1/zh-Hant/Microsoft.TestPlatform.CrossPlatEngine.resources.dll",
         "lib/netcoreapp3.1/zh-Hant/Microsoft.VisualStudio.TestPlatform.Common.resources.dll",
-        "microsoft.testplatform.testhost.17.13.0.nupkg.sha512",
+        "microsoft.testplatform.testhost.17.9.0.nupkg.sha512",
         "microsoft.testplatform.testhost.nuspec"
       ]
     },
@@ -6975,10 +7057,10 @@
         "xunit.extensibility.execution.nuspec"
       ]
     },
-    "xunit.runner.visualstudio/2.5.7": {
-      "sha512": "31Rl7dBJriX0DNwZfDp8gqFOPsiM0c9kqpcH/HvNi9vDp+K7Ydf42H7mVIvYT918Ywzn1ymLg1c4DDC6iU754w==",
+    "xunit.runner.visualstudio/2.5.6": {
+      "sha512": "CW6uhMXNaQQNMSG1IWhHkBT+V5eqHqn7MP0zfNMhU9wS/sgKX7FGL3rzoaUgt26wkY3bpf7pDVw3IjXhwfiP4w==",
       "type": "package",
-      "path": "xunit.runner.visualstudio/2.5.7",
+      "path": "xunit.runner.visualstudio/2.5.6",
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
@@ -6996,22 +7078,24 @@
         "build/net6.0/xunit.runner.visualstudio.testadapter.dll",
         "lib/net462/_._",
         "lib/net6.0/_._",
-        "xunit.runner.visualstudio.2.5.7.nupkg.sha512",
+        "xunit.runner.visualstudio.2.5.6.nupkg.sha512",
         "xunit.runner.visualstudio.nuspec"
       ]
+    },
+    "ChessDecoderApi/1.0.0": {
+      "type": "project",
+      "path": "../ChessDecoderApi.csproj",
+      "msbuildProject": "../ChessDecoderApi.csproj"
     }
   },
   "projectFileDependencyGroups": {
     "net9.0": [
-      "DotNetEnv >= 3.1.1",
-      "Google.Cloud.Vision.V1 >= 3.7.0",
-      "Microsoft.AspNetCore.OpenApi >= 9.0.4",
-      "Microsoft.NET.Test.Sdk >= 17.13.0",
+      "ChessDecoderApi >= 1.0.0",
+      "Microsoft.NET.Test.Sdk >= 17.9.0",
       "Moq >= 4.20.72",
-      "SixLabors.ImageSharp >= 3.1.8",
-      "Swashbuckle.AspNetCore >= 8.1.1",
+      "coverlet.collector >= 6.0.0",
       "xunit >= 2.6.6",
-      "xunit.runner.visualstudio >= 2.5.7"
+      "xunit.runner.visualstudio >= 2.5.6"
     ]
   },
   "packageFolders": {
@@ -7020,11 +7104,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "/Users/prompanos/Repos/Chess-decoder/ChessDecoderApi/ChessDecoderApi.csproj",
-      "projectName": "ChessDecoderApi",
-      "projectPath": "/Users/prompanos/Repos/Chess-decoder/ChessDecoderApi/ChessDecoderApi.csproj",
+      "projectUniqueName": "/Users/prompanos/Repos/Chess-decoder/ChessDecoderApi/Tests/Tests.csproj",
+      "projectName": "Tests",
+      "projectPath": "/Users/prompanos/Repos/Chess-decoder/ChessDecoderApi/Tests/Tests.csproj",
       "packagesPath": "/Users/prompanos/.nuget/packages/",
-      "outputPath": "/Users/prompanos/Repos/Chess-decoder/ChessDecoderApi/obj/",
+      "outputPath": "/Users/prompanos/Repos/Chess-decoder/ChessDecoderApi/Tests/obj/",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "/Users/prompanos/.nuget/NuGet/NuGet.Config"
@@ -7038,7 +7122,11 @@
       "frameworks": {
         "net9.0": {
           "targetAlias": "net9.0",
-          "projectReferences": {}
+          "projectReferences": {
+            "/Users/prompanos/Repos/Chess-decoder/ChessDecoderApi/ChessDecoderApi.csproj": {
+              "projectPath": "/Users/prompanos/Repos/Chess-decoder/ChessDecoderApi/ChessDecoderApi.csproj"
+            }
+          }
         }
       },
       "warningProperties": {
@@ -7057,33 +7145,19 @@
       "net9.0": {
         "targetAlias": "net9.0",
         "dependencies": {
-          "DotNetEnv": {
-            "target": "Package",
-            "version": "[3.1.1, )"
-          },
-          "Google.Cloud.Vision.V1": {
-            "target": "Package",
-            "version": "[3.7.0, )"
-          },
-          "Microsoft.AspNetCore.OpenApi": {
-            "target": "Package",
-            "version": "[9.0.4, )"
-          },
           "Microsoft.NET.Test.Sdk": {
             "target": "Package",
-            "version": "[17.13.0, )"
+            "version": "[17.9.0, )"
           },
           "Moq": {
             "target": "Package",
             "version": "[4.20.72, )"
           },
-          "SixLabors.ImageSharp": {
+          "coverlet.collector": {
+            "include": "Runtime, Build, Native, ContentFiles, Analyzers, BuildTransitive",
+            "suppressParent": "All",
             "target": "Package",
-            "version": "[3.1.8, )"
-          },
-          "Swashbuckle.AspNetCore": {
-            "target": "Package",
-            "version": "[8.1.1, )"
+            "version": "[6.0.0, )"
           },
           "xunit": {
             "target": "Package",
@@ -7093,7 +7167,7 @@
             "include": "Runtime, Build, Native, ContentFiles, Analyzers, BuildTransitive",
             "suppressParent": "All",
             "target": "Package",
-            "version": "[2.5.7, )"
+            "version": "[2.5.6, )"
           }
         },
         "imports": [
@@ -7108,9 +7182,6 @@
         "assetTargetFallback": true,
         "warn": true,
         "frameworkReferences": {
-          "Microsoft.AspNetCore.App": {
-            "privateAssets": "none"
-          },
           "Microsoft.NETCore.App": {
             "privateAssets": "all"
           }

@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("ChessDecoderApi")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+07abac084c400cbfa44101057f6c866e2ee085c2")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+0d812246e1c2e5587eea96b4fab2d7634b0ba044")]
 [assembly: System.Reflection.AssemblyProductAttribute("ChessDecoderApi")]
 [assembly: System.Reflection.AssemblyTitleAttribute("ChessDecoderApi")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
