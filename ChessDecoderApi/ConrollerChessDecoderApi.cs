@@ -32,7 +32,7 @@ namespace ChessDecoderApi.Controllers
         [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> UploadImage(IFormFile? image)
+        public async Task<IActionResult> UploadImage(IFormFile? image, [FromForm] string language = "English")
         {
             _logger.LogInformation("Processing image upload request");
 
@@ -69,7 +69,7 @@ namespace ChessDecoderApi.Controllers
                     }
 
                     // Process the image
-                    var pgnContent = await _imageProcessingService.ProcessImageAsync(tempFilePath);
+                    var pgnContent = await _imageProcessingService.ProcessImageAsync(tempFilePath, language);
 
                     // Generate output filename based on input filename
                     var outputFilename = Path.GetFileNameWithoutExtension(image.FileName) + ".pgn";

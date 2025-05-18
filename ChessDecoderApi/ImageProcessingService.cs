@@ -45,7 +45,7 @@ namespace ChessDecoderApi.Services
             _logger = logger;
         }
 
-        public async Task<string> ProcessImageAsync(string imagePath)
+        public async Task<string> ProcessImageAsync(string imagePath, string language = "English")
         {
             // Check if file exists
             if (!File.Exists(imagePath))
@@ -81,7 +81,7 @@ namespace ChessDecoderApi.Services
 
     
 
-            string language = "English"; // Default to English language
+            //string language = "English"; // Default to English language
             string text = await ExtractTextFromImageAsync(imageBytes, language);
 
             // Convert the extracted text to PGN format
