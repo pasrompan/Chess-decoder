@@ -14,6 +14,7 @@ namespace ChessDecoderApi.Services
         private readonly ILogger<ImageProcessingService> _logger;
         private readonly ILoggerFactory _loggerFactory;
         private readonly ChessMoveProcessor _chessMoveProcessor;
+        private readonly ChessMoveValidator _chessMoveValidator;
 
         private static readonly Dictionary<string, string> GreekToEnglishMap = new()
         {
@@ -48,6 +49,7 @@ namespace ChessDecoderApi.Services
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
             _chessMoveProcessor = new ChessMoveProcessor(loggerFactory.CreateLogger<ChessMoveProcessor>());
+            _chessMoveValidator = new ChessMoveValidator(loggerFactory.CreateLogger<ChessMoveValidator>());
         }
 
         public async Task<string> ProcessImageAsync(string imagePath, string language = "English")
@@ -58,23 +60,8 @@ namespace ChessDecoderApi.Services
                 throw new FileNotFoundException("Image file not found", imagePath);
             }
 
-            // Load the image
-            using var image = await Image.LoadAsync(imagePath);
-
-            // Resize the image if necessary
-            image.Mutate(x => x.Resize(new ResizeOptions
-            {
-                Size = new Size(1024, 1024),
-                Mode = ResizeMode.Max
-            }));
-
-            // Convert the image to bytes
-            byte[] imageBytes;
-            using (var ms = new MemoryStream())
-            {
-                await image.SaveAsJpegAsync(ms);
-                imageBytes = ms.ToArray();
-            }
+            // Load and process the image
+            byte[] imageBytes = await LoadAndProcessImageAsync(imagePath);
 
             // Extract text from the image using OpenAI
             var apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY") ?? 
@@ -84,9 +71,6 @@ namespace ChessDecoderApi.Services
                     _logger.LogInformation("API Key available: {available}", !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("OPENAI_API_KEY")));
                     throw new UnauthorizedAccessException("OPENAI_API_KEY environment variable not set");}
 
-    
-
-            //string language = "English"; // Default to English language
             string text = await ExtractTextFromImageAsync(imageBytes, language);
 
             // Convert the extracted text to PGN format
@@ -111,6 +95,24 @@ namespace ChessDecoderApi.Services
                     throw new InvalidOperationException("No valid moves were extracted from the image");
                 }
 
+                // Validate moves and log any issues
+                var validationResult = _chessMoveValidator.ValidateMoves(moves);
+                if (!validationResult.IsValid)
+                {
+                    foreach (var error in validationResult.Errors)
+                    {
+                        _logger.LogError("Move validation error: {Error}", error);
+                    }
+                }
+                foreach (var warning in validationResult.Warnings)
+                {
+                    _logger.LogWarning("Move validation warning: {Warning}", warning);
+                }
+                foreach (var suggestion in validationResult.Suggestions)
+                {
+                    _logger.LogInformation("Move validation suggestion: {Suggestion}", suggestion);
+                }
+
                 _logger.LogInformation("Successfully processed {MoveCount} moves", moves.Length);
             }
             catch (Exception ex)
@@ -123,7 +125,29 @@ namespace ChessDecoderApi.Services
             return await GeneratePGNContentAsync(moves);
         }
 
-        public async Task<string> ExtractTextFromImageAsync(byte[] imageBytes, string language)
+        protected virtual async Task<byte[]> LoadAndProcessImageAsync(string imagePath)
+        {
+            // Load the image
+            using var image = await Image.LoadAsync(imagePath);
+
+            // Resize the image if necessary
+            image.Mutate(x => x.Resize(new ResizeOptions
+            {
+                Size = new Size(1024, 1024),
+                Mode = ResizeMode.Max
+            }));
+
+            // Convert the image to bytes
+            byte[] imageBytes;
+            using (var ms = new MemoryStream())
+            {
+                await image.SaveAsJpegAsync(ms);
+                imageBytes = ms.ToArray();
+            }
+            return imageBytes;
+        }
+
+        public virtual async Task<string> ExtractTextFromImageAsync(byte[] imageBytes, string language)
         {
             try
             {
