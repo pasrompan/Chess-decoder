@@ -32,8 +32,12 @@ namespace ChessDecoderApi.Services
                 var jsonStartIndex = rawText.IndexOf("json\n");
                 if (jsonStartIndex == -1)
                 {
-                    _logger.LogError("Invalid response format: 'json' indicator not found");
-                    throw new ArgumentException("Invalid response format: 'json' indicator not found");
+                    jsonStartIndex = rawText.IndexOf("json\r\n");
+                    if (jsonStartIndex == -1)
+                    {
+                        _logger.LogError("Invalid response format: 'json' indicator not found");
+                        throw new ArgumentException("Invalid response format: 'json' indicator not found");
+                    }
                 }
 
                 // Extract the JSON array part after the "json" indicator and newline
