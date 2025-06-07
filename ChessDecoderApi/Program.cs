@@ -28,7 +28,7 @@ builder.Services.AddCors(options =>
     {
         policy.WithOrigins(
                 builder.Configuration.GetSection("AllowedOrigins").Get<string[]>() ?? 
-                new[] { "https://chess-scribe-convert.lovable.app" }
+                new[] { "https://chess-scribe-convert.lovable.app", "https://lovable.dev/projects/62ad5c43-6c34-4327-a33d-f77c21343ea5" }
             )
             .AllowAnyMethod()
             .AllowAnyHeader()
