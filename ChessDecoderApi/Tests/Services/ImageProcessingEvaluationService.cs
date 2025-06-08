@@ -56,19 +56,18 @@ namespace ChessDecoderApi.Tests.Services
                 _logger.LogInformation("Loaded {Count} ground truth moves from {Path}", 
                     groundTruthMoves.Count, groundTruthPath);
 
-                // Process the image
+                // Extract moves directly from the image
                 var startTime = DateTime.UtcNow;
-                var pgnResult = await _imageProcessingService.ProcessImageAsync(imagePath, language);
+                var extractedMovesArray = await _imageProcessingService.ExtractMovesFromImageToStringAsync(imagePath, language);
                 var endTime = DateTime.UtcNow;
 
                 result.ProcessingTime = endTime - startTime;
-                result.GeneratedPgn = pgnResult;
-
-                // Extract moves from the generated PGN
-                var extractedMoves = ExtractMovesFromPgn(pgnResult);
+                
+                // Convert array to list for consistency with existing evaluation logic
+                var extractedMoves = extractedMovesArray.ToList();
                 result.ExtractedMoves = extractedMoves;
 
-                _logger.LogInformation("Extracted {Count} moves from generated PGN", extractedMoves.Count);
+                _logger.LogInformation("Extracted {Count} moves directly from image", extractedMoves.Count);
 
                 // Compute various distance metrics
                 result.ExactMatchScore = ComputeExactMatchScore(groundTruthMoves, extractedMoves);
@@ -310,7 +309,6 @@ namespace ChessDecoderApi.Tests.Services
         
         public List<string> GroundTruthMoves { get; set; } = new();
         public List<string> ExtractedMoves { get; set; } = new();
-        public string GeneratedPgn { get; set; } = string.Empty;
         
         // Metrics
         public double ExactMatchScore { get; set; }

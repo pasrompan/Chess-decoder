@@ -253,10 +253,6 @@ namespace ChessDecoderApi.Tests
                 
                 Console.WriteLine($"  {i + 1,2}: {gtMove,-10} | {exMove,-10} | {match}");
             }
-
-            Console.WriteLine();
-            Console.WriteLine("=== GENERATED PGN ===");
-            Console.WriteLine(result.GeneratedPgn);
         }
     }
 } 

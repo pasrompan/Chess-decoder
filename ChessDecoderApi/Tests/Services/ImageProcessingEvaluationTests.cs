@@ -181,21 +181,12 @@ namespace ChessDecoderApi.Tests.Services
             // without actually calling the OpenAI API
 
             var mockImageService = new Mock<IImageProcessingService>();
-            
-            // Mock the ProcessImageAsync to return a known PGN result
-            var mockPgnResult = @"[Event ""Test""]
-[Site ""Test""]
-[Date ""2024.01.01""]
-[Round ""1""]
-[White ""Player1""]
-[Black ""Player2""]
-[Result ""*""]
 
-1. e4 e5 2. Nf3 Nc6 3. Bb5 *";
+            // Mock the ProcessImageAsync to return a known PGN result
 
             mockImageService
-                .Setup(x => x.ProcessImageAsync(It.IsAny<string>(), It.IsAny<string>()))
-                .ReturnsAsync(mockPgnResult);
+                .Setup(x => x.ExtractMovesFromImageToStringAsync(It.IsAny<string>(), It.IsAny<string>()))
+                .ReturnsAsync(new string[] { "e4", "e5", "Nf3", "Nc6", "Bb5" }); // Perfect match with ground truth
 
             var evaluationService = new ImageProcessingEvaluationService(
                 mockImageService.Object, 
