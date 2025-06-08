@@ -29,9 +29,13 @@ namespace ChessDecoderApi.Tests.Services
 
             // Assert
             Assert.True(result.IsValid);
-            Assert.Empty(result.Errors);
-            Assert.Empty(result.Warnings);
-            Assert.Equal(moves, result.NormalizedMoves);
+            Assert.Equal(moves.Length, result.Moves.Count);
+            Assert.All(result.Moves, move => 
+            {
+                Assert.Equal("valid", move.ValidationStatus);
+                Assert.Empty(move.ValidationText);
+                Assert.Equal(move.Notation, move.NormalizedNotation);
+            });
         }
 
         [Fact]
@@ -45,7 +49,9 @@ namespace ChessDecoderApi.Tests.Services
 
             // Assert
             Assert.False(result.IsValid);
-            Assert.Contains("Invalid move syntax", result.Errors.First());
+            var invalidMove = result.Moves.First(m => m.Notation == "invalid");
+            Assert.Equal("error", invalidMove.ValidationStatus);
+            Assert.Contains("Invalid move syntax", invalidMove.ValidationText);
         }
 
         [Fact]
@@ -59,7 +65,9 @@ namespace ChessDecoderApi.Tests.Services
 
             // Assert
             Assert.False(result.IsValid);
-            Assert.Contains("Invalid move syntax", result.Errors.First());
+            var invalidMove = result.Moves.First(m => m.Notation == "Xe5");
+            Assert.Equal("error", invalidMove.ValidationStatus);
+            Assert.Contains("Invalid piece notation", invalidMove.ValidationText);
         }
 
         [Theory]
@@ -84,8 +92,9 @@ namespace ChessDecoderApi.Tests.Services
 
             // Assert
             Assert.True(result.IsValid, $"Castling notation '{input}' should be valid");
-            Assert.Empty(result.Errors);
-            Assert.Equal(expected, result.NormalizedMoves[2]);
+            var castlingMove = result.Moves.First(m => m.Notation == input);
+            Assert.Equal("valid", castlingMove.ValidationStatus);
+            Assert.Equal(expected, castlingMove.NormalizedNotation);
         }
 
         [Theory]
@@ -116,8 +125,9 @@ namespace ChessDecoderApi.Tests.Services
 
             // Assert
             Assert.True(result.IsValid, $"Castling notation '{input}' should be valid");
-            Assert.Empty(result.Errors);
-            Assert.Equal(expected, result.NormalizedMoves[2]);
+            var castlingMove = result.Moves.First(m => m.Notation == input);
+            Assert.Equal("valid", castlingMove.ValidationStatus);
+            Assert.Equal(expected, castlingMove.NormalizedNotation);
         }
 
         [Fact]
@@ -131,8 +141,14 @@ namespace ChessDecoderApi.Tests.Services
 
             // Assert
             Assert.True(result.IsValid);
-            Assert.Empty(result.Errors);
-            Assert.Equal(new[] { "O-O", "O-O-O", "O-O", "O-O-O", "O-O" }, result.NormalizedMoves);
+            Assert.All(result.Moves, move => Assert.Equal("valid", move.ValidationStatus));
+            Assert.Collection(result.Moves,
+                move => Assert.Equal("O-O", move.NormalizedNotation),
+                move => Assert.Equal("O-O-O", move.NormalizedNotation),
+                move => Assert.Equal("O-O", move.NormalizedNotation),
+                move => Assert.Equal("O-O-O", move.NormalizedNotation),
+                move => Assert.Equal("O-O", move.NormalizedNotation)
+            );
         }
 
         [Fact]
@@ -146,7 +162,9 @@ namespace ChessDecoderApi.Tests.Services
 
             // Assert
             Assert.False(result.IsValid);
-            Assert.Contains("Invalid promotion piece", result.Suggestions.First());
+            var invalidMove = result.Moves.First(m => m.Notation == "e8=X");
+            Assert.Equal("error", invalidMove.ValidationStatus);
+            Assert.Contains("Invalid promotion piece", invalidMove.ValidationText);
         }
 
         [Fact]
@@ -160,7 +178,9 @@ namespace ChessDecoderApi.Tests.Services
 
             // Assert
             Assert.True(result.IsValid);
-            Assert.Contains("Consecutive checks detected", result.Warnings.First());
+            var checkMoves = result.Moves.Where(m => m.Notation.EndsWith("+")).ToList();
+            Assert.All(checkMoves, move => Assert.Equal("warning", move.ValidationStatus));
+            Assert.All(checkMoves, move => Assert.Contains("Consecutive checks detected", move.ValidationText));
         }
 
         [Fact]
@@ -174,7 +194,9 @@ namespace ChessDecoderApi.Tests.Services
 
             // Assert
             Assert.True(result.IsValid);
-            Assert.Empty(result.Errors);
+            var promotionMove = result.Moves.First(m => m.Notation == "e8=Q");
+            Assert.Equal("valid", promotionMove.ValidationStatus);
+            Assert.Empty(promotionMove.ValidationText);
         }
 
         [Fact]
@@ -188,7 +210,9 @@ namespace ChessDecoderApi.Tests.Services
 
             // Assert
             Assert.True(result.IsValid);
-            Assert.Empty(result.Errors);
+            var checkmateMove = result.Moves.First(m => m.Notation == "Qh5#");
+            Assert.Equal("valid", checkmateMove.ValidationStatus);
+            Assert.Empty(checkmateMove.ValidationText);
         }
 
         [Fact]
@@ -199,7 +223,10 @@ namespace ChessDecoderApi.Tests.Services
 
             // Assert
             Assert.False(result.IsValid);
-            Assert.Contains("No moves provided", result.Errors.First());
+            var errorMove = result.Moves.First();
+            Assert.Equal(0, errorMove.MoveNumber);
+            Assert.Equal("error", errorMove.ValidationStatus);
+            Assert.Contains("No moves provided", errorMove.ValidationText);
         }
 
         [Fact]
@@ -210,7 +237,10 @@ namespace ChessDecoderApi.Tests.Services
 
             // Assert
             Assert.False(result.IsValid);
-            Assert.Contains("No moves provided", result.Errors.First());
+            var errorMove = result.Moves.First();
+            Assert.Equal(0, errorMove.MoveNumber);
+            Assert.Equal("error", errorMove.ValidationStatus);
+            Assert.Contains("No moves provided", errorMove.ValidationText);
         }
     }
 } 
