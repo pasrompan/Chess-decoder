@@ -272,14 +272,14 @@ namespace ChessDecoderApi.Tests.Services
         private double ComputeNormalizedScore(EvaluationResult result)
         {
             // Weighted combination of different metrics
-            // Lower score is better (0 = perfect)
+            // Higher score is better (1 = perfect, 0 = worst)
             
             const double exactMatchWeight = 0.4;
             const double positionalWeight = 0.3;
             const double levenshteinWeight = 0.2;
             const double lcsWeight = 0.1;
             
-            // Normalize each metric to 0-1 range where 0 is best
+            // Normalize each metric to 0-1 range where 0 is worst
             double exactMatchComponent = 1.0 - result.ExactMatchScore;
             double positionalComponent = 1.0 - result.PositionalAccuracy;
             
@@ -291,10 +291,13 @@ namespace ChessDecoderApi.Tests.Services
             int maxPossibleLcs = Math.Min(result.GroundTruthMoves.Count, result.ExtractedMoves.Count);
             double lcsComponent = maxPossibleLcs > 0 ? 1.0 - ((double)result.LongestCommonSubsequence / maxPossibleLcs) : 1.0;
             
-            return exactMatchWeight * exactMatchComponent +
-                   positionalWeight * positionalComponent +
-                   levenshteinWeight * levenshteinComponent +
-                   lcsWeight * lcsComponent;
+            double rawScore = exactMatchWeight * exactMatchComponent +
+                             positionalWeight * positionalComponent +
+                             levenshteinWeight * levenshteinComponent +
+                             lcsWeight * lcsComponent;
+            
+            // Invert the score so that 1 = perfect, 0 = worst
+            return 1.0 - rawScore;
         }
     }
 
@@ -330,7 +333,7 @@ namespace ChessDecoderApi.Tests.Services
                 Console.WriteLine($"Processing Time: {ProcessingTime.TotalSeconds:F2}s");
                 Console.WriteLine($"Ground Truth Moves: {GroundTruthMoves.Count}");
                 Console.WriteLine($"Extracted Moves: {ExtractedMoves.Count}");
-                Console.WriteLine($"Normalized Score: {NormalizedScore:F3} (0 = perfect)");
+                Console.WriteLine($"Normalized Score: {NormalizedScore:F3} (1 = perfect)");
                 Console.WriteLine($"Exact Match Score: {ExactMatchScore:F3}");
                 Console.WriteLine($"Positional Accuracy: {PositionalAccuracy:F3}");
                 Console.WriteLine($"Levenshtein Distance: {LevenshteinDistance}");
