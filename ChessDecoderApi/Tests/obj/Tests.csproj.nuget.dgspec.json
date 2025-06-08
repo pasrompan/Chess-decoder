@@ -56,14 +56,6 @@
               "target": "Package",
               "version": "[9.0.4, )"
             },
-            "Microsoft.NET.Test.Sdk": {
-              "target": "Package",
-              "version": "[17.13.0, )"
-            },
-            "Moq": {
-              "target": "Package",
-              "version": "[4.20.72, )"
-            },
             "SixLabors.ImageSharp": {
               "target": "Package",
               "version": "[3.1.8, )"
@@ -71,16 +63,6 @@
             "Swashbuckle.AspNetCore": {
               "target": "Package",
               "version": "[8.1.1, )"
-            },
-            "xunit": {
-              "target": "Package",
-              "version": "[2.6.6, )"
-            },
-            "xunit.runner.visualstudio": {
-              "include": "Runtime, Build, Native, ContentFiles, Analyzers, BuildTransitive",
-              "suppressParent": "All",
-              "target": "Package",
-              "version": "[2.5.7, )"
             }
           },
           "imports": [
@@ -152,7 +134,7 @@
           "dependencies": {
             "Microsoft.NET.Test.Sdk": {
               "target": "Package",
-              "version": "[17.9.0, )"
+              "version": "[17.13.0, )"
             },
             "Moq": {
               "target": "Package",
