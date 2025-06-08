@@ -52,7 +52,13 @@ namespace ChessDecoderApi.Services
             _chessMoveValidator = new ChessMoveValidator(loggerFactory.CreateLogger<ChessMoveValidator>());
         }
 
-        public async Task<string> ProcessImageAsync(string imagePath, string language = "English")
+        /// <summary>
+        /// Extracts chess moves from an image and returns them as a list of strings
+        /// </summary>
+        /// <param name="imagePath">Path to the chess image</param>
+        /// <param name="language">Language for chess notation (default: English)</param>
+        /// <returns>Array of chess moves in standard notation</returns>
+        public async Task<string[]> ExtractMovesFromImageToStringAsync(string imagePath, string language = "English")
         {
             // Check if file exists
             if (!File.Exists(imagePath))
@@ -73,7 +79,7 @@ namespace ChessDecoderApi.Services
 
             string text = await ExtractTextFromImageAsync(imageBytes, language);
 
-            // Convert the extracted text to PGN format
+            // Convert the extracted text to moves
             string[] moves;
             try
             {
@@ -120,6 +126,20 @@ namespace ChessDecoderApi.Services
                 _logger.LogError(ex, "Error processing chess moves for language: {Language}", language);
                 throw;
             }
+
+            return moves;
+        }
+
+        /// <summary>
+        /// Processes a chess image and returns the moves as a PGN string
+        /// </summary>
+        /// <param name="imagePath">Path to the chess image</param>
+        /// <param name="language">Language for chess notation (default: English)</param>
+        /// <returns>PGN formatted string containing the chess moves</returns>
+        public async Task<string> ProcessImageAsync(string imagePath, string language = "English")
+        {
+            // Extract moves from the image
+            string[] moves = await ExtractMovesFromImageToStringAsync(imagePath, language);
 
             // Generate the PGN content
             return await GeneratePGNContentAsync(moves);
