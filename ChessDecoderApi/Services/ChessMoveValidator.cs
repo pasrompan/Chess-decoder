@@ -58,7 +58,7 @@ namespace ChessDecoderApi.Services
         public List<ValidatedMove> Moves { get; set; } = new();
     }
 
-    public class ChessMoveValidator
+    public class ChessMoveValidator : IChessMoveValidator
     {
         private readonly ILogger<ChessMoveValidator> _logger;
         private static readonly Regex _validMovePattern = new(@"^([KQRBN]?[a-h]?[1-8]?x?[a-h][1-8](=[QRBN])?[+#]?|O-O(-O)?[+#]?)$", RegexOptions.Compiled);

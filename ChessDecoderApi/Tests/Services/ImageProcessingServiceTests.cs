@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
 using ChessDecoderApi.Services;
+using ChessDecoderApi.Models;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -59,7 +60,7 @@ namespace ChessDecoderApi.Tests.Services
         }
 
         [Fact]
-        public async Task ProcessImageAsync_ValidEnglishMoves_ReturnsPGNContent()
+        public async Task ProcessImageAsync_ValidEnglishMoves_ReturnsPGNContentAndValidation()
         {
             // Arrange
             var tempFile = Path.GetTempFileName();
@@ -92,10 +93,33 @@ namespace ChessDecoderApi.Tests.Services
                 var result = await mockService.Object.ProcessImageAsync(tempFile);
 
                 // Assert
-                Assert.Contains("[Event \"??\"]", result);
-                Assert.Contains("1. e4 e5", result);
-                Assert.Contains("2. Nf3 Nc6", result);
-                Assert.Contains("*", result);
+                Assert.NotNull(result);
+                Assert.NotNull(result.PgnContent);
+                Assert.NotNull(result.Validation);
+                Assert.NotNull(result.Validation.GameId);
+                Assert.NotEmpty(result.Validation.Moves);
+
+                // Check PGN content
+                Assert.Contains("[Event \"??\"]", result.PgnContent);
+                Assert.Contains("1. e4 e5", result.PgnContent);
+                Assert.Contains("2. Nf3 Nc6", result.PgnContent);
+                Assert.Contains("*", result.PgnContent);
+
+                // Check validation data
+                Assert.Equal(2, result.Validation.Moves.Count); // 2 move pairs
+                var firstPair = result.Validation.Moves[0];
+                Assert.Equal(1, firstPair.MoveNumber);
+                Assert.Equal("e4", firstPair.WhiteMove.Notation);
+                Assert.Equal("e5", firstPair.BlackMove.Notation);
+                Assert.Equal("valid", firstPair.WhiteMove.ValidationStatus);
+                Assert.Equal("valid", firstPair.BlackMove.ValidationStatus);
+
+                var secondPair = result.Validation.Moves[1];
+                Assert.Equal(2, secondPair.MoveNumber);
+                Assert.Equal("Nf3", secondPair.WhiteMove.Notation);
+                Assert.Equal("Nc6", secondPair.BlackMove.Notation);
+                Assert.Equal("valid", secondPair.WhiteMove.ValidationStatus);
+                Assert.Equal("valid", secondPair.BlackMove.ValidationStatus);
 
                 // Verify that ExtractTextFromImageAsync was called with our dummy image bytes
                 mockService.Verify(x => x.ExtractTextFromImageAsync(
@@ -113,7 +137,7 @@ namespace ChessDecoderApi.Tests.Services
         }
 
         [Fact]
-        public async Task ProcessImageAsync_ValidGreekMoves_ReturnsPGNContent()
+        public async Task ProcessImageAsync_ValidGreekMoves_ReturnsPGNContentAndValidation()
         {
             // Arrange
             var tempFile = Path.GetTempFileName();
@@ -146,10 +170,33 @@ namespace ChessDecoderApi.Tests.Services
                 var result = await mockService.Object.ProcessImageAsync(tempFile, "Greek");
 
                 // Assert
-                Assert.Contains("[Event \"??\"]", result);
-                Assert.Contains("1. e4 e5", result);
-                Assert.Contains("2. Nf3 Nc6", result);
-                Assert.Contains("*", result);
+                Assert.NotNull(result);
+                Assert.NotNull(result.PgnContent);
+                Assert.NotNull(result.Validation);
+                Assert.NotNull(result.Validation.GameId);
+                Assert.NotEmpty(result.Validation.Moves);
+
+                // Check PGN content
+                Assert.Contains("[Event \"??\"]", result.PgnContent);
+                Assert.Contains("1. e4 e5", result.PgnContent);
+                Assert.Contains("2. Nf3 Nc6", result.PgnContent);
+                Assert.Contains("*", result.PgnContent);
+
+                // Check validation data
+                Assert.Equal(2, result.Validation.Moves.Count); // 2 move pairs
+                var firstPair = result.Validation.Moves[0];
+                Assert.Equal(1, firstPair.MoveNumber);
+                Assert.Equal("e4", firstPair.WhiteMove.Notation);
+                Assert.Equal("e5", firstPair.BlackMove.Notation);
+                Assert.Equal("valid", firstPair.WhiteMove.ValidationStatus);
+                Assert.Equal("valid", firstPair.BlackMove.ValidationStatus);
+
+                var secondPair = result.Validation.Moves[1];
+                Assert.Equal(2, secondPair.MoveNumber);
+                Assert.Equal("Nf3", secondPair.WhiteMove.Notation);
+                Assert.Equal("Nc6", secondPair.BlackMove.Notation);
+                Assert.Equal("valid", secondPair.WhiteMove.ValidationStatus);
+                Assert.Equal("valid", secondPair.BlackMove.ValidationStatus);
 
                 // Verify that ExtractTextFromImageAsync was called with our dummy image bytes
                 mockService.Verify(x => x.ExtractTextFromImageAsync(
@@ -167,7 +214,7 @@ namespace ChessDecoderApi.Tests.Services
         }
 
         [Fact]
-        public async Task ProcessImageAsync_InvalidMoves_LogsValidationErrors()
+        public async Task ProcessImageAsync_InvalidMoves_ReturnsValidationErrors()
         {
             // Arrange
             var tempFile = Path.GetTempFileName();
@@ -200,7 +247,35 @@ namespace ChessDecoderApi.Tests.Services
                 var result = await mockService.Object.ProcessImageAsync(tempFile);
 
                 // Assert
-                Assert.Contains("[Event \"??\"]", result);
+                Assert.NotNull(result);
+                Assert.NotNull(result.PgnContent);
+                Assert.NotNull(result.Validation);
+                Assert.NotNull(result.Validation.GameId);
+                Assert.NotEmpty(result.Validation.Moves);
+
+                // Check PGN content
+                Assert.Contains("[Event \"??\"]", result.PgnContent);
+                Assert.Contains("1. invalid e5", result.PgnContent);
+                Assert.Contains("2. Nf3 Nc6", result.PgnContent);
+                Assert.Contains("*", result.PgnContent);
+
+                // Check validation data
+                Assert.Equal(2, result.Validation.Moves.Count); // 2 move pairs
+                var firstPair = result.Validation.Moves[0];
+                Assert.Equal(1, firstPair.MoveNumber);
+                Assert.Equal("invalid", firstPair.WhiteMove.Notation);
+                Assert.Equal("e5", firstPair.BlackMove.Notation);
+                Assert.Equal("error", firstPair.WhiteMove.ValidationStatus);
+                Assert.Equal("valid", firstPair.BlackMove.ValidationStatus);
+                Assert.Contains("Invalid move", firstPair.WhiteMove.ValidationText);
+
+                var secondPair = result.Validation.Moves[1];
+                Assert.Equal(2, secondPair.MoveNumber);
+                Assert.Equal("Nf3", secondPair.WhiteMove.Notation);
+                Assert.Equal("Nc6", secondPair.BlackMove.Notation);
+                Assert.Equal("valid", secondPair.WhiteMove.ValidationStatus);
+                Assert.Equal("valid", secondPair.BlackMove.ValidationStatus);
+
                 // Verify that validation errors were logged
                 _loggerMock.Verify(
                     x => x.Log(
@@ -227,7 +302,7 @@ namespace ChessDecoderApi.Tests.Services
         }
 
         [Fact]
-        public async Task ProcessImageAsync_ConsecutiveChecks_LogsValidationWarning()
+        public async Task ProcessImageAsync_ConsecutiveChecks_ReturnsValidationWarnings()
         {
             // Arrange
             var tempFile = Path.GetTempFileName();
@@ -260,7 +335,36 @@ namespace ChessDecoderApi.Tests.Services
                 var result = await mockService.Object.ProcessImageAsync(tempFile);
 
                 // Assert
-                Assert.Contains("[Event \"??\"]", result);
+                Assert.NotNull(result);
+                Assert.NotNull(result.PgnContent);
+                Assert.NotNull(result.Validation);
+                Assert.NotNull(result.Validation.GameId);
+                Assert.NotEmpty(result.Validation.Moves);
+
+                // Check PGN content
+                Assert.Contains("[Event \"??\"]", result.PgnContent);
+                Assert.Contains("1. e4 e5", result.PgnContent);
+                Assert.Contains("2. Qh5+ Ke7+", result.PgnContent);
+                Assert.Contains("*", result.PgnContent);
+
+                // Check validation data
+                Assert.Equal(2, result.Validation.Moves.Count); // 2 move pairs
+                var firstPair = result.Validation.Moves[0];
+                Assert.Equal(1, firstPair.MoveNumber);
+                Assert.Equal("e4", firstPair.WhiteMove.Notation);
+                Assert.Equal("e5", firstPair.BlackMove.Notation);
+                Assert.Equal("valid", firstPair.WhiteMove.ValidationStatus);
+                Assert.Equal("valid", firstPair.BlackMove.ValidationStatus);
+
+                var secondPair = result.Validation.Moves[1];
+                Assert.Equal(2, secondPair.MoveNumber);
+                Assert.Equal("Qh5+", secondPair.WhiteMove.Notation);
+                Assert.Equal("Ke7+", secondPair.BlackMove.Notation);
+                Assert.Equal("warning", secondPair.WhiteMove.ValidationStatus);
+                Assert.Equal("warning", secondPair.BlackMove.ValidationStatus);
+                Assert.Contains("Consecutive checks", secondPair.WhiteMove.ValidationText);
+                Assert.Contains("Consecutive checks", secondPair.BlackMove.ValidationText);
+
                 // Verify that validation warning was logged
                 _loggerMock.Verify(
                     x => x.Log(

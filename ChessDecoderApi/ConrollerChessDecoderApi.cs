@@ -69,13 +69,14 @@ namespace ChessDecoderApi.Controllers
                     }
 
                     // Process the image
-                    var pgnContent = await _imageProcessingService.ProcessImageAsync(tempFilePath, language);
+                    var result = await _imageProcessingService.ProcessImageAsync(tempFilePath, language);
 
-                    // Generate output filename based on input filename
-                    var outputFilename = Path.GetFileNameWithoutExtension(image.FileName) + ".pgn";
-
-                    // Return the PGN file
-                    return File(Encoding.UTF8.GetBytes(pgnContent), "application/octet-stream", outputFilename);
+                    // Return both PGN content and validation data
+                    return Ok(new
+                    {
+                        pgnContent = result.PgnContent,
+                        validation = result.Validation
+                    });
                 }
                 finally
                 {
