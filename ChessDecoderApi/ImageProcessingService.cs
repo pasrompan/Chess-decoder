@@ -97,20 +97,19 @@ namespace ChessDecoderApi.Services
 
                 // Validate moves and log any issues
                 var validationResult = _chessMoveValidator.ValidateMoves(moves);
-                if (!validationResult.IsValid)
+                foreach (var move in validationResult.Moves)
                 {
-                    foreach (var error in validationResult.Errors)
+                    switch (move.ValidationStatus)
                     {
-                        _logger.LogError("Move validation error: {Error}", error);
+                        case "error":
+                            _logger.LogError("Move validation error: Move {MoveNumber} '{Move}': {Error}", 
+                                move.MoveNumber, move.Notation, move.ValidationText);
+                            break;
+                        case "warning":
+                            _logger.LogWarning("Move validation warning: Move {MoveNumber} '{Move}': {Warning}", 
+                                move.MoveNumber, move.Notation, move.ValidationText);
+                            break;
                     }
-                }
-                foreach (var warning in validationResult.Warnings)
-                {
-                    _logger.LogWarning("Move validation warning: {Warning}", warning);
-                }
-                foreach (var suggestion in validationResult.Suggestions)
-                {
-                    _logger.LogInformation("Move validation suggestion: {Suggestion}", suggestion);
                 }
 
                 _logger.LogInformation("Successfully processed {MoveCount} moves", moves.Length);
