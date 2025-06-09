@@ -1,0 +1,13 @@
+41. Kg3 Nxd5 
+42. f4 Rf8 
+43. f3 Rxf4
+44. h3 Rd4
+45. f4 Rd3+
+46. Kg4 Rxb3
+47. f5 Rc3
+48. f6 Nxf6
+49. Kg5 b3
+50. h4 b2
+51. Kf4 b1=Q
+52. Ke5 Qe4
+53. Kd6 Rc6#
