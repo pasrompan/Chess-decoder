@@ -15,12 +15,12 @@ namespace ChessDecoderApi.Services
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        public async Task<string[]> ProcessChessMovesAsync(string rawText)
+        public Task<string[]> ProcessChessMovesAsync(string rawText)
         {
             if (string.IsNullOrWhiteSpace(rawText))
             {
                 _logger.LogWarning("Received empty or whitespace input for processing");
-                return Array.Empty<string>();
+                return Task.FromResult(Array.Empty<string>());
             }
 
             try
@@ -46,10 +46,16 @@ namespace ChessDecoderApi.Services
                 // Parse the inner JSON array
                 var moves = JsonSerializer.Deserialize<string[]>(jsonPart);
 
+                if (moves == null)
+                {
+                    _logger.LogError("Failed to deserialize chess moves - null result");
+                    throw new ArgumentException("Failed to deserialize chess moves - null result");
+                }
+
                 _logger.LogInformation("Successfully processed {MoveCount} chess moves", moves.Length);
                 _logger.LogDebug("Processed moves: {Moves}", string.Join(", ", moves));
 
-                return moves;
+                return Task.FromResult(moves);
             }
             catch (JsonException ex)
             {
@@ -66,6 +72,6 @@ namespace ChessDecoderApi.Services
 
     public class OuterResponse
     {
-        public string response { get; set; }
+        public string? response { get; set; }
     }
 } 

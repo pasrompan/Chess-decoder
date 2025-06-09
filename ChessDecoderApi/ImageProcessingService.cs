@@ -261,7 +261,7 @@ namespace ChessDecoderApi.Services
             }
         }
 
-        private async Task<string[]> ConvertGreekMovesToEnglishAsync(string[] greekMoves)
+        private Task<string[]> ConvertGreekMovesToEnglishAsync(string[] greekMoves)
         {
             var englishMoves = new string[greekMoves.Length];
 
@@ -281,7 +281,7 @@ namespace ChessDecoderApi.Services
                 englishMoves[i] = englishMove;
             }
 
-            return englishMoves;
+            return Task.FromResult(englishMoves);
         }
 
         private string HandleSpecialCases(string move)

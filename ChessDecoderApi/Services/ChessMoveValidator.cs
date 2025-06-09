@@ -12,7 +12,7 @@ namespace ChessDecoderApi.Services
         public List<string> Errors { get; set; } = new();
         public List<string> Warnings { get; set; } = new();
         public List<string> Suggestions { get; set; } = new();
-        public string[] NormalizedMoves { get; set; }
+        public string[]? NormalizedMoves { get; set; }
     }
 
     public class ChessMoveValidator
