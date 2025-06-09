@@ -8,7 +8,7 @@ using ChessDecoderApi.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
-namespace ChessDecoderApi.Tests.Services
+namespace ChessDecoderApi.Services
 {
     public class ImageProcessingEvaluationService
     {

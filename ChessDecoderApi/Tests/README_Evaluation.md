@@ -4,11 +4,50 @@ This evaluation system allows you to test the `ProcessImageAsync` function again
 
 ## Features
 
-- **Controlled API Usage**: Flag-controlled system to prevent accidental OpenAI API calls
+- **API Endpoint**: RESTful endpoint for evaluating chess image processing accuracy
 - **Multiple Metrics**: Exact match, positional accuracy, Levenshtein distance, and longest common subsequence
 - **Normalized Scoring**: Single score (0-1) where 0 is perfect and 1 is worst
-- **Batch Processing**: Evaluate multiple test cases and get aggregate results
-- **Detailed Reporting**: Move-by-move comparison and detailed metrics
+- **Detailed JSON Response**: Complete evaluation results including move-by-move comparison
+- **File Upload Support**: Direct image and ground truth file upload via multipart form data
+
+## API Endpoint
+
+### POST `/ChessDecoder/evaluate`
+
+Evaluates a chess image against ground truth data and returns comprehensive accuracy metrics.
+
+**Request Parameters:**
+- `image` (required): Chess image file (JPG, PNG, etc.)
+- `groundTruth` (required): Ground truth file (.txt or .pgn)
+- `language` (optional): Chess notation language (default: "English")
+
+**Response Format:**
+```json
+{
+  "imageFileName": "chess-game.jpg",
+  "groundTruthFileName": "game1.txt",
+  "language": "English",
+  "isSuccessful": true,
+  "errorMessage": "",
+  "processingTimeSeconds": 2.341,
+  "metrics": {
+    "normalizedScore": 0.127,
+    "exactMatchScore": 0.897,
+    "positionalAccuracy": 0.931,
+    "levenshteinDistance": 4,
+    "longestCommonSubsequence": 52
+  },
+  "moveCounts": {
+    "groundTruthMoves": 58,
+    "extractedMoves": 56
+  },
+  "moves": {
+    "groundTruth": ["e4", "e5", "Nf3", "Nc6", "..."],
+    "extracted": ["e4", "e5", "Nf3", "Nc6", "..."]
+  },
+  "generatedPgn": "[Event \"??\"]\n[Site \"??\"]\n...\n1. e4 e5 2. Nf3 Nc6 *"
+}
+```
 
 ## Getting Started
 
@@ -19,63 +58,83 @@ This evaluation system allows you to test the `ProcessImageAsync` function again
    export OPENAI_API_KEY="your-api-key-here"
    ```
 
-2. Prepare test data:
+2. Start the Chess Decoder API:
+   ```bash
+   dotnet run
+   ```
+
+3. Prepare test data:
    - Chess images (JPG, PNG, etc.)
    - Corresponding ground truth PGN files (like `Game1.txt`)
 
-### Basic Usage
+### Usage Examples
 
-#### 1. Single Evaluation
-
-```csharp
-// Create the evaluation service
-var evaluationService = new ImageProcessingEvaluationService(
-    imageProcessingService, 
-    logger, 
-    useRealApi: true); // Enable real API calls
-
-// Run evaluation
-var result = await evaluationService.EvaluateAsync(
-    "path/to/chess-image.jpg", 
-    "Tests/data/GroundTruth/Game1.txt");
-
-// Display results
-result.PrintSummary();
-```
-
-#### 2. Multiple Evaluations
-
-```csharp
-var testCases = new List<TestCase>
-{
-    new TestCase 
-    { 
-        ImagePath = "test1.jpg", 
-        GroundTruthPath = "ground1.txt",
-        Language = "English"
-    },
-    new TestCase 
-    { 
-        ImagePath = "test2.jpg", 
-        GroundTruthPath = "ground2.txt",
-        Language = "Greek"
-    }
-};
-
-var aggregateResult = await evaluationService.EvaluateMultipleAsync(testCases);
-aggregateResult.PrintSummary();
-```
-
-#### 3. Console Application
-
-Use the provided console application for command-line evaluation:
+#### 1. Using cURL
 
 ```bash
-# Single evaluation
-dotnet run --project Tests -- --image "chess1.jpg" --groundtruth "Game1.txt"
+# Basic evaluation
+curl -X POST "https://localhost:7000/ChessDecoder/evaluate" \
+  -H "Content-Type: multipart/form-data" \
+  -F "image=@chess-image.jpg" \
+  -F "groundTruth=@Tests/data/GroundTruth/Game1.txt"
 
 # With Greek language support
-dotnet run --project Tests -- -i "greek_chess.jpg" -g "Greek1.txt" -l "Greek"
+curl -X POST "https://localhost:7000/ChessDecoder/evaluate" \
+  -H "Content-Type: multipart/form-data" \
+  -F "image=@greek-chess.jpg" \
+  -F "groundTruth=@greek-game.txt" \
+  -F "language=Greek"
+```
+
+#### 2. Using JavaScript/Fetch
+
+```javascript
+async function evaluateChessImage(imageFile, groundTruthFile, language = 'English') {
+  const formData = new FormData();
+  formData.append('image', imageFile);
+  formData.append('groundTruth', groundTruthFile);
+  formData.append('language', language);
+
+  const response = await fetch('/ChessDecoder/evaluate', {
+    method: 'POST',
+    body: formData
+  });
+
+  const result = await response.json();
+  return result;
+}
+
+// Usage
+const imageFile = document.getElementById('imageInput').files[0];
+const groundTruthFile = document.getElementById('groundTruthInput').files[0];
+const evaluation = await evaluateChessImage(imageFile, groundTruthFile);
+console.log('Normalized Score:', evaluation.metrics.normalizedScore);
+```
+
+#### 3. Using Python
+
+```python
+import requests
+
+def evaluate_chess_image(image_path, ground_truth_path, language='English'):
+    url = 'https://localhost:7000/ChessDecoder/evaluate'
+    
+    with open(image_path, 'rb') as img, open(ground_truth_path, 'rb') as gt:
+        files = {
+            'image': img,
+            'groundTruth': gt
+        }
+        data = {
+            'language': language
+        }
+        
+        response = requests.post(url, files=files, data=data)
+        return response.json()
+
+# Usage
+result = evaluate_chess_image('chess.jpg', 'game1.txt')
+print(f"Normalized Score: {result['metrics']['normalizedScore']}")
+print(f"Exact Match Score: {result['metrics']['exactMatchScore']}")
 ```
 
 ## Evaluation Metrics
@@ -106,7 +165,7 @@ The normalized score uses weighted components:
 - Levenshtein Distance: 20%
 - LCS Component: 10%
 
-## Testing Approaches
+## Programmatic Testing
 
 ### 1. Development Testing (Mocked)
 
@@ -119,8 +178,8 @@ var evaluationService = new ImageProcessingEvaluationService(
 
 // Or with mocked results
 mockImageService
-    .Setup(x => x.ProcessImageAsync(It.IsAny<string>(), It.IsAny<string>()))
-    .ReturnsAsync(knownPgnResult);
+    .Setup(x => x.ExtractMovesFromImageToStringAsync(It.IsAny<string>(), It.IsAny<string>()))
+    .ReturnsAsync(new string[] { "e4", "e5", "Nf3", "Nc6" });
 ```
 
 ### 2. Integration Testing (Real API)
@@ -152,8 +211,10 @@ Tests/
 ├── data/
 │   └── GroundTruth/
 │       └── Game1.txt                          # Sample ground truth data
-├── EvaluationRunner.cs                        # Console application
 └── README_Evaluation.md                       # This file
+
+Controllers/
+└── ChessDecoderController.cs                  # API endpoints including /evaluate
 ```
 
 ## Ground Truth Format
@@ -170,22 +231,33 @@ Ground truth files should be in PGN format or simple move list format:
 
 The evaluation system will parse both full PGN files and simple move lists.
 
-## Example Output
+## Example Response
 
-```
-=== Evaluation Results ===
-Image: test-chess.jpg
-Ground Truth: Game1.txt
-Language: English
-Success: True
-Processing Time: 2.34s
-Ground Truth Moves: 58
-Extracted Moves: 56
-Normalized Score: 0.127 (0 = perfect)
-Exact Match Score: 0.897
-Positional Accuracy: 0.931
-Levenshtein Distance: 4
-Longest Common Subsequence: 52
+```json
+{
+  "imageFileName": "test-chess.jpg",
+  "groundTruthFileName": "Game1.txt",
+  "language": "English",
+  "isSuccessful": true,
+  "errorMessage": "",
+  "processingTimeSeconds": 2.34,
+  "metrics": {
+    "normalizedScore": 0.127,
+    "exactMatchScore": 0.897,
+    "positionalAccuracy": 0.931,
+    "levenshteinDistance": 4,
+    "longestCommonSubsequence": 52
+  },
+  "moveCounts": {
+    "groundTruthMoves": 58,
+    "extractedMoves": 56
+  },
+  "moves": {
+    "groundTruth": ["e4", "e5", "Nf3", "Nc6", "Bb5", "..."],
+    "extracted": ["e4", "e5", "Nf3", "Nc6", "Ba4", "..."]
+  },
+  "generatedPgn": "[Event \"??\"]\n[Site \"??\"]\n[Date \"??\"]\n[Round \"??\"]\n[White \"??\"]\n[Black \"??\"]\n[Result \"*\"]\n\n1. e4 e5 2. Nf3 Nc6 3. Ba4 *"
+}
 ```
 
 ## Language Support
@@ -195,22 +267,45 @@ The evaluation system supports different chess notation languages:
 - **Greek**: Greek chess notation (ε4, Ιf3, etc.)
 - Additional languages can be added by extending the character mapping
 
-## Safety Features
+## Error Handling
 
-- **API Key Validation**: Checks for OpenAI API key before starting
-- **File Validation**: Verifies image and ground truth files exist
-- **Flag Protection**: `useRealApi` flag prevents accidental API usage
-- **Error Handling**: Comprehensive error handling and logging
-- **Skipped Tests**: Integration tests are skipped by default
+The API returns appropriate HTTP status codes:
+
+- **200 OK**: Successful evaluation
+- **400 Bad Request**: Missing or invalid files
+- **401 Unauthorized**: Invalid or missing OpenAI API key
+- **500 Internal Server Error**: Processing errors
+
+Error responses include details:
+```json
+{
+  "status": 400,
+  "message": "No image file provided"
+}
+```
 
 ## Cost Considerations
 
 Each evaluation makes a real OpenAI API call, which incurs costs. Use the evaluation system judiciously:
 
-- Start with mock tests for development
-- Use single evaluations for debugging
-- Run batch evaluations only when needed
+- Test with a few images first to understand accuracy
 - Monitor your API usage and costs
+- Consider batching evaluations for efficiency
+- Use the development/mock tests for initial development
+
+## Security Notes
+
+- The evaluation endpoint requires both image and ground truth files
+- Temporary files are automatically cleaned up after processing
+- No persistent storage of uploaded files
+- OpenAI API key validation occurs before processing
+
+## Performance Tips
+
+- Use appropriately sized images (the system resizes to 1024x1024 max)
+- Ground truth files should be reasonably sized
+- Consider image quality and chess notation clarity for better results
+- Network latency affects processing time for API calls
 
 ## Extending the System
 
@@ -219,7 +314,7 @@ Each evaluation makes a real OpenAI API call, which incurs costs. Use the evalua
 1. Add metric calculation in `ImageProcessingEvaluationService`
 2. Update `EvaluationResult` class with new property
 3. Modify `ComputeNormalizedScore` to include new metric
-4. Update display methods to show new metric
+4. Update API response format to include new metric
 
 ### Adding New Languages
 
@@ -232,4 +327,5 @@ Each evaluation makes a real OpenAI API call, which incurs costs. Use the evalua
 You can implement custom scoring by:
 1. Inheriting from `ImageProcessingEvaluationService`
 2. Overriding `ComputeNormalizedScore` method
-3. Adjusting weights or adding new components 
+3. Adjusting weights or adding new components
+4. Creating a custom evaluation endpoint 
