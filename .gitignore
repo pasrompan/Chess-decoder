@@ -8,3 +8,5 @@
 *.log
 *.Up2Date
 ChessDecoderApi/obj/
+ChessDecoderApi/Tests/bin/
+ChessDecoderApi/Tests/obj/
