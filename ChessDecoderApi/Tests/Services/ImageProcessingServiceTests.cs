@@ -178,9 +178,9 @@ namespace ChessDecoderApi.Tests.Services
                 Assert.Equal("valid", secondPair.WhiteMove.ValidationStatus);
                 Assert.Equal("valid", secondPair.BlackMove.ValidationStatus);
 
-                // Verify that ExtractTextFromImageAsync was called with our dummy image bytes
-                mockService.Verify(x => x.ExtractTextFromImageAsync(
-                    It.Is<byte[]>(b => b.SequenceEqual(new byte[] { 0x00, 0x01, 0x02 })), 
+                // Verify that ExtractMovesFromImageToStringAsync was called with our dummy image bytes
+                mockService.Verify(x => x.ExtractMovesFromImageToStringAsync(
+                    tempFile, 
                     "English"), 
                     Times.Once);
             }
@@ -217,10 +217,10 @@ namespace ChessDecoderApi.Tests.Services
                     .Setup<Task<byte[]>>("LoadAndProcessImageAsync", ItExpr.Is<string>(s => s == tempFile))
                     .ReturnsAsync(new byte[] { 0x00, 0x01, 0x02 }); // Dummy image bytes
 
-                // Mock ExtractTextFromImageAsync to return predefined moves without making API calls
-                mockService.Setup(x => x.ExtractTextFromImageAsync(It.IsAny<byte[]>(), "Greek"))
-                    .ReturnsAsync(@"json
-[""ε4"", ""ε5"", ""Ιf3"", ""Ιc6""]");
+                // Mock ExtractMovesFromImageToStringAsync to return predefined moves without making API calls
+                mockService.Setup(x => x.ExtractMovesFromImageToStringAsync(It.IsAny<String>(), "Greek"))
+                    .ReturnsAsync(
+["ε4", "ε5", "Ιf3", "Ιc6"]);
 
                 // Verify that no HTTP client is created (no API calls)
                 _httpClientFactoryMock.Verify(x => x.CreateClient(It.IsAny<string>()), Times.Never);
@@ -296,10 +296,9 @@ namespace ChessDecoderApi.Tests.Services
                     .Setup<Task<byte[]>>("LoadAndProcessImageAsync", ItExpr.Is<string>(s => s == tempFile))
                     .ReturnsAsync(new byte[] { 0x00, 0x01, 0x02 }); // Dummy image bytes
 
-                // Mock ExtractTextFromImageAsync to return predefined moves without making API calls
-                mockService.Setup(x => x.ExtractTextFromImageAsync(It.IsAny<byte[]>(), "English"))
-                    .ReturnsAsync(@"json
-[""invalid"", ""e5"", ""Nf3"", ""Nc6""]");
+                // Mock ExtractMovesFromImageToStringAsync to return predefined moves without making API calls
+                mockService.Setup(x => x.ExtractMovesFromImageToStringAsync(It.IsAny<String>(), "English"))
+                    .ReturnsAsync(["invalid", "e5", "Nf3", "Nc6"]);
 
                 // Verify that no HTTP client is created (no API calls)
                 _httpClientFactoryMock.Verify(x => x.CreateClient(It.IsAny<string>()), Times.Never);
@@ -372,7 +371,7 @@ namespace ChessDecoderApi.Tests.Services
                 // Create a small test image file
                 File.WriteAllBytes(tempFile, new byte[] { 0xFF, 0xD8, 0xFF, 0xE0 }); // Minimal JPEG header
 
-                // Mock ExtractTextFromImageAsync to return moves with consecutive checks
+                // Mock ExtractMovesFromImageToStringAsync to return moves with consecutive checks
                 var mockService = new Mock<ImageProcessingService>(
                     _httpClientFactoryMock.Object,
                     _configurationMock.Object,
@@ -386,10 +385,9 @@ namespace ChessDecoderApi.Tests.Services
                     .Setup<Task<byte[]>>("LoadAndProcessImageAsync", ItExpr.Is<string>(s => s == tempFile))
                     .ReturnsAsync(new byte[] { 0x00, 0x01, 0x02 }); // Dummy image bytes
 
-                // Mock ExtractTextFromImageAsync to return predefined moves without making API calls
-                mockService.Setup(x => x.ExtractTextFromImageAsync(It.IsAny<byte[]>(), "English"))
-                    .ReturnsAsync(@"json
-[""e4"", ""e5"", ""Qh5+"", ""Ke7+""]");
+                // Mock ExtractMovesFromImageToStringAsync to return predefined moves without making API calls
+                mockService.Setup(x => x.ExtractMovesFromImageToStringAsync(It.IsAny<String>(), "English"))
+                    .ReturnsAsync(["e4", "e5", "Qh5+", "Ke7+"]);
 
                 // Verify that no HTTP client is created (no API calls)
                 _httpClientFactoryMock.Verify(x => x.CreateClient(It.IsAny<string>()), Times.Never);
