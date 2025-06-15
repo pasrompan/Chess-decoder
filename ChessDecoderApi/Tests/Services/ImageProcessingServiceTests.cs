@@ -350,7 +350,7 @@ namespace ChessDecoderApi.Tests.Services
         public void SplitImageIntoColumns_FindsColumnsInGame2Picture()
         {
             // Arrange
-            string imagePath = Path.Combine("data", "EvaluationExamples", "Game2", "Game2.png");
+            string imagePath = Path.Combine("data", "EvaluationExamples", "Game2", "Game2rot.png");
             var service = new ChessDecoderApi.Services.ImageProcessingService(
                 _httpClientFactoryMock.Object,
                 _configurationMock.Object,

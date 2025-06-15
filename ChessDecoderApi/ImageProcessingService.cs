@@ -469,13 +469,16 @@ namespace ChessDecoderApi.Services
             int width = image.Width;
             int height = image.Height;
             double[] columnSums = new double[width];
+            // Binarize and sum binary values per column
             for (int x = 0; x < width; x++)
             {
                 double sum = 0;
                 for (int y = 0; y < height; y++)
                 {
                     var pixel = image[x, y];
-                    sum += pixel.R;
+                    int gray = pixel.R;
+                    int binary = gray > 128 ? 1 : 0; // Threshold at 128
+                    sum += binary;
                 }
                 columnSums[x] = sum;
             }
@@ -490,11 +493,16 @@ namespace ChessDecoderApi.Services
                 smoothed[x] = avg / (end - start + 1);
             }
             List<int> boundaries = new List<int> { 0 };
+            var differences = new List<(int x, double diff)>();
+            double threshold = 3.0;
             for (int x = 1; x < width - 1; x++)
             {
-                if (smoothed[x] < smoothed[x - 1] && smoothed[x] < smoothed[x + 1])
+                double diff = Math.Abs(smoothed[x] - smoothed[x - 1]) + Math.Abs(smoothed[x] - smoothed[x + 1]);
+                bool bothNeighborsAreNegative = (smoothed[x] - smoothed[x - 1] < 0 ) && (smoothed[x] - smoothed[x + 1] < 0);
+                if (diff > threshold && bothNeighborsAreNegative)
                 {
                     boundaries.Add(x);
+                    differences.Add((x, diff));
                 }
             }
             boundaries.Add(width);
@@ -517,6 +525,7 @@ namespace ChessDecoderApi.Services
                 columnImage.SaveAsJpeg(tempPath);
                 tempFiles.Add(tempPath);
             }
+            // differences list contains (x, diff) tuples for each x (1 to width-2)
             return tempFiles;
         }
     }
