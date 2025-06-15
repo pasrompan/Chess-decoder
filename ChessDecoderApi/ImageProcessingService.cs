@@ -52,7 +52,13 @@ namespace ChessDecoderApi.Services
             _chessMoveValidator = new ChessMoveValidator(loggerFactory.CreateLogger<ChessMoveValidator>());
         }
 
-        public async Task<string> ProcessImageAsync(string imagePath, string language = "English")
+        /// <summary>
+        /// Extracts chess moves from an image and returns them as a list of strings
+        /// </summary>
+        /// <param name="imagePath">Path to the chess image</param>
+        /// <param name="language">Language for chess notation (default: English)</param>
+        /// <returns>Array of chess moves in standard notation</returns>
+        public async Task<string[]> ExtractMovesFromImageToStringAsync(string imagePath, string language = "English")
         {
             // Check if file exists
             if (!File.Exists(imagePath))
@@ -73,7 +79,7 @@ namespace ChessDecoderApi.Services
 
             string text = await ExtractTextFromImageAsync(imageBytes, language);
 
-            // Convert the extracted text to PGN format
+            // Convert the extracted text to moves
             string[] moves;
             try
             {
@@ -119,6 +125,20 @@ namespace ChessDecoderApi.Services
                 _logger.LogError(ex, "Error processing chess moves for language: {Language}", language);
                 throw;
             }
+
+            return moves;
+        }
+
+        /// <summary>
+        /// Processes a chess image and returns the moves as a PGN string
+        /// </summary>
+        /// <param name="imagePath">Path to the chess image</param>
+        /// <param name="language">Language for chess notation (default: English)</param>
+        /// <returns>PGN formatted string containing the chess moves</returns>
+        public async Task<string> ProcessImageAsync(string imagePath, string language = "English")
+        {
+            // Extract moves from the image
+            string[] moves = await ExtractMovesFromImageToStringAsync(imagePath, language);
 
             // Generate the PGN content
             return await GeneratePGNContentAsync(moves);
@@ -240,112 +260,7 @@ namespace ChessDecoderApi.Services
             }
         }
 
-        public async Task<string> ExtractTextFromImageWithGoogleVisionAsync(byte[] imageBytes, string language)
-        {
-            try
-            {
-                // Get Google Cloud Vision API key from environment or configuration
-                string apiKey = Environment.GetEnvironmentVariable("GOOGLE_VISION_API_KEY") ?? 
-                    _configuration["GOOGLE_VISION_API_KEY"] ?? 
-                    throw new UnauthorizedAccessException("GOOGLE_VISION_API_KEY not set");
-
-                var client = _httpClientFactory.CreateClient();
-                
-                // Convert image to base64 encoding
-                var base64Image = Convert.ToBase64String(imageBytes);
-                
-                // Prepare the Google Vision API request
-                var requestData = new
-                {
-                    requests = new[]
-                    {
-                        new
-                        {
-                            image = new
-                            {
-                                content = base64Image
-                            },
-                            features = new[]
-                            {
-                                new
-                                {
-                                    type = "TEXT_DETECTION",
-                                    maxResults = 1
-                                }
-                            },
-                            imageContext = new
-                            {
-                                languageHints = new[] {  "en-t-i0-handwrit"  }
-                            }
-                        }
-                    }
-                };
-
-                var content = new StringContent(
-                    JsonSerializer.Serialize(requestData),
-                    Encoding.UTF8,
-                    "application/json");
-
-                // Send request to Google Vision API
-                var response = await client.PostAsync(
-                    $"https://vision.googleapis.com/v1/images:annotate?key={apiKey}", 
-                    content);
-                
-                if (!response.IsSuccessStatusCode)
-                {
-                    var errorContent = await response.Content.ReadAsStringAsync();
-                    throw new Exception($"Google Vision API error: {response.StatusCode} - {errorContent}");
-                }
-
-                var responseContent = await response.Content.ReadAsStringAsync();
-                using var jsonDoc = JsonDocument.Parse(responseContent);
-                
-                // Extract OCR text from the response
-                var text = jsonDoc.RootElement
-                    .GetProperty("responses")[0]
-                    .TryGetProperty("fullTextAnnotation", out var textAnnotation) 
-                        ? textAnnotation.GetProperty("text").GetString() 
-                        : string.Empty;
-
-                if (string.IsNullOrEmpty(text))
-                {
-                    return string.Empty;
-                }
-
-                // Get valid characters for the specified language
-                var validChars = GetChessNotationCharacters(language);
-                var validCharsSet = new HashSet<char>(validChars.SelectMany(c => c));
-                
-                // Filter out invalid characters and process the text
-                var lines = text.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
-                var filteredLines = new List<string>();
-                
-                foreach (var line in lines)
-                {
-                    // Keep only valid characters and basic formatting
-                    var filteredLine = new string(line.Where(c => 
-                        validCharsSet.Contains(c) || 
-                        c == ' ' || 
-                        c == '.' || 
-                        c == '-').ToArray());
-                    
-                    // Only add non-empty lines after filtering
-                    if (!string.IsNullOrWhiteSpace(filteredLine))
-                    {
-                        filteredLines.Add(filteredLine.Trim());
-                    }
-                }
-                
-                return string.Join("\n", filteredLines);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error extracting text from image with Google Vision");
-                throw;
-            }
-        }
-
-        private async Task<string[]> ConvertGreekMovesToEnglishAsync(string[] greekMoves)
+        private Task<string[]> ConvertGreekMovesToEnglishAsync(string[] greekMoves)
         {
             var englishMoves = new string[greekMoves.Length];
 
@@ -365,7 +280,7 @@ namespace ChessDecoderApi.Services
                 englishMoves[i] = englishMove;
             }
 
-            return englishMoves;
+            return Task.FromResult(englishMoves);
         }
 
         private string HandleSpecialCases(string move)
