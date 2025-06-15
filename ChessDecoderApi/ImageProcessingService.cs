@@ -62,7 +62,7 @@ namespace ChessDecoderApi.Services
         /// <param name="imagePath">Path to the chess image</param>
         /// <param name="language">Language for chess notation (default: English)</param>
         /// <returns>Array of chess moves in standard notation</returns>
-        public async Task<string[]> ExtractMovesFromImageToStringAsync(string imagePath, string language = "English")
+        public virtual async Task<string[]> ExtractMovesFromImageToStringAsync(string imagePath, string language = "English")
         {
             // Check if file exists
             if (!File.Exists(imagePath))

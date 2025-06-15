@@ -139,10 +139,9 @@ namespace ChessDecoderApi.Tests.Services
                     .Setup<Task<byte[]>>("LoadAndProcessImageAsync", ItExpr.Is<string>(s => s == tempFile))
                     .ReturnsAsync(new byte[] { 0x00, 0x01, 0x02 }); // Dummy image bytes
 
-                // Mock ExtractTextFromImageAsync to return predefined moves without making API calls
-                mockService.Setup(x => x.ExtractTextFromImageAsync(It.IsAny<byte[]>(), "English"))
-                    .ReturnsAsync(@"json
-[""e4"", ""e5"", ""Nf3"", ""Nc6""]");
+                mockService.Setup(x => x.ExtractMovesFromImageToStringAsync(It.IsAny<string>(), "English"))
+                    .ReturnsAsync(
+["e4", "e5", "Nf3", "Nc6"]);
 
                 // Verify that no HTTP client is created (no API calls)
                 _httpClientFactoryMock.Verify(x => x.CreateClient(It.IsAny<string>()), Times.Never);
