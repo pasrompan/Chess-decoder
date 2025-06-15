@@ -20,8 +20,8 @@ namespace ChessDecoderApi.Tests.Services
         private readonly Mock<ILoggerFactory> _loggerFactoryMock;
         private readonly Mock<ILogger<ChessMoveProcessor>> _chessMoveProcessorLoggerMock;
         private readonly Mock<ILogger<ChessMoveValidator>> _chessMoveValidatorLoggerMock;
-        private readonly Mock<IChessMoveProcessor> _chessMoveProcessorMock;
-        private readonly Mock<IChessMoveValidator> _chessMoveValidatorMock;
+        private readonly IChessMoveProcessor _chessMoveProcessor;
+        private readonly IChessMoveValidator _chessMoveValidator;
         private readonly ImageProcessingService _service;
 
         public ImageProcessingServiceTests()
@@ -32,8 +32,8 @@ namespace ChessDecoderApi.Tests.Services
             _loggerFactoryMock = new Mock<ILoggerFactory>();
             _chessMoveProcessorLoggerMock = new Mock<ILogger<ChessMoveProcessor>>();
             _chessMoveValidatorLoggerMock = new Mock<ILogger<ChessMoveValidator>>();
-            _chessMoveProcessorMock = new Mock<IChessMoveProcessor>();
-            _chessMoveValidatorMock = new Mock<IChessMoveValidator>();
+            _chessMoveProcessor = new ChessMoveProcessor(_chessMoveProcessorLoggerMock.Object);
+            _chessMoveValidator = new ChessMoveValidator(_chessMoveValidatorLoggerMock.Object);
 
             // Setup logger factory to return our mock loggers
             _loggerFactoryMock.Setup(x => x.CreateLogger(It.Is<string>(s => s == typeof(ChessMoveProcessor).FullName)))
@@ -45,63 +45,65 @@ namespace ChessDecoderApi.Tests.Services
             _configurationMock.Setup(x => x["OPENAI_API_KEY"]).Returns("dummy-api-key");
 
             // Setup chess move processor mock
-           /* _chessMoveProcessorMock.Setup(x => x.ProcessChessMovesAsync(It.IsAny<string>()))
-                .ReturnsAsync((string text) => 
-                {
-                    // Parse the JSON array from the text and return the moves
-                    if (text.Contains("e4") && text.Contains("e5"))
-                        return new[] { "e4", "e5", "Nf3", "Nc6" };
-                    if (text.Contains("ε4") && text.Contains("ε5"))
-                        return new[] { "ε4", "ε5", "Ιf3", "Ιc6" };
-                    if (text.Contains("invalid"))
-                        return new[] { "invalid", "e5", "Nf3", "Nc6" };
-                    if (text.Contains("Qh5+"))
-                        return new[] { "e4", "e5", "Qh5+", "Ke7+" };
-                    return new string[0];
-                });
+            /* _chessMoveProcessorMock.Setup(x => x.ProcessChessMovesAsync(It.IsAny<string>()))
+                 .ReturnsAsync((string text) => 
+                 {
+                     // Parse the JSON array from the text and return the moves
+                     if (text.Contains("e4") && text.Contains("e5"))
+                         return new[] { "e4", "e5", "Nf3", "Nc6" };
+                     if (text.Contains("ε4") && text.Contains("ε5"))
+                         return new[] { "ε4", "ε5", "Ιf3", "Ιc6" };
+                     if (text.Contains("invalid"))
+                         return new[] { "invalid", "e5", "Nf3", "Nc6" };
+                     if (text.Contains("Qh5+"))
+                         return new[] { "e4", "e5", "Qh5+", "Ke7+" };
+                     return new string[0];
+                 });
 
-            // Setup chess move validator mock
-            _chessMoveValidatorMock.Setup(x => x.ValidateMoves(It.IsAny<string[]>()))
-                .Returns((string[] moves) => 
-                {
-                    var result = new ChessDecoderApi.Services.ChessMoveValidationResult { IsValid = true };
-                    for (int i = 0; i < moves.Length; i++)
-                    {
-                        var move = moves[i];
-                        var validatedMove = new ChessDecoderApi.Services.ValidatedMove
-                        {
-                            MoveNumber = i + 1,
-                            Notation = move,
-                            NormalizedNotation = move,
-                            ValidationStatus = "valid",
-                            ValidationText = ""
-                        };
+             // Setup chess move validator mock
+             _chessMoveValidatorMock.Setup(x => x.ValidateMoves(It.IsAny<string[]>()))
+                 .Returns((string[] moves) => 
+                 {
+                     var result = new ChessDecoderApi.Services.ChessMoveValidationResult { IsValid = true };
+                     for (int i = 0; i < moves.Length; i++)
+                     {
+                         var move = moves[i];
+                         var validatedMove = new ChessDecoderApi.Services.ValidatedMove
+                         {
+                             MoveNumber = i + 1,
+                             Notation = move,
+                             NormalizedNotation = move,
+                             ValidationStatus = "valid",
+                             ValidationText = ""
+                         };
 
-                        // Add specific validation logic for test cases
-                        if (move == "invalid")
-                        {
-                            validatedMove.ValidationStatus = "error";
-                            validatedMove.ValidationText = "Invalid move";
-                        }
-                        else if (move.EndsWith("+"))
-                        {
-                            validatedMove.ValidationStatus = "warning";
-                            validatedMove.ValidationText = "Consecutive checks";
-                        }
+                         // Add specific validation logic for test cases
+                         if (move == "invalid")
+                         {
+                             validatedMove.ValidationStatus = "error";
+                             validatedMove.ValidationText = "Invalid move";
+                         }
+                         else if (move.EndsWith("+"))
+                         {
+                             validatedMove.ValidationStatus = "warning";
+                             validatedMove.ValidationText = "Consecutive checks";
+                         }
 
-                        result.Moves.Add(validatedMove);
-                    }
-                    return result;
-                });
-*/
+                         result.Moves.Add(validatedMove);
+                     }
+                     return result;
+                 });
+ */
             // Create a partial mock of the service to override ExtractTextFromImageAsync
             _service = new ImageProcessingService(
                 _httpClientFactoryMock.Object,
                 _configurationMock.Object,
                 _loggerMock.Object,
                 _loggerFactoryMock.Object,
-                _chessMoveProcessorMock.Object,
-                _chessMoveValidatorMock.Object);
+                _chessMoveProcessor,
+                _chessMoveValidator);
+              
+            
         }
 
         [Fact]
@@ -131,17 +133,19 @@ namespace ChessDecoderApi.Tests.Services
                     _configurationMock.Object,
                     _loggerMock.Object,
                     _loggerFactoryMock.Object,
-                    _chessMoveProcessorMock.Object,
-                    _chessMoveValidatorMock.Object) { CallBase = true };
+                    _chessMoveProcessor,
+                    _chessMoveValidator) { CallBase = true };
 
                 // Mock the image loading part
                 mockService.Protected()
                     .Setup<Task<byte[]>>("LoadAndProcessImageAsync", ItExpr.Is<string>(s => s == tempFile))
                     .ReturnsAsync(new byte[] { 0x00, 0x01, 0x02 }); // Dummy image bytes
 
-                mockService.Setup(x => x.ExtractMovesFromImageToStringAsync(It.IsAny<string>(), "English"))
-                    .ReturnsAsync(
-["e4", "e5", "Nf3", "Nc6"]);
+                // Mock ExtractTextFromImageAsync to return predefined English text without making API calls
+                mockService.Setup(x => x.ExtractTextFromImageAsync(
+                    It.Is<byte[]>(b => b.SequenceEqual(new byte[] { 0x00, 0x01, 0x02 })), 
+                    "English"))
+                    .ReturnsAsync("```json\n[\"e4\", \"e5\", \"Nf3\", \"Nc6\"]```");
 
                 // Verify that no HTTP client is created (no API calls)
                 _httpClientFactoryMock.Verify(x => x.CreateClient(It.IsAny<string>()), Times.Never);
@@ -178,9 +182,9 @@ namespace ChessDecoderApi.Tests.Services
                 Assert.Equal("valid", secondPair.WhiteMove.ValidationStatus);
                 Assert.Equal("valid", secondPair.BlackMove.ValidationStatus);
 
-                // Verify that ExtractMovesFromImageToStringAsync was called with our dummy image bytes
-                mockService.Verify(x => x.ExtractMovesFromImageToStringAsync(
-                    tempFile, 
+                // Verify that ExtractTextFromImageAsync was called with our dummy image bytes
+                mockService.Verify(x => x.ExtractTextFromImageAsync(
+                    It.Is<byte[]>(b => b.SequenceEqual(new byte[] { 0x00, 0x01, 0x02 })), 
                     "English"), 
                     Times.Once);
             }
@@ -209,18 +213,19 @@ namespace ChessDecoderApi.Tests.Services
                     _configurationMock.Object,
                     _loggerMock.Object,
                     _loggerFactoryMock.Object,
-                    _chessMoveProcessorMock.Object,
-                    _chessMoveValidatorMock.Object) { CallBase = true };
+                    _chessMoveProcessor,
+                    _chessMoveValidator) { CallBase = true };
 
                 // Mock the image loading part
                 mockService.Protected()
                     .Setup<Task<byte[]>>("LoadAndProcessImageAsync", ItExpr.Is<string>(s => s == tempFile))
                     .ReturnsAsync(new byte[] { 0x00, 0x01, 0x02 }); // Dummy image bytes
 
-                // Mock ExtractMovesFromImageToStringAsync to return predefined moves without making API calls
-                mockService.Setup(x => x.ExtractMovesFromImageToStringAsync(It.IsAny<String>(), "Greek"))
-                    .ReturnsAsync(
-["ε4", "ε5", "Ιf3", "Ιc6"]);
+                // Mock ExtractTextFromImageAsync to return predefined Greek text without making API calls
+                mockService.Setup(x => x.ExtractTextFromImageAsync(
+                    It.Is<byte[]>(b => b.SequenceEqual(new byte[] { 0x00, 0x01, 0x02 })),
+                    "Greek"))
+                    .ReturnsAsync("```json\n[\"ε4\", \"ε5\", \"Ιf3\", \"Ιc6\"]```");
 
                 // Verify that no HTTP client is created (no API calls)
                 _httpClientFactoryMock.Verify(x => x.CreateClient(It.IsAny<string>()), Times.Never);
@@ -288,17 +293,19 @@ namespace ChessDecoderApi.Tests.Services
                     _configurationMock.Object,
                     _loggerMock.Object,
                     _loggerFactoryMock.Object,
-                    _chessMoveProcessorMock.Object,
-                    _chessMoveValidatorMock.Object) { CallBase = true };
+                    _chessMoveProcessor,
+                    _chessMoveValidator) { CallBase = true };
 
                 // Mock the image loading part
                 mockService.Protected()
                     .Setup<Task<byte[]>>("LoadAndProcessImageAsync", ItExpr.Is<string>(s => s == tempFile))
                     .ReturnsAsync(new byte[] { 0x00, 0x01, 0x02 }); // Dummy image bytes
 
-                // Mock ExtractMovesFromImageToStringAsync to return predefined moves without making API calls
-                mockService.Setup(x => x.ExtractMovesFromImageToStringAsync(It.IsAny<String>(), "English"))
-                    .ReturnsAsync(["invalid", "e5", "Nf3", "Nc6"]);
+                // Mock ExtractTextFromImageAsync to return predefined invalid text without making API calls
+                mockService.Setup(x => x.ExtractTextFromImageAsync(
+                    It.Is<byte[]>(b => b.SequenceEqual(new byte[] { 0x00, 0x01, 0x02 })), 
+                    "English"))
+                    .ReturnsAsync("```json\n[\"invalid\", \"e5\", \"Nf3\", \"Nc6\"]```");
 
                 // Verify that no HTTP client is created (no API calls)
                 _httpClientFactoryMock.Verify(x => x.CreateClient(It.IsAny<string>()), Times.Never);
@@ -377,17 +384,19 @@ namespace ChessDecoderApi.Tests.Services
                     _configurationMock.Object,
                     _loggerMock.Object,
                     _loggerFactoryMock.Object,
-                    _chessMoveProcessorMock.Object,
-                    _chessMoveValidatorMock.Object) { CallBase = true };
+                    _chessMoveProcessor,
+                    _chessMoveValidator) { CallBase = true };
 
                 // Mock the image loading part
                 mockService.Protected()
                     .Setup<Task<byte[]>>("LoadAndProcessImageAsync", ItExpr.Is<string>(s => s == tempFile))
                     .ReturnsAsync(new byte[] { 0x00, 0x01, 0x02 }); // Dummy image bytes
 
-                // Mock ExtractMovesFromImageToStringAsync to return predefined moves without making API calls
-                mockService.Setup(x => x.ExtractMovesFromImageToStringAsync(It.IsAny<String>(), "English"))
-                    .ReturnsAsync(["e4", "e5", "Qh5+", "Ke7+"]);
+                // Mock ExtractTextFromImageAsync to return predefined moves with consecutive checks without making API calls
+                mockService.Setup(x => x.ExtractTextFromImageAsync(
+                    It.Is<byte[]>(b => b.SequenceEqual(new byte[] { 0x00, 0x01, 0x02 })), 
+                    "English"))
+                    .ReturnsAsync("```json\n[\"e4\", \"e5\", \"Qh5+\", \"Ke7+\"]```");
 
                 // Verify that no HTTP client is created (no API calls)
                 _httpClientFactoryMock.Verify(x => x.CreateClient(It.IsAny<string>()), Times.Never);

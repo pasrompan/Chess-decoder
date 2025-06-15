@@ -73,13 +73,13 @@ namespace ChessDecoderApi.Services
             // Load and process the image
             byte[] imageBytes = await LoadAndProcessImageAsync(imagePath);
 
-            // Extract text from the image using OpenAI
-            var apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY") ?? 
-                _configuration["OPENAI_API_KEY"];
-                if (string.IsNullOrEmpty(apiKey))
-                {
-                    _logger.LogInformation("API Key available: {available}", !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("OPENAI_API_KEY")));
-                    throw new UnauthorizedAccessException("OPENAI_API_KEY environment variable not set");}
+            // // Extract text from the image using OpenAI
+            // var apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY") ?? 
+            //     _configuration["OPENAI_API_KEY"];
+            //     if (string.IsNullOrEmpty(apiKey))
+            //     {
+            //         _logger.LogInformation("API Key available: {available}", !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("OPENAI_API_KEY")));
+            //         throw new UnauthorizedAccessException("OPENAI_API_KEY environment variable not set");}
 
             string text = await ExtractTextFromImageAsync(imageBytes, language);
 
