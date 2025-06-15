@@ -20,6 +20,8 @@ namespace ChessDecoderApi.Tests.Services
         private readonly Mock<ILoggerFactory> _loggerFactoryMock;
         private readonly Mock<ILogger<ChessMoveProcessor>> _chessMoveProcessorLoggerMock;
         private readonly Mock<ILogger<ChessMoveValidator>> _chessMoveValidatorLoggerMock;
+        private readonly Mock<IChessMoveProcessor> _chessMoveProcessorMock;
+        private readonly Mock<IChessMoveValidator> _chessMoveValidatorMock;
         private readonly ImageProcessingService _service;
 
         public ImageProcessingServiceTests()
@@ -30,6 +32,8 @@ namespace ChessDecoderApi.Tests.Services
             _loggerFactoryMock = new Mock<ILoggerFactory>();
             _chessMoveProcessorLoggerMock = new Mock<ILogger<ChessMoveProcessor>>();
             _chessMoveValidatorLoggerMock = new Mock<ILogger<ChessMoveValidator>>();
+            _chessMoveProcessorMock = new Mock<IChessMoveProcessor>();
+            _chessMoveValidatorMock = new Mock<IChessMoveValidator>();
 
             // Setup logger factory to return our mock loggers
             _loggerFactoryMock.Setup(x => x.CreateLogger(It.Is<string>(s => s == typeof(ChessMoveProcessor).FullName)))
@@ -40,12 +44,64 @@ namespace ChessDecoderApi.Tests.Services
             // Setup configuration to return a dummy API key
             _configurationMock.Setup(x => x["OPENAI_API_KEY"]).Returns("dummy-api-key");
 
+            // Setup chess move processor mock
+           /* _chessMoveProcessorMock.Setup(x => x.ProcessChessMovesAsync(It.IsAny<string>()))
+                .ReturnsAsync((string text) => 
+                {
+                    // Parse the JSON array from the text and return the moves
+                    if (text.Contains("e4") && text.Contains("e5"))
+                        return new[] { "e4", "e5", "Nf3", "Nc6" };
+                    if (text.Contains("ε4") && text.Contains("ε5"))
+                        return new[] { "ε4", "ε5", "Ιf3", "Ιc6" };
+                    if (text.Contains("invalid"))
+                        return new[] { "invalid", "e5", "Nf3", "Nc6" };
+                    if (text.Contains("Qh5+"))
+                        return new[] { "e4", "e5", "Qh5+", "Ke7+" };
+                    return new string[0];
+                });
+
+            // Setup chess move validator mock
+            _chessMoveValidatorMock.Setup(x => x.ValidateMoves(It.IsAny<string[]>()))
+                .Returns((string[] moves) => 
+                {
+                    var result = new ChessDecoderApi.Services.ChessMoveValidationResult { IsValid = true };
+                    for (int i = 0; i < moves.Length; i++)
+                    {
+                        var move = moves[i];
+                        var validatedMove = new ChessDecoderApi.Services.ValidatedMove
+                        {
+                            MoveNumber = i + 1,
+                            Notation = move,
+                            NormalizedNotation = move,
+                            ValidationStatus = "valid",
+                            ValidationText = ""
+                        };
+
+                        // Add specific validation logic for test cases
+                        if (move == "invalid")
+                        {
+                            validatedMove.ValidationStatus = "error";
+                            validatedMove.ValidationText = "Invalid move";
+                        }
+                        else if (move.EndsWith("+"))
+                        {
+                            validatedMove.ValidationStatus = "warning";
+                            validatedMove.ValidationText = "Consecutive checks";
+                        }
+
+                        result.Moves.Add(validatedMove);
+                    }
+                    return result;
+                });
+*/
             // Create a partial mock of the service to override ExtractTextFromImageAsync
             _service = new ImageProcessingService(
                 _httpClientFactoryMock.Object,
                 _configurationMock.Object,
                 _loggerMock.Object,
-                _loggerFactoryMock.Object);
+                _loggerFactoryMock.Object,
+                _chessMoveProcessorMock.Object,
+                _chessMoveValidatorMock.Object);
         }
 
         [Fact]
@@ -74,7 +130,9 @@ namespace ChessDecoderApi.Tests.Services
                     _httpClientFactoryMock.Object,
                     _configurationMock.Object,
                     _loggerMock.Object,
-                    _loggerFactoryMock.Object) { CallBase = true };
+                    _loggerFactoryMock.Object,
+                    _chessMoveProcessorMock.Object,
+                    _chessMoveValidatorMock.Object) { CallBase = true };
 
                 // Mock the image loading part
                 mockService.Protected()
@@ -151,7 +209,9 @@ namespace ChessDecoderApi.Tests.Services
                     _httpClientFactoryMock.Object,
                     _configurationMock.Object,
                     _loggerMock.Object,
-                    _loggerFactoryMock.Object) { CallBase = true };
+                    _loggerFactoryMock.Object,
+                    _chessMoveProcessorMock.Object,
+                    _chessMoveValidatorMock.Object) { CallBase = true };
 
                 // Mock the image loading part
                 mockService.Protected()
@@ -228,7 +288,9 @@ namespace ChessDecoderApi.Tests.Services
                     _httpClientFactoryMock.Object,
                     _configurationMock.Object,
                     _loggerMock.Object,
-                    _loggerFactoryMock.Object) { CallBase = true };
+                    _loggerFactoryMock.Object,
+                    _chessMoveProcessorMock.Object,
+                    _chessMoveValidatorMock.Object) { CallBase = true };
 
                 // Mock the image loading part
                 mockService.Protected()
@@ -267,7 +329,7 @@ namespace ChessDecoderApi.Tests.Services
                 Assert.Equal("e5", firstPair.BlackMove.Notation);
                 Assert.Equal("error", firstPair.WhiteMove.ValidationStatus);
                 Assert.Equal("valid", firstPair.BlackMove.ValidationStatus);
-                Assert.Contains("Invalid move", firstPair.WhiteMove.ValidationText);
+                Assert.Contains("Invalid move", firstPair.WhiteMove.ValidationText ?? "");
 
                 var secondPair = result.Validation.Moves[1];
                 Assert.Equal(2, secondPair.MoveNumber);
@@ -282,8 +344,8 @@ namespace ChessDecoderApi.Tests.Services
                         LogLevel.Error,
                         It.IsAny<EventId>(),
                         It.Is<It.IsAnyType>((o, t) => o.ToString().Contains("Move validation error")),
-                        It.IsAny<Exception>(),
-                        It.IsAny<Func<It.IsAnyType, Exception, string>>()),
+                        It.IsAny<Exception?>(),
+                        It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
                     Times.AtLeastOnce);
 
                 // Verify that ExtractTextFromImageAsync was called with our dummy image bytes
@@ -316,7 +378,9 @@ namespace ChessDecoderApi.Tests.Services
                     _httpClientFactoryMock.Object,
                     _configurationMock.Object,
                     _loggerMock.Object,
-                    _loggerFactoryMock.Object) { CallBase = true };
+                    _loggerFactoryMock.Object,
+                    _chessMoveProcessorMock.Object,
+                    _chessMoveValidatorMock.Object) { CallBase = true };
 
                 // Mock the image loading part
                 mockService.Protected()
@@ -362,8 +426,8 @@ namespace ChessDecoderApi.Tests.Services
                 Assert.Equal("Ke7+", secondPair.BlackMove.Notation);
                 Assert.Equal("warning", secondPair.WhiteMove.ValidationStatus);
                 Assert.Equal("warning", secondPair.BlackMove.ValidationStatus);
-                Assert.Contains("Consecutive checks", secondPair.WhiteMove.ValidationText);
-                Assert.Contains("Consecutive checks", secondPair.BlackMove.ValidationText);
+                Assert.Contains("Consecutive checks", secondPair.WhiteMove.ValidationText ?? "");
+                Assert.Contains("Consecutive checks", secondPair.BlackMove.ValidationText ?? "");
 
                 // Verify that validation warning was logged
                 _loggerMock.Verify(
@@ -371,8 +435,8 @@ namespace ChessDecoderApi.Tests.Services
                         LogLevel.Warning,
                         It.IsAny<EventId>(),
                         It.Is<It.IsAnyType>((o, t) => o.ToString().Contains("Move validation warning")),
-                        It.IsAny<Exception>(),
-                        It.IsAny<Func<It.IsAnyType, Exception, string>>()),
+                        It.IsAny<Exception?>(),
+                        It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
                     Times.AtLeastOnce);
 
                 // Verify that ExtractTextFromImageAsync was called with our dummy image bytes
