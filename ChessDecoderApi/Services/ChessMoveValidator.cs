@@ -6,13 +6,56 @@ using Microsoft.Extensions.Logging;
 
 namespace ChessDecoderApi.Services
 {
+    /// <summary>
+    /// Represents a validated chess move with its original and normalized notation.
+    /// This class maintains both the original notation (as detected from input) and a normalized version
+    /// to support different use cases:
+    /// - Original notation for debugging and showing users what was actually detected
+    /// - Normalized notation for internal validation and consistent move representation
+    /// </summary>
+    public class ValidatedMove
+    {
+        /// <summary>
+        /// The sequential number of the move in the game.
+        /// </summary>
+        public int MoveNumber { get; set; }
+
+        /// <summary>
+        /// The original notation of the move as detected from the input (image or text).
+        /// This preserves the exact format as it was detected, which is useful for:
+        /// - Debugging move detection issues
+        /// - Showing users what was actually detected from their input
+        /// - Maintaining the original format for reference
+        /// </summary>
+        public string Notation { get; set; }
+
+        /// <summary>
+        /// The standardized version of the move notation.
+        /// This is particularly important for castling moves where different notations
+        /// (e.g., "0-0", "O-O", "o-o") are normalized to a consistent format ("O-O").
+        /// Used for:
+        /// - Internal validation and move comparison
+        /// - Generating consistent move suggestions
+        /// - Displaying moves in a standardized format
+        /// - Supporting move validation rules that require consistent notation
+        /// </summary>
+        public string NormalizedNotation { get; set; }
+
+        /// <summary>
+        /// The validation status of the move: "valid", "warning", or "error".
+        /// </summary>
+        public string ValidationStatus { get; set; }
+
+        /// <summary>
+        /// Detailed feedback about the validation result, including any warnings or errors.
+        /// </summary>
+        public string ValidationText { get; set; }
+    }
+
     public class ChessMoveValidationResult
     {
         public bool IsValid { get; set; }
-        public List<string> Errors { get; set; } = new();
-        public List<string> Warnings { get; set; } = new();
-        public List<string> Suggestions { get; set; } = new();
-        public string[]? NormalizedMoves { get; set; }
+        public List<ValidatedMove> Moves { get; set; } = new();
     }
 
     public class ChessMoveValidator
@@ -35,33 +78,40 @@ namespace ChessDecoderApi.Services
             if (moves == null || moves.Length == 0)
             {
                 result.IsValid = false;
-                result.Errors.Add("No moves provided for validation");
+                result.Moves.Add(new ValidatedMove
+                {
+                    MoveNumber = 0,
+                    ValidationStatus = "error",
+                    ValidationText = "No moves provided for validation"
+                });
                 return result;
             }
-
-            // Create a copy of moves for normalization
-            result.NormalizedMoves = new string[moves.Length];
 
             for (int i = 0; i < moves.Length; i++)
             {
                 var move = moves[i].Trim();
                 var normalizedMove = NormalizeCastling(move);
-                result.NormalizedMoves[i] = normalizedMove;
 
                 var moveValidation = ValidateSingleMove(normalizedMove, i + 1);
-                
+
+                result.Moves.Add(new ValidatedMove
+                {
+                    MoveNumber = i + 1,
+                    Notation = move,
+                    NormalizedNotation = normalizedMove,
+                    ValidationStatus = moveValidation.IsValid ? "valid" :
+                                     moveValidation.Moves.Any(m => m.ValidationStatus == "error") ? "error" : "warning",
+                    ValidationText = string.Join("; ", moveValidation.Moves.Select(m => m.ValidationText))
+                });
+
                 if (!moveValidation.IsValid)
                 {
                     result.IsValid = false;
-                    result.Errors.AddRange(moveValidation.Errors);
                 }
-                
-                result.Warnings.AddRange(moveValidation.Warnings);
-                result.Suggestions.AddRange(moveValidation.Suggestions);
             }
 
             // Additional game-level validations
-            ValidateGameLevelRules(result.NormalizedMoves, result);
+            ValidateGameLevelRules(result.Moves, result);
 
             return result;
         }
@@ -84,12 +134,20 @@ namespace ChessDecoderApi.Services
         private ChessMoveValidationResult ValidateSingleMove(string move, int moveNumber)
         {
             var result = new ChessMoveValidationResult { IsValid = true };
+            var validatedMove = new ValidatedMove
+            {
+                MoveNumber = moveNumber,
+                Notation = move,
+                NormalizedNotation = move
+            };
 
             // Check for empty or whitespace moves
             if (string.IsNullOrWhiteSpace(move))
             {
                 result.IsValid = false;
-                result.Errors.Add($"Move {moveNumber}: Empty or whitespace move");
+                validatedMove.ValidationStatus = "error";
+                validatedMove.ValidationText = "Empty or whitespace move";
+                result.Moves.Add(validatedMove);
                 return result;
             }
 
@@ -97,13 +155,16 @@ namespace ChessDecoderApi.Services
             if (!_validMovePattern.IsMatch(move))
             {
                 result.IsValid = false;
-                result.Errors.Add($"Move {moveNumber}: Invalid move syntax '{move}'");
+                validatedMove.ValidationStatus = "error";
+                validatedMove.ValidationText = $"Invalid move syntax '{move}'";
                 
-                // Only suggest for invalid promotion pieces now
+                // Add promotion suggestion if applicable
                 if (move.Contains("=") && !_validPromotions.Any(p => move.EndsWith(p)))
                 {
-                    result.Suggestions.Add($"Move {moveNumber}: Invalid promotion piece. Valid promotions are: =Q, =R, =B, =N");
+                    validatedMove.ValidationText += "; Invalid promotion piece. Valid promotions are: =Q, =R, =B, =N";
                 }
+                
+                result.Moves.Add(validatedMove);
                 return result;
             }
 
@@ -117,26 +178,40 @@ namespace ChessDecoderApi.Services
                     if (!_validPieces.Contains(piece))
                     {
                         result.IsValid = false;
-                        result.Errors.Add($"Move {moveNumber}: Invalid piece notation '{piece}'");
+                        validatedMove.ValidationStatus = "error";
+                        validatedMove.ValidationText = $"Invalid piece notation '{piece}'";
+                        result.Moves.Add(validatedMove);
                         return result;
                     }
                 }
             }
 
+            // If we get here, the move is valid
+            validatedMove.ValidationStatus = "valid";
+            validatedMove.ValidationText = "";
+            result.Moves.Add(validatedMove);
             return result;
         }
 
-        private void ValidateGameLevelRules(string[] moves, ChessMoveValidationResult result)
+        private void ValidateGameLevelRules(List<ValidatedMove> moves, ChessMoveValidationResult result)
         {
             // Check for consecutive checks
-            for (int i = 0; i < moves.Length - 1; i++)
+            for (int i = 0; i < moves.Count - 1; i++)
             {
                 var currentMove = moves[i];
                 var nextMove = moves[i + 1];
 
-                if (currentMove.EndsWith("+") && nextMove.EndsWith("+"))
+                if (currentMove.NormalizedNotation.EndsWith("+") && nextMove.NormalizedNotation.EndsWith("+"))
                 {
-                    result.Warnings.Add($"Moves {i + 1}-{i + 2}: Consecutive checks detected. Please verify these moves.");
+                    // Update the validation status and text for both moves
+                    currentMove.ValidationStatus = currentMove.ValidationStatus == "valid" ? "warning" : currentMove.ValidationStatus;
+                    nextMove.ValidationStatus = nextMove.ValidationStatus == "valid" ? "warning" : nextMove.ValidationStatus;
+                    
+                    var warningText = "Consecutive checks detected. Please verify these moves.";
+                    currentMove.ValidationText = string.IsNullOrEmpty(currentMove.ValidationText) ? 
+                        warningText : currentMove.ValidationText + "; " + warningText;
+                    nextMove.ValidationText = string.IsNullOrEmpty(nextMove.ValidationText) ? 
+                        warningText : nextMove.ValidationText + "; " + warningText;
                 }
             }
         }
