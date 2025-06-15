@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using Moq.Protected;
 using Xunit;
+using SixLabors.ImageSharp.PixelFormats;
 
 namespace ChessDecoderApi.Tests.Services
 {
@@ -283,6 +284,93 @@ namespace ChessDecoderApi.Tests.Services
                 {
                     File.Delete(tempFile);
                 }
+            }
+        }
+
+        [Fact]
+        public void SplitImageIntoColumns_ReturnsExpectedNumberOfColumns()
+        {
+            // Arrange: Create a synthetic image with 4 vertical columns
+            int width = 400;
+            int height = 100;
+            int columns = 4;
+            using var image = new SixLabors.ImageSharp.Image<SixLabors.ImageSharp.PixelFormats.Rgba32>(width, height);
+            var colors = new[] {
+                SixLabors.ImageSharp.Color.Black,
+                SixLabors.ImageSharp.Color.White,
+                SixLabors.ImageSharp.Color.Gray,
+                SixLabors.ImageSharp.Color.Red
+            };
+            for (int i = 0; i < columns; i++)
+            {
+                int xStart = i * width / columns;
+                int xEnd = (i + 1) * width / columns;
+                for (int x = xStart; x < xEnd; x++)
+                {
+                    for (int y = 0; y < height; y++)
+                    {
+                        image[x, y] = colors[i].ToPixel<SixLabors.ImageSharp.PixelFormats.Rgba32>();
+                    }
+                }
+            }
+            string tempPath = Path.GetTempFileName() + ".jpg";
+            using (var fs = File.OpenWrite(tempPath))
+            {
+                image.Save(fs, new SixLabors.ImageSharp.Formats.Jpeg.JpegEncoder());
+            }
+            var service = new ChessDecoderApi.Services.ImageProcessingService(
+                _httpClientFactoryMock.Object,
+                _configurationMock.Object,
+                _loggerMock.Object,
+                _loggerFactoryMock.Object);
+            try
+            {
+                // Act
+                var result = service.SplitImageIntoColumns(tempPath, columns);
+                // Assert
+                Assert.Equal(columns, result.Count);
+                foreach (var file in result)
+                {
+                    Assert.True(File.Exists(file));
+                }
+                // Clean up
+                foreach (var file in result)
+                {
+                    File.Delete(file);
+                }
+            }
+            finally
+            {
+                if (File.Exists(tempPath))
+                    File.Delete(tempPath);
+            }
+        }
+
+        [Fact]
+        public void SplitImageIntoColumns_FindsColumnsInGame2Picture()
+        {
+            // Arrange
+            string imagePath = Path.Combine("data", "EvaluationExamples", "Game2", "Game2.png");
+            var service = new ChessDecoderApi.Services.ImageProcessingService(
+                _httpClientFactoryMock.Object,
+                _configurationMock.Object,
+                _loggerMock.Object,
+                _loggerFactoryMock.Object);
+
+            // Act
+            var result = service.SplitImageIntoColumns(imagePath, 6);
+
+            // Assert
+            Assert.Equal(6, result.Count);
+            foreach (var file in result)
+            {
+                Assert.True(File.Exists(file), $"Expected file {file} to exist");
+            }
+
+            // Clean up
+            foreach (var file in result)
+            {
+                File.Delete(file);
             }
         }
     }

@@ -1,5 +1,6 @@
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Processing;
+using SixLabors.ImageSharp.PixelFormats;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -453,6 +454,70 @@ namespace ChessDecoderApi.Services
             var messageContent = choices[0].GetProperty("message").GetProperty("content").GetString();
             
             return messageContent?.Replace("`", "") ?? string.Empty;
+        }
+
+        /// <summary>
+        /// Splits the input image into vertical columns based on projection profile and returns file paths to cropped column images.
+        /// </summary>
+        /// <param name="imagePath">Path to the chess moves image</param>
+        /// <param name="expectedColumns">Expected number of columns (default: 2)</param>
+        /// <returns>List of file paths to cropped column images</returns>
+        public List<string> SplitImageIntoColumns(string imagePath, int expectedColumns = 2)
+        {
+            using var image = Image.Load<Rgba32>(imagePath);
+            image.Mutate(x => x.Grayscale());
+            int width = image.Width;
+            int height = image.Height;
+            double[] columnSums = new double[width];
+            for (int x = 0; x < width; x++)
+            {
+                double sum = 0;
+                for (int y = 0; y < height; y++)
+                {
+                    var pixel = image[x, y];
+                    sum += pixel.R;
+                }
+                columnSums[x] = sum;
+            }
+            int smoothWindow = Math.Max(3, width / 100);
+            double[] smoothed = new double[width];
+            for (int x = 0; x < width; x++)
+            {
+                int start = Math.Max(0, x - smoothWindow);
+                int end = Math.Min(width - 1, x + smoothWindow);
+                double avg = 0;
+                for (int i = start; i <= end; i++) avg += columnSums[i];
+                smoothed[x] = avg / (end - start + 1);
+            }
+            List<int> boundaries = new List<int> { 0 };
+            for (int x = 1; x < width - 1; x++)
+            {
+                if (smoothed[x] < smoothed[x - 1] && smoothed[x] < smoothed[x + 1])
+                {
+                    boundaries.Add(x);
+                }
+            }
+            boundaries.Add(width);
+            if (boundaries.Count - 1 < expectedColumns)
+            {
+                boundaries.Clear();
+                for (int i = 0; i <= expectedColumns; i++)
+                {
+                    boundaries.Add(i * width / expectedColumns);
+                }
+            }
+            var tempFiles = new List<string>();
+            for (int i = 0; i < boundaries.Count - 1; i++)
+            {
+                int colWidth = boundaries[i + 1] - boundaries[i];
+                if (colWidth <= 0) continue;
+                var rect = new Rectangle(boundaries[i], 0, colWidth, height);
+                using var columnImage = image.Clone(ctx => ctx.Crop(rect));
+                string tempPath = Path.GetTempFileName() + $"_col{i}.jpg";
+                columnImage.SaveAsJpeg(tempPath);
+                tempFiles.Add(tempPath);
+            }
+            return tempFiles;
         }
     }
 }
