@@ -55,80 +55,101 @@ namespace ChessDecoderApi.Services
         }
 
         /// <summary>
-        /// Extracts chess moves from an image and returns them as a list of strings
+        /// Extracts chess moves from an image and returns two lists: white and black moves.
         /// </summary>
         /// <param name="imagePath">Path to the chess image</param>
         /// <param name="language">Language for chess notation (default: English)</param>
-        /// <returns>Array of chess moves in standard notation</returns>
-        public async Task<string[]> ExtractMovesFromImageToStringAsync(string imagePath, string language = "English")
+        /// <returns>Tuple of two lists: whiteMoves and blackMoves</returns>
+        public async Task<(List<string> whiteMoves, List<string> blackMoves)> ExtractMovesFromImageToStringAsync(string imagePath, string language = "English")
         {
-            // Check if file exists
             if (!File.Exists(imagePath))
             {
                 throw new FileNotFoundException("Image file not found", imagePath);
             }
 
-            // Load and process the image
-            byte[] imageBytes = await LoadAndProcessImageAsync(imagePath);
+            // Load the image
+            using var image = Image.Load<Rgba32>(imagePath);
+            int width = image.Width;
+            int height = image.Height;
 
-            // Extract text from the image using OpenAI
-            var apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY") ?? 
-                _configuration["OPENAI_API_KEY"];
-                if (string.IsNullOrEmpty(apiKey))
-                {
-                    _logger.LogInformation("API Key available: {available}", !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("OPENAI_API_KEY")));
-                    throw new UnauthorizedAccessException("OPENAI_API_KEY environment variable not set");}
+            // Get column boundaries
+            var boundaries = SplitImageIntoColumns(imagePath, 6);
+            var whiteMoves = new List<string>();
+            var blackMoves = new List<string>();
 
-            string text = await ExtractTextFromImageAsync(imageBytes, language);
-
-            // Convert the extracted text to moves
-            string[] moves;
-            try
+            for (int i = 0; i < boundaries.Count - 1; i++)
             {
-                if (language == "Greek")
+                int colStart = boundaries[i];
+                int colEnd = boundaries[i + 1];
+                int colWidth = colEnd - colStart;
+                if (colWidth <= 0) continue;
+                var rect = new Rectangle(colStart, 0, colWidth, height);
+                using var columnImage = image.Clone(ctx => ctx.Crop(rect));
+                byte[] imageBytes;
+                using (var ms = new MemoryStream())
                 {
-                    _logger.LogInformation("Processing Greek chess notation");
-                    string[] greekMoves = await _chessMoveProcessor.ProcessChessMovesAsync(text);
-                    moves = await ConvertGreekMovesToEnglishAsync(greekMoves);
+                    columnImage.SaveAsJpeg(ms);
+                    imageBytes = ms.ToArray();
+                }
+                string text = await ExtractTextFromImageAsync(imageBytes, language);
+                string[] moves;
+                try
+                {
+                    if (language == "Greek")
+                    {
+                        _logger.LogInformation($"Processing Greek chess notation for column {i}");
+                        string[] greekMoves = await _chessMoveProcessor.ProcessChessMovesAsync(text);
+                        moves = await ConvertGreekMovesToEnglishAsync(greekMoves);
+                    }
+                    else
+                    {
+                        _logger.LogInformation($"Processing standard chess notation for column {i}");
+                        moves = await _chessMoveProcessor.ProcessChessMovesAsync(text);
+                    }
+
+                    if (moves == null || moves.Length == 0)
+                    {
+                        _logger.LogWarning($"No valid moves were extracted from column {i}");
+                        continue;
+                    }
+
+                    // Validate moves and log any issues
+                    var validationResult = _chessMoveValidator.ValidateMoves(moves);
+                    foreach (var move in validationResult.Moves)
+                    {
+                        switch (move.ValidationStatus)
+                        {
+                            case "error":
+                                _logger.LogError("Move validation error: Move {MoveNumber} '{Move}': {Error}", 
+                                    move.MoveNumber, move.Notation, move.ValidationText);
+                                break;
+                            case "warning":
+                                _logger.LogWarning("Move validation warning: Move {MoveNumber} '{Move}': {Warning}", 
+                                    move.MoveNumber, move.Notation, move.ValidationText);
+                                break;
+                        }
+                    }
+
+                    _logger.LogInformation($"Successfully processed {moves.Length} moves from column {i}");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"Error processing chess moves for column {i} and language: {language}");
+                    continue;
+                }
+
+                // Merge moves into white and black lists
+                if (i % 2 == 0)
+                {
+                    whiteMoves.AddRange(moves);
                 }
                 else
                 {
-                    _logger.LogInformation("Processing standard chess notation");
-                    moves = await _chessMoveProcessor.ProcessChessMovesAsync(text);
+                    blackMoves.AddRange(moves);
                 }
-
-                if (moves == null || moves.Length == 0)
-                {
-                    _logger.LogWarning("No valid moves were extracted from the image");
-                    throw new InvalidOperationException("No valid moves were extracted from the image");
-                }
-
-                // Validate moves and log any issues
-                var validationResult = _chessMoveValidator.ValidateMoves(moves);
-                foreach (var move in validationResult.Moves)
-                {
-                    switch (move.ValidationStatus)
-                    {
-                        case "error":
-                            _logger.LogError("Move validation error: Move {MoveNumber} '{Move}': {Error}", 
-                                move.MoveNumber, move.Notation, move.ValidationText);
-                            break;
-                        case "warning":
-                            _logger.LogWarning("Move validation warning: Move {MoveNumber} '{Move}': {Warning}", 
-                                move.MoveNumber, move.Notation, move.ValidationText);
-                            break;
-                    }
-                }
-
-                _logger.LogInformation("Successfully processed {MoveCount} moves", moves.Length);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error processing chess moves for language: {Language}", language);
-                throw;
             }
 
-            return moves;
+            return (whiteMoves, blackMoves);
         }
 
         /// <summary>
@@ -140,10 +161,10 @@ namespace ChessDecoderApi.Services
         public async Task<string> ProcessImageAsync(string imagePath, string language = "English")
         {
             // Extract moves from the image
-            string[] moves = await ExtractMovesFromImageToStringAsync(imagePath, language);
+            var (whiteMoves, blackMoves) = await ExtractMovesFromImageToStringAsync(imagePath, language);
 
             // Generate the PGN content
-            return await GeneratePGNContentAsync(moves);
+            return await GeneratePGNContentAsync(whiteMoves, blackMoves);
         }
 
         protected virtual async Task<byte[]> LoadAndProcessImageAsync(string imagePath)
@@ -331,7 +352,7 @@ namespace ChessDecoderApi.Services
             };
         }
 
-        public Task<string> GeneratePGNContentAsync(IEnumerable<string> moves)
+        public Task<string> GeneratePGNContentAsync(IEnumerable<string> whiteMoves, IEnumerable<string> blackMoves)
         {
             // Basic PGN structure
             var sb = new StringBuilder();
@@ -344,26 +365,22 @@ namespace ChessDecoderApi.Services
             sb.AppendLine("[Result \"*\"]");
             sb.AppendLine();
 
-            // Format moves
+            var whiteList = whiteMoves?.ToList() ?? new List<string>();
+            var blackList = blackMoves?.ToList() ?? new List<string>();
+            int maxMoves = Math.Max(whiteList.Count, blackList.Count);
             var moveList = new List<string>();
-            int moveNumber = 1;
-            bool whiteMove = true;
-
-            foreach (var move in moves.Where(m => !string.IsNullOrWhiteSpace(m)))
+            for (int i = 0; i < maxMoves; i++)
             {
-                if (whiteMove)
+                string white = i < whiteList.Count ? whiteList[i] : null;
+                string black = i < blackList.Count ? blackList[i] : null;
+                if (!string.IsNullOrWhiteSpace(white) || !string.IsNullOrWhiteSpace(black))
                 {
-                    moveList.Add($"{moveNumber}. {move}");
-                    whiteMove = false;
-                }
-                else
-                {
-                    moveList.Add(move);
-                    whiteMove = true;
-                    moveNumber++;
+                    if (!string.IsNullOrWhiteSpace(white))
+                        moveList.Add($"{i + 1}. {white}");
+                    if (!string.IsNullOrWhiteSpace(black))
+                        moveList.Add(black);
                 }
             }
-
             sb.AppendLine(string.Join(" ", moveList) + " *");
             return Task.FromResult(sb.ToString());
         }
@@ -458,12 +475,12 @@ namespace ChessDecoderApi.Services
         }
 
         /// <summary>
-        /// Splits the input image into vertical columns based on projection profile and returns file paths to cropped column images.
+        /// Splits the input image into vertical columns based on projection profile and returns the column boundaries.
         /// </summary>
         /// <param name="imagePath">Path to the chess moves image</param>
         /// <param name="expectedColumns">Expected number of columns (default: 6)</param>
-        /// <returns>List of file paths to cropped column images</returns>
-        public List<string> SplitImageIntoColumns(string imagePath, int expectedColumns = 6)
+        /// <returns>List of column boundary indices (pixel positions)</returns>
+        public List<int> SplitImageIntoColumns(string imagePath, int expectedColumns = 6)
         {
             using var image = Image.Load<Rgba32>(imagePath);
             image.Mutate(x => x.Grayscale());
@@ -508,7 +525,7 @@ namespace ChessDecoderApi.Services
             detectedBoundaries.Add(width);
             detectedBoundaries = detectedBoundaries.Distinct().OrderBy(b => b).ToList();
 
-            // Step 1: Create dummy slices (width/6)
+            // Step 1: Create dummy slices (width/expectedColumns)
             List<int> dummyEdges = new List<int>();
             for (int i = 0; i <= expectedColumns; i++)
             {
@@ -549,21 +566,7 @@ namespace ChessDecoderApi.Services
                 }
             }
 
-            // Step 3: Create slices
-            var tempFiles = new List<string>();
-            for (int i = 0; i < finalEdges.Count - 1; i++)
-            {
-                int colStart = finalEdges[i];
-                int colEnd = finalEdges[i + 1];
-                int colWidth = colEnd - colStart;
-                if (colWidth <= 0) continue;
-                var rect = new Rectangle(colStart, 0, colWidth, height);
-                using var columnImage = image.Clone(ctx => ctx.Crop(rect));
-                string tempPath = Path.GetTempFileName() + $"_col{i}.jpg";
-                columnImage.SaveAsJpeg(tempPath);
-                tempFiles.Add(tempPath);
-            }
-            return tempFiles;
+            return finalEdges;
         }
     }
 }

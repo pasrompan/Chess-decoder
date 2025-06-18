@@ -9,6 +9,7 @@ using Moq;
 using Moq.Protected;
 using Xunit;
 using SixLabors.ImageSharp.PixelFormats;
+using System.Linq;
 
 namespace ChessDecoderApi.Tests.Services
 {
@@ -67,7 +68,11 @@ namespace ChessDecoderApi.Tests.Services
             try
             {
                 // Create a small test image file
-                File.WriteAllBytes(tempFile, new byte[] { 0xFF, 0xD8, 0xFF, 0xE0 }); // Minimal JPEG header
+                using (var image = new SixLabors.ImageSharp.Image<SixLabors.ImageSharp.PixelFormats.Rgba32>(10, 10))
+                using (var fs = File.OpenWrite(tempFile))
+                {
+                    image.Save(fs, new SixLabors.ImageSharp.Formats.Jpeg.JpegEncoder());
+                }
 
                 // Mock ExtractTextFromImageAsync to return valid moves
                 var mockService = new Mock<ImageProcessingService>(
@@ -121,7 +126,11 @@ namespace ChessDecoderApi.Tests.Services
             try
             {
                 // Create a small test image file
-                File.WriteAllBytes(tempFile, new byte[] { 0xFF, 0xD8, 0xFF, 0xE0 }); // Minimal JPEG header
+                using (var image = new SixLabors.ImageSharp.Image<SixLabors.ImageSharp.PixelFormats.Rgba32>(10, 10))
+                using (var fs = File.OpenWrite(tempFile))
+                {
+                    image.Save(fs, new SixLabors.ImageSharp.Formats.Jpeg.JpegEncoder());
+                }
 
                 // Mock ExtractTextFromImageAsync to return Greek moves
                 var mockService = new Mock<ImageProcessingService>(
@@ -175,7 +184,11 @@ namespace ChessDecoderApi.Tests.Services
             try
             {
                 // Create a small test image file
-                File.WriteAllBytes(tempFile, new byte[] { 0xFF, 0xD8, 0xFF, 0xE0 }); // Minimal JPEG header
+                using (var image = new SixLabors.ImageSharp.Image<SixLabors.ImageSharp.PixelFormats.Rgba32>(10, 10))
+                using (var fs = File.OpenWrite(tempFile))
+                {
+                    image.Save(fs, new SixLabors.ImageSharp.Formats.Jpeg.JpegEncoder());
+                }
 
                 // Mock ExtractTextFromImageAsync to return invalid moves
                 var mockService = new Mock<ImageProcessingService>(
@@ -235,7 +248,11 @@ namespace ChessDecoderApi.Tests.Services
             try
             {
                 // Create a small test image file
-                File.WriteAllBytes(tempFile, new byte[] { 0xFF, 0xD8, 0xFF, 0xE0 }); // Minimal JPEG header
+                using (var image = new SixLabors.ImageSharp.Image<SixLabors.ImageSharp.PixelFormats.Rgba32>(10, 10))
+                using (var fs = File.OpenWrite(tempFile))
+                {
+                    image.Save(fs, new SixLabors.ImageSharp.Formats.Jpeg.JpegEncoder());
+                }
 
                 // Mock ExtractTextFromImageAsync to return moves with consecutive checks
                 var mockService = new Mock<ImageProcessingService>(
@@ -288,7 +305,7 @@ namespace ChessDecoderApi.Tests.Services
         }
 
         [Fact]
-        public void SplitImageIntoColumns_ReturnsExpectedNumberOfColumns()
+        public void SplitImageIntoColumns_ReturnsExpectedNumberOfBoundaries()
         {
             // Arrange: Create a synthetic image with 4 vertical columns
             int width = 400;
@@ -328,15 +345,13 @@ namespace ChessDecoderApi.Tests.Services
                 // Act
                 var result = service.SplitImageIntoColumns(tempPath, columns);
                 // Assert
-                Assert.Equal(columns, result.Count);
-                foreach (var file in result)
+                Assert.Equal(columns + 1, result.Count); // boundaries = columns + 1
+                Assert.True(result.SequenceEqual(result.OrderBy(x => x)), "Boundaries should be sorted");
+                Assert.Equal(0, result.First());
+                Assert.Equal(width, result.Last());
+                foreach (var b in result)
                 {
-                    Assert.True(File.Exists(file));
-                }
-                // Clean up
-                foreach (var file in result)
-                {
-                    File.Delete(file);
+                    Assert.InRange(b, 0, width);
                 }
             }
             finally
@@ -347,7 +362,7 @@ namespace ChessDecoderApi.Tests.Services
         }
 
         [Fact]
-        public void SplitImageIntoColumns_FindsColumnsInGame2Picture()
+        public void SplitImageIntoColumns_FindsBoundariesInGame2Picture()
         {
             // Arrange
             string imagePath = Path.Combine("data", "EvaluationExamples", "Game2", "Game2rot.png");
@@ -361,16 +376,13 @@ namespace ChessDecoderApi.Tests.Services
             var result = service.SplitImageIntoColumns(imagePath, 6);
 
             // Assert
-            Assert.Equal(6, result.Count);
-            foreach (var file in result)
+            Assert.Equal(7, result.Count); // 6 columns = 7 boundaries
+            Assert.True(result.SequenceEqual(result.OrderBy(x => x)), "Boundaries should be sorted");
+            Assert.Equal(0, result.First());
+            // We can't know the exact width, but boundaries should be increasing
+            for (int i = 1; i < result.Count; i++)
             {
-                Assert.True(File.Exists(file), $"Expected file {file} to exist");
-            }
-
-            // Clean up
-            foreach (var file in result)
-            {
-                File.Delete(file);
+                Assert.True(result[i] > result[i - 1], $"Boundary {i} should be greater than {i - 1}");
             }
         }
     }

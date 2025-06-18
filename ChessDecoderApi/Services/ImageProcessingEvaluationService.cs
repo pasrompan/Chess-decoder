@@ -58,19 +58,17 @@ namespace ChessDecoderApi.Services
 
                 // Extract moves directly from the image
                 var startTime = DateTime.UtcNow;
-                var extractedMovesArray = await _imageProcessingService.ExtractMovesFromImageToStringAsync(imagePath, language);
-                var endTime = DateTime.UtcNow;
-
-                result.ProcessingTime = endTime - startTime;
-                
-                // Convert array to list for consistency with existing evaluation logic
-                var extractedMoves = extractedMovesArray.ToList();
+                var (whiteMoves, blackMoves) = await _imageProcessingService.ExtractMovesFromImageToStringAsync(imagePath, language);
+                var extractedMoves = new List<string>();
+                int maxMoves = Math.Max(whiteMoves.Count, blackMoves.Count);
+                for (int i = 0; i < maxMoves; i++)
+                {
+                    if (i < whiteMoves.Count) extractedMoves.Add(whiteMoves[i]);
+                    if (i < blackMoves.Count) extractedMoves.Add(blackMoves[i]);
+                }
                 result.ExtractedMoves = extractedMoves;
-
                 _logger.LogInformation("Extracted {Count} moves directly from image", extractedMoves.Count);
-
-                // Generate PGN content for the extracted moves
-                result.GeneratedPgn = await _imageProcessingService.GeneratePGNContentAsync(extractedMoves);
+                result.GeneratedPgn = await _imageProcessingService.GeneratePGNContentAsync(whiteMoves, blackMoves);
 
                 // Compute various distance metrics
                 result.ExactMatchScore = ComputeExactMatchScore(groundTruthMoves, extractedMoves);
