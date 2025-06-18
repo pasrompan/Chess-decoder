@@ -5,6 +5,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace ChessDecoderApi.Services
 {
@@ -460,9 +461,9 @@ namespace ChessDecoderApi.Services
         /// Splits the input image into vertical columns based on projection profile and returns file paths to cropped column images.
         /// </summary>
         /// <param name="imagePath">Path to the chess moves image</param>
-        /// <param name="expectedColumns">Expected number of columns (default: 2)</param>
+        /// <param name="expectedColumns">Expected number of columns (default: 6)</param>
         /// <returns>List of file paths to cropped column images</returns>
-        public List<string> SplitImageIntoColumns(string imagePath, int expectedColumns = 2)
+        public List<string> SplitImageIntoColumns(string imagePath, int expectedColumns = 6)
         {
             using var image = Image.Load<Rgba32>(imagePath);
             image.Mutate(x => x.Grayscale());
@@ -492,8 +493,8 @@ namespace ChessDecoderApi.Services
                 for (int i = start; i <= end; i++) avg += columnSums[i];
                 smoothed[x] = avg / (end - start + 1);
             }
-            List<int> boundaries = new List<int> { 0 };
-            var differences = new List<(int x, double diff)>();
+            // Detect boundaries as before
+            List<int> detectedBoundaries = new List<int> { 0 };
             double threshold = 3.0;
             for (int x = 1; x < width - 1; x++)
             {
@@ -501,31 +502,67 @@ namespace ChessDecoderApi.Services
                 bool bothNeighborsAreNegative = (smoothed[x] - smoothed[x - 1] < 0 ) && (smoothed[x] - smoothed[x + 1] < 0);
                 if (diff > threshold && bothNeighborsAreNegative)
                 {
-                    boundaries.Add(x);
-                    differences.Add((x, diff));
+                    detectedBoundaries.Add(x);
                 }
             }
-            boundaries.Add(width);
-            if (boundaries.Count - 1 < expectedColumns)
+            detectedBoundaries.Add(width);
+            detectedBoundaries = detectedBoundaries.Distinct().OrderBy(b => b).ToList();
+
+            // Step 1: Create dummy slices (width/6)
+            List<int> dummyEdges = new List<int>();
+            for (int i = 0; i <= expectedColumns; i++)
             {
-                boundaries.Clear();
-                for (int i = 0; i <= expectedColumns; i++)
+                dummyEdges.Add(i * width / expectedColumns);
+            }
+
+            // Step 2: For each dummy edge (except 0 and width), adjust to closest detected boundary if within range
+            int maxAdjust = width / (expectedColumns * 2); // e.g., width/12 for 6 columns
+            List<int> finalEdges = new List<int> { 0 };
+            for (int i = 1; i < dummyEdges.Count - 1; i++)
+            {
+                int dummyEdge = dummyEdges[i];
+                int closestBoundary = detectedBoundaries
+                    .OrderBy(b => Math.Abs(b - dummyEdge))
+                    .FirstOrDefault();
+                if (Math.Abs(closestBoundary - dummyEdge) <= maxAdjust)
                 {
-                    boundaries.Add(i * width / expectedColumns);
+                    // Prefer larger slices: if boundary is to the right, use it, else use dummyEdge
+                    if (closestBoundary > dummyEdge)
+                        finalEdges.Add(closestBoundary);
+                    else
+                        finalEdges.Add(dummyEdge);
+                }
+                else
+                {
+                    finalEdges.Add(dummyEdge);
                 }
             }
-            var tempFiles = new List<string>();
-            for (int i = 0; i < boundaries.Count - 1; i++)
+            finalEdges.Add(width);
+
+            // Ensure edges are sorted and unique, and at least 1 pixel apart
+            finalEdges = finalEdges.Distinct().OrderBy(e => e).ToList();
+            for (int i = finalEdges.Count - 1; i > 0; i--)
             {
-                int colWidth = boundaries[i + 1] - boundaries[i];
+                if (finalEdges[i] - finalEdges[i - 1] < 1)
+                {
+                    finalEdges.RemoveAt(i);
+                }
+            }
+
+            // Step 3: Create slices
+            var tempFiles = new List<string>();
+            for (int i = 0; i < finalEdges.Count - 1; i++)
+            {
+                int colStart = finalEdges[i];
+                int colEnd = finalEdges[i + 1];
+                int colWidth = colEnd - colStart;
                 if (colWidth <= 0) continue;
-                var rect = new Rectangle(boundaries[i], 0, colWidth, height);
+                var rect = new Rectangle(colStart, 0, colWidth, height);
                 using var columnImage = image.Clone(ctx => ctx.Crop(rect));
                 string tempPath = Path.GetTempFileName() + $"_col{i}.jpg";
                 columnImage.SaveAsJpeg(tempPath);
                 tempFiles.Add(tempPath);
             }
-            // differences list contains (x, diff) tuples for each x (1 to width-2)
             return tempFiles;
         }
     }
