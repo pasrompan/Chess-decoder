@@ -356,10 +356,10 @@ namespace ChessDecoderApi.Services
         {
             // Basic PGN structure
             var sb = new StringBuilder();
-            sb.AppendLine("[Event \"??\"]");
-            sb.AppendLine("[Site \"??\"]");
-            sb.AppendLine("[Date \"??\"]");
-            sb.AppendLine("[Round \"??\"]");
+            //sb.AppendLine("[Event \"??\"]");
+            //sb.AppendLine("[Site \"??\"]");
+            sb.AppendLine($"[Date \"{DateTime.Now:yyyy.MM.dd}\"]");
+            //sb.AppendLine("[Round \"??\"]");
             sb.AppendLine("[White \"??\"]");
             sb.AppendLine("[Black \"??\"]");
             sb.AppendLine("[Result \"*\"]");
@@ -378,7 +378,10 @@ namespace ChessDecoderApi.Services
                     if (!string.IsNullOrWhiteSpace(white))
                         moveList.Add($"{i + 1}. {white}");
                     if (!string.IsNullOrWhiteSpace(black))
+                    {
                         moveList.Add(black);
+                        moveList.Add("\n");
+                    }
                 }
             }
             sb.AppendLine(string.Join(" ", moveList) + " *");

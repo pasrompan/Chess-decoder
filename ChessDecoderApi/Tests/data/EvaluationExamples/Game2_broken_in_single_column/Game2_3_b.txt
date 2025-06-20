@@ -1,7 +1,0 @@
-41. Nxd5 Rf8
-42. Rxf4 Rd4
-43. Rd3+ Rxb3
-44. Rc3 Nxf6+
-45. b3 b2
-46. b1=Q Qe4+
-47. Rc6#
