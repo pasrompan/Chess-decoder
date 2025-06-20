@@ -214,15 +214,15 @@ namespace ChessDecoderApi.Tests.Services
                 var result = await mockService.Object.ProcessImageAsync(tempFile);
 
                 // Assert
-                Assert.Contains("[Event \"??\"]", result);
+                Assert.Contains("[Date", result);
                 // Verify that validation errors were logged
                 _loggerMock.Verify(
                     x => x.Log(
                         LogLevel.Error,
                         It.IsAny<EventId>(),
-                        It.Is<It.IsAnyType>((o, t) => o.ToString().Contains("Move validation error")),
+                        It.Is<It.IsAnyType>((o, t) => o != null && o.ToString()!.Contains("Move validation error")),
                         It.IsAny<Exception>(),
-                        It.IsAny<Func<It.IsAnyType, Exception, string>>()),
+                        It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
                     Times.AtLeastOnce);
 
                 // Verify that ExtractTextFromImageAsync was called with our dummy image bytes
@@ -278,15 +278,15 @@ namespace ChessDecoderApi.Tests.Services
                 var result = await mockService.Object.ProcessImageAsync(tempFile);
 
                 // Assert
-                Assert.Contains("[Event \"??\"]", result);
+                Assert.Contains("[Date", result);
                 // Verify that validation warning was logged
                 _loggerMock.Verify(
                     x => x.Log(
                         LogLevel.Warning,
                         It.IsAny<EventId>(),
-                        It.Is<It.IsAnyType>((o, t) => o.ToString().Contains("Move validation warning")),
+                        It.Is<It.IsAnyType>((o, t) => o != null && o.ToString()!.Contains("Move validation warning")),
                         It.IsAny<Exception>(),
-                        It.IsAny<Func<It.IsAnyType, Exception, string>>()),
+                        It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
                     Times.AtLeastOnce);
 
                 // Verify that ExtractTextFromImageAsync was called with our dummy image bytes

@@ -219,7 +219,7 @@ namespace ChessDecoderApi.Tests.Services
         public void ValidateMoves_NullInput_ReturnsError()
         {
             // Act
-            var result = _validator.ValidateMoves(null);
+            var result = _validator.ValidateMoves(null!);
 
             // Assert
             Assert.False(result.IsValid);
