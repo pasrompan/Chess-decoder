@@ -1,20 +1,21 @@
+using ChessDecoderApi.Models;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Processing;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
-using System.Collections.Generic;
 
 namespace ChessDecoderApi.Services
 {
     public class ImageProcessingService : IImageProcessingService
-    {
+    {	   
         private readonly IHttpClientFactory _httpClientFactory;
-        private readonly IConfiguration _configuration;
+	    private readonly IConfiguration _configuration;
         private readonly ILogger<ImageProcessingService> _logger;
-        private readonly ILoggerFactory _loggerFactory;
-        private readonly ChessMoveProcessor _chessMoveProcessor;
-        private readonly ChessMoveValidator _chessMoveValidator;
+	    private readonly ILoggerFactory _loggerFactory;
+        
+        private readonly IChessMoveProcessor _chessMoveProcessor;
+        private readonly IChessMoveValidator _chessMoveValidator;
 
         private static readonly Dictionary<string, string> GreekToEnglishMap = new()
         {
@@ -42,14 +43,17 @@ namespace ChessDecoderApi.Services
             IHttpClientFactory httpClientFactory,
             IConfiguration configuration,
             ILogger<ImageProcessingService> logger,
-            ILoggerFactory loggerFactory)
+            ILoggerFactory loggerFactory,
+            IChessMoveProcessor chessMoveProcessor,
+            IChessMoveValidator chessMoveValidator
+            )
         {
             _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
             _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
-            _chessMoveProcessor = new ChessMoveProcessor(loggerFactory.CreateLogger<ChessMoveProcessor>());
-            _chessMoveValidator = new ChessMoveValidator(loggerFactory.CreateLogger<ChessMoveValidator>());
+            _chessMoveProcessor = chessMoveProcessor ?? throw new ArgumentNullException(nameof(chessMoveProcessor));
+            _chessMoveValidator = chessMoveValidator ?? throw new ArgumentNullException(nameof(chessMoveValidator));
         }
 
         /// <summary>
@@ -58,7 +62,7 @@ namespace ChessDecoderApi.Services
         /// <param name="imagePath">Path to the chess image</param>
         /// <param name="language">Language for chess notation (default: English)</param>
         /// <returns>Array of chess moves in standard notation</returns>
-        public async Task<string[]> ExtractMovesFromImageToStringAsync(string imagePath, string language = "English")
+        public virtual async Task<string[]> ExtractMovesFromImageToStringAsync(string imagePath, string language = "English")
         {
             // Check if file exists
             if (!File.Exists(imagePath))
@@ -69,13 +73,13 @@ namespace ChessDecoderApi.Services
             // Load and process the image
             byte[] imageBytes = await LoadAndProcessImageAsync(imagePath);
 
-            // Extract text from the image using OpenAI
-            var apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY") ?? 
-                _configuration["OPENAI_API_KEY"];
-                if (string.IsNullOrEmpty(apiKey))
-                {
-                    _logger.LogInformation("API Key available: {available}", !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("OPENAI_API_KEY")));
-                    throw new UnauthorizedAccessException("OPENAI_API_KEY environment variable not set");}
+            // // Extract text from the image using OpenAI
+            // var apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY") ?? 
+            //     _configuration["OPENAI_API_KEY"];
+            //     if (string.IsNullOrEmpty(apiKey))
+            //     {
+            //         _logger.LogInformation("API Key available: {available}", !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("OPENAI_API_KEY")));
+            //         throw new UnauthorizedAccessException("OPENAI_API_KEY environment variable not set");}
 
             string text = await ExtractTextFromImageAsync(imageBytes, language);
 
@@ -101,23 +105,7 @@ namespace ChessDecoderApi.Services
                     throw new InvalidOperationException("No valid moves were extracted from the image");
                 }
 
-                // Validate moves and log any issues
-                var validationResult = _chessMoveValidator.ValidateMoves(moves);
-                foreach (var move in validationResult.Moves)
-                {
-                    switch (move.ValidationStatus)
-                    {
-                        case "error":
-                            _logger.LogError("Move validation error: Move {MoveNumber} '{Move}': {Error}", 
-                                move.MoveNumber, move.Notation, move.ValidationText);
-                            break;
-                        case "warning":
-                            _logger.LogWarning("Move validation warning: Move {MoveNumber} '{Move}': {Warning}", 
-                                move.MoveNumber, move.Notation, move.ValidationText);
-                            break;
-                    }
-                }
-
+                
                 _logger.LogInformation("Successfully processed {MoveCount} moves", moves.Length);
             }
             catch (Exception ex)
@@ -135,19 +123,82 @@ namespace ChessDecoderApi.Services
         /// <param name="imagePath">Path to the chess image</param>
         /// <param name="language">Language for chess notation (default: English)</param>
         /// <returns>PGN formatted string containing the chess moves</returns>
-        public async Task<string> ProcessImageAsync(string imagePath, string language = "English")
+        public async Task<ChessGameResponse> ProcessImageAsync(string imagePath, string language = "English")
         {
             // Extract moves from the image
             string[] moves = await ExtractMovesFromImageToStringAsync(imagePath, language);
+            // Validate moves and log any issues
+                ChessMoveValidationResult validationResult;
+                validationResult = _chessMoveValidator.ValidateMoves(moves);
+                foreach (var move in validationResult.Moves)
+                {
+                    switch (move.ValidationStatus)
+                    {
+                        case "error":
+                            _logger.LogError("Move validation error: Move {MoveNumber} '{Move}': {Error}", 
+                                move.MoveNumber, move.Notation, move.ValidationText);
+                            break;
+                        case "warning":
+                            _logger.LogWarning("Move validation warning: Move {MoveNumber} '{Move}': {Warning}", 
+                                move.MoveNumber, move.Notation, move.ValidationText);
+                            break;
+                    }
+                }
+                
+                 // Convert validation result to the new format
+            var validation = new ChessGameValidation
+            {
+                GameId = Guid.NewGuid().ToString(),
+                Moves = new List<ChessMovePair>()
+            };
+
+            // Group moves into pairs (white and black moves)
+            for (int i = 0; i < validationResult.Moves.Count; i += 2)
+            {
+                var movePair = new ChessMovePair
+                {
+                    MoveNumber = (i / 2) + 1,
+                    WhiteMove = new Models.ValidatedMove
+                    {
+                        Notation = validationResult.Moves[i].Notation,
+                        NormalizedNotation = validationResult.Moves[i].NormalizedNotation,
+                        ValidationStatus = validationResult.Moves[i].ValidationStatus,
+                        ValidationText = validationResult.Moves[i].ValidationText
+                    }
+                };
+
+                // Add black move if it exists
+                if (i + 1 < validationResult.Moves.Count)
+                {
+                    movePair.BlackMove = new Models.ValidatedMove
+                    {
+                        Notation = validationResult.Moves[i + 1].Notation,
+                        NormalizedNotation = validationResult.Moves[i + 1].NormalizedNotation,
+                        ValidationStatus = validationResult.Moves[i + 1].ValidationStatus,
+                        ValidationText = validationResult.Moves[i + 1].ValidationText
+                    };
+                }
+
+                validation.Moves.Add(movePair);
+            }
+
 
             // Generate the PGN content
-            return await GeneratePGNContentAsync(moves);
+            var pgnContent = await GeneratePGNContentAsync(moves);
+
+           
+
+            return new ChessGameResponse
+            {
+                PgnContent = pgnContent,
+                Validation = validation
+            };
         }
 
         protected virtual async Task<byte[]> LoadAndProcessImageAsync(string imagePath)
         {
             // Load the image
-            using var image = await Image.LoadAsync(imagePath);
+            using var image = await SixLabors.ImageSharp.Image.LoadAsync(imagePath);
 
             // Resize the image if necessary
             image.Mutate(x => x.Resize(new ResizeOptions
@@ -328,8 +379,8 @@ namespace ChessDecoderApi.Services
                 _ => Array.Empty<string>() // Return empty array for unsupported languages
             };
         }
-
-        public Task<string> GeneratePGNContentAsync(IEnumerable<string> moves)
+        
+        public async Task<string> GeneratePGNContentAsync(IEnumerable<string> moves)
         {
             // Basic PGN structure
             var sb = new StringBuilder();
@@ -363,7 +414,7 @@ namespace ChessDecoderApi.Services
             }
 
             sb.AppendLine(string.Join(" ", moveList) + " *");
-            return Task.FromResult(sb.ToString());
+            return sb.ToString();
         }
 
         public async Task<string> DebugUploadAsync(string imagePath, string promptText)
@@ -375,7 +426,7 @@ namespace ChessDecoderApi.Services
             }
 
             // Load and process the image
-            using var image = await Image.LoadAsync(imagePath);
+            using var image = await SixLabors.ImageSharp.Image.LoadAsync(imagePath);
             image.Mutate(x => x.Resize(new ResizeOptions
             {
                 Size = new Size(1024, 1024),
@@ -455,4 +506,4 @@ namespace ChessDecoderApi.Services
             return messageContent?.Replace("`", "") ?? string.Empty;
         }
     }
-}
+} 

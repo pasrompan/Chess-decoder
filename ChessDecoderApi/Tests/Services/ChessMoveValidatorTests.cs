@@ -67,7 +67,7 @@ namespace ChessDecoderApi.Tests.Services
             Assert.False(result.IsValid);
             var invalidMove = result.Moves.First(m => m.Notation == "Xe5");
             Assert.Equal("error", invalidMove.ValidationStatus);
-            Assert.Contains("Invalid piece notation", invalidMove.ValidationText);
+            Assert.Contains("Invalid move syntax 'Xe5'", invalidMove.ValidationText);
         }
 
         [Theory]
