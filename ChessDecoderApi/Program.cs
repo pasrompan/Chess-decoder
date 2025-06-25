@@ -14,6 +14,8 @@ builder.Services.AddSwaggerGen();
 
 // Register services
 builder.Services.AddScoped<IImageProcessingService, ImageProcessingService>();
+builder.Services.AddScoped<IChessMoveProcessor, ChessMoveProcessor>();
+builder.Services.AddScoped<IChessMoveValidator, ChessMoveValidator>();
 builder.Services.AddHttpClient();
 
 // Load environment variables - includes both .env and system environment variables

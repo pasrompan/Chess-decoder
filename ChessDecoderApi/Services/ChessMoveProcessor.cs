@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 
 namespace ChessDecoderApi.Services
 {
-    public class ChessMoveProcessor
+    public class ChessMoveProcessor : IChessMoveProcessor
     {
         private readonly ILogger<ChessMoveProcessor> _logger;
 
