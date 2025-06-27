@@ -78,7 +78,7 @@ namespace ChessDecoderApi.Controllers
                     var pgnContent = result.PgnContent;
 
                     // Return the PGN file
-                    return File(Encoding.UTF8.GetBytes(pgnContent), "application/octet-stream", outputFilename);
+                    return File(Encoding.UTF8.GetBytes(pgnContent ?? string.Empty), "application/octet-stream", outputFilename);
                 }
                 finally
                 {

@@ -49,7 +49,7 @@ namespace ChessDecoderApi.Services
         /// <summary>
         /// Detailed feedback about the validation result, including any warnings or errors.
         /// </summary>
-        public string? ValidationText { get; set; }
+        public string? ValidationText { get; set; } = string.Empty;
     }
 
     public class ChessMoveValidationResult
@@ -188,7 +188,7 @@ namespace ChessDecoderApi.Services
 
             // If we get here, the move is valid
             validatedMove.ValidationStatus = "valid";
-            validatedMove.ValidationText = "";
+            validatedMove.ValidationText = string.Empty;
             result.Moves.Add(validatedMove);
             return result;
         }
@@ -201,7 +201,8 @@ namespace ChessDecoderApi.Services
                 var currentMove = moves[i];
                 var nextMove = moves[i + 1];
 
-                if (currentMove.NormalizedNotation.EndsWith("+") && nextMove.NormalizedNotation.EndsWith("+"))
+                if (!string.IsNullOrEmpty(currentMove.NormalizedNotation) && currentMove.NormalizedNotation.EndsWith("+") &&
+                    !string.IsNullOrEmpty(nextMove.NormalizedNotation) && nextMove.NormalizedNotation.EndsWith("+"))
                 {
                     // Update the validation status and text for both moves
                     currentMove.ValidationStatus = currentMove.ValidationStatus == "valid" ? "warning" : currentMove.ValidationStatus;

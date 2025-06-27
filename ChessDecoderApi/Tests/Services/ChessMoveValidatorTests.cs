@@ -33,7 +33,7 @@ namespace ChessDecoderApi.Tests.Services
             Assert.All(result.Moves, move => 
             {
                 Assert.Equal("valid", move.ValidationStatus);
-                Assert.Empty(move.ValidationText);
+                Assert.Empty(move.ValidationText ?? string.Empty);
                 Assert.Equal(move.Notation, move.NormalizedNotation);
             });
         }
@@ -51,7 +51,7 @@ namespace ChessDecoderApi.Tests.Services
             Assert.False(result.IsValid);
             var invalidMove = result.Moves.First(m => m.Notation == "invalid");
             Assert.Equal("error", invalidMove.ValidationStatus);
-            Assert.Contains("Invalid move syntax", invalidMove.ValidationText);
+            Assert.Contains("Invalid move syntax", invalidMove.ValidationText ?? string.Empty);
         }
 
         [Fact]
@@ -67,7 +67,7 @@ namespace ChessDecoderApi.Tests.Services
             Assert.False(result.IsValid);
             var invalidMove = result.Moves.First(m => m.Notation == "Xe5");
             Assert.Equal("error", invalidMove.ValidationStatus);
-            Assert.Contains("Invalid move syntax 'Xe5'", invalidMove.ValidationText);
+            Assert.Contains("Invalid move syntax 'Xe5'", invalidMove.ValidationText ?? string.Empty);
         }
 
         [Theory]
@@ -164,7 +164,7 @@ namespace ChessDecoderApi.Tests.Services
             Assert.False(result.IsValid);
             var invalidMove = result.Moves.First(m => m.Notation == "e8=X");
             Assert.Equal("error", invalidMove.ValidationStatus);
-            Assert.Contains("Invalid promotion piece", invalidMove.ValidationText);
+            Assert.Contains("Invalid promotion piece", invalidMove.ValidationText ?? string.Empty);
         }
 
         [Fact]
@@ -179,8 +179,11 @@ namespace ChessDecoderApi.Tests.Services
             // Assert
             Assert.True(result.IsValid);
             var checkMoves = result.Moves.Where(m => m.Notation.EndsWith("+")).ToList();
-            Assert.All(checkMoves, move => Assert.Equal("warning", move.ValidationStatus));
-            Assert.All(checkMoves, move => Assert.Contains("Consecutive checks detected", move.ValidationText));
+            Assert.All(checkMoves, move => {
+                Assert.NotNull(move.ValidationStatus);
+                Assert.Equal("warning", move.ValidationStatus);
+            });
+            Assert.All(checkMoves, move => Assert.Contains("Consecutive checks detected", move.ValidationText ?? string.Empty));
         }
 
         [Fact]
@@ -196,7 +199,7 @@ namespace ChessDecoderApi.Tests.Services
             Assert.True(result.IsValid);
             var promotionMove = result.Moves.First(m => m.Notation == "e8=Q");
             Assert.Equal("valid", promotionMove.ValidationStatus);
-            Assert.Empty(promotionMove.ValidationText);
+            Assert.Empty(promotionMove.ValidationText ?? string.Empty);
         }
 
         [Fact]
@@ -212,7 +215,7 @@ namespace ChessDecoderApi.Tests.Services
             Assert.True(result.IsValid);
             var checkmateMove = result.Moves.First(m => m.Notation == "Qh5#");
             Assert.Equal("valid", checkmateMove.ValidationStatus);
-            Assert.Empty(checkmateMove.ValidationText);
+            Assert.Empty(checkmateMove.ValidationText ?? string.Empty);
         }
 
         [Fact]
@@ -226,7 +229,7 @@ namespace ChessDecoderApi.Tests.Services
             var errorMove = result.Moves.First();
             Assert.Equal(0, errorMove.MoveNumber);
             Assert.Equal("error", errorMove.ValidationStatus);
-            Assert.Contains("No moves provided", errorMove.ValidationText);
+            Assert.Contains("No moves provided", errorMove.ValidationText ?? string.Empty);
         }
 
         [Fact]
@@ -240,7 +243,7 @@ namespace ChessDecoderApi.Tests.Services
             var errorMove = result.Moves.First();
             Assert.Equal(0, errorMove.MoveNumber);
             Assert.Equal("error", errorMove.ValidationStatus);
-            Assert.Contains("No moves provided", errorMove.ValidationText);
+            Assert.Contains("No moves provided", errorMove.ValidationText ?? string.Empty);
         }
     }
 } 

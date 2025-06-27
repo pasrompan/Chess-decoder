@@ -446,8 +446,8 @@ namespace ChessDecoderApi.Services
             var moveList = new List<string>();
             for (int i = 0; i < maxMoves; i++)
             {
-                string white = i < whiteList.Count ? whiteList[i] : null;
-                string black = i < blackList.Count ? blackList[i] : null;
+                string white = i < whiteList.Count ? whiteList[i] ?? string.Empty : string.Empty;
+                string black = i < blackList.Count ? blackList[i] ?? string.Empty : string.Empty;
                 if (!string.IsNullOrWhiteSpace(white) || !string.IsNullOrWhiteSpace(black))
                 {
                     if (!string.IsNullOrWhiteSpace(white))

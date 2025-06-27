@@ -94,6 +94,7 @@ namespace ChessDecoderApi.Tests.Services
                 Assert.NotNull(result.PgnContent);
                 Assert.NotNull(result.Validation);
                 Assert.NotNull(result.Validation.GameId);
+                Assert.NotNull(result.Validation.Moves);
                 Assert.NotEmpty(result.Validation.Moves);
                 Assert.Contains("Date", result.PgnContent);
                 Assert.Contains("1. e4 e5", result.PgnContent);
@@ -133,6 +134,7 @@ namespace ChessDecoderApi.Tests.Services
                 Assert.NotNull(result.PgnContent);
                 Assert.NotNull(result.Validation);
                 Assert.NotNull(result.Validation.GameId);
+                Assert.NotNull(result.Validation.Moves);
                 Assert.NotEmpty(result.Validation.Moves);
                 Assert.Contains("Date", result.PgnContent);
                 Assert.Contains("1. ε4 ε5", result.PgnContent);
@@ -170,6 +172,7 @@ namespace ChessDecoderApi.Tests.Services
 
                 Assert.Contains("[Date", result.PgnContent);
                 Assert.NotNull(result.Validation);
+                Assert.NotNull(result.Validation.Moves);
                 Assert.NotEmpty(result.Validation.Moves);
             }
             finally
@@ -204,13 +207,15 @@ namespace ChessDecoderApi.Tests.Services
 
             // Assert
             Assert.NotNull(result.Validation.GameId);
+            Assert.NotNull(result.Validation.Moves);
             Assert.NotEmpty(result.Validation.Moves);
             Assert.Contains("Date", result.PgnContent);
             Assert.Contains("1. e4 e5", result.PgnContent);
             Assert.Contains("2. Qh5+ Ke7+", result.PgnContent);
             // Check for warning status in validation
             Assert.Contains(result.Validation.Moves, pair =>
-                (pair.WhiteMove?.ValidationStatus == "warning" || pair.BlackMove?.ValidationStatus == "warning"));
+                (pair.WhiteMove != null && pair.WhiteMove.ValidationStatus != null && pair.WhiteMove.ValidationStatus == "warning") ||
+                (pair.BlackMove != null && pair.BlackMove.ValidationStatus != null && pair.BlackMove.ValidationStatus == "warning"));
         }
 
         [Fact]
