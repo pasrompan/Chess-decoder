@@ -1,9 +1,12 @@
 using ChessDecoderApi.Models;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Processing;
+using SixLabors.ImageSharp.PixelFormats;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace ChessDecoderApi.Services
 {
@@ -57,64 +60,101 @@ namespace ChessDecoderApi.Services
         }
 
         /// <summary>
-        /// Extracts chess moves from an image and returns them as a list of strings
+        /// Extracts chess moves from an image and returns two lists: white and black moves.
         /// </summary>
         /// <param name="imagePath">Path to the chess image</param>
         /// <param name="language">Language for chess notation (default: English)</param>
-        /// <returns>Array of chess moves in standard notation</returns>
-        public virtual async Task<string[]> ExtractMovesFromImageToStringAsync(string imagePath, string language = "English")
+        /// <returns>Tuple of two lists: whiteMoves and blackMoves</returns>
+        public virtual async Task<(List<string> whiteMoves, List<string> blackMoves)> ExtractMovesFromImageToStringAsync(string imagePath, string language = "English")
         {
-            // Check if file exists
             if (!File.Exists(imagePath))
             {
                 throw new FileNotFoundException("Image file not found", imagePath);
             }
 
-            // Load and process the image
-            byte[] imageBytes = await LoadAndProcessImageAsync(imagePath);
+            // Load the image
+            using var image = Image.Load<Rgba32>(imagePath);
+            int width = image.Width;
+            int height = image.Height;
 
-            // // Extract text from the image using OpenAI
-            // var apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY") ?? 
-            //     _configuration["OPENAI_API_KEY"];
-            //     if (string.IsNullOrEmpty(apiKey))
-            //     {
-            //         _logger.LogInformation("API Key available: {available}", !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("OPENAI_API_KEY")));
-            //         throw new UnauthorizedAccessException("OPENAI_API_KEY environment variable not set");}
+            // Get column boundaries
+            var boundaries = SplitImageIntoColumns(imagePath, 6);
+            var whiteMoves = new List<string>();
+            var blackMoves = new List<string>();
 
-            string text = await ExtractTextFromImageAsync(imageBytes, language);
-
-            // Convert the extracted text to moves
-            string[] moves;
-            try
+            for (int i = 0; i < boundaries.Count - 1; i++)
             {
-                if (language == "Greek")
+                int colStart = boundaries[i];
+                int colEnd = boundaries[i + 1];
+                int colWidth = colEnd - colStart;
+                if (colWidth <= 0) continue;
+                var rect = new Rectangle(colStart, 0, colWidth, height);
+                using var columnImage = image.Clone(ctx => ctx.Crop(rect));
+                byte[] imageBytes;
+                using (var ms = new MemoryStream())
                 {
-                    _logger.LogInformation("Processing Greek chess notation");
-                    string[] greekMoves = await _chessMoveProcessor.ProcessChessMovesAsync(text);
-                    moves = await ConvertGreekMovesToEnglishAsync(greekMoves);
+                    columnImage.SaveAsJpeg(ms);
+                    imageBytes = ms.ToArray();
+                }
+                string text = await ExtractTextFromImageAsync(imageBytes, language);
+                string[] moves;
+                try
+                {
+                    if (language == "Greek")
+                    {
+                        _logger.LogInformation($"Processing Greek chess notation for column {i}");
+                        string[] greekMoves = await _chessMoveProcessor.ProcessChessMovesAsync(text);
+                        moves = await ConvertGreekMovesToEnglishAsync(greekMoves);
+                    }
+                    else
+                    {
+                        _logger.LogInformation($"Processing standard chess notation for column {i}");
+                        moves = await _chessMoveProcessor.ProcessChessMovesAsync(text);
+                    }
+
+                    if (moves == null || moves.Length == 0)
+                    {
+                        _logger.LogWarning($"No valid moves were extracted from column {i}");
+                        continue;
+                    }
+
+                    // Validate moves and log any issues
+                    var validationResult = _chessMoveValidator.ValidateMoves(moves);
+                    foreach (var move in validationResult.Moves)
+                    {
+                        switch (move.ValidationStatus)
+                        {
+                            case "error":
+                                _logger.LogError("Move validation error: Move {MoveNumber} '{Move}': {Error}", 
+                                    move.MoveNumber, move.Notation, move.ValidationText);
+                                break;
+                            case "warning":
+                                _logger.LogWarning("Move validation warning: Move {MoveNumber} '{Move}': {Warning}", 
+                                    move.MoveNumber, move.Notation, move.ValidationText);
+                                break;
+                        }
+                    }
+
+                    _logger.LogInformation($"Successfully processed {moves.Length} moves from column {i}");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"Error processing chess moves for column {i} and language: {language}");
+                    continue;
+                }
+
+                // Merge moves into white and black lists
+                if (i % 2 == 0)
+                {
+                    whiteMoves.AddRange(moves);
                 }
                 else
                 {
-                    _logger.LogInformation("Processing standard chess notation");
-                    moves = await _chessMoveProcessor.ProcessChessMovesAsync(text);
+                    blackMoves.AddRange(moves);
                 }
-
-                if (moves == null || moves.Length == 0)
-                {
-                    _logger.LogWarning("No valid moves were extracted from the image");
-                    throw new InvalidOperationException("No valid moves were extracted from the image");
-                }
-
-                
-                _logger.LogInformation("Successfully processed {MoveCount} moves", moves.Length);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error processing chess moves for language: {Language}", language);
-                throw;
             }
 
-            return moves;
+            return (whiteMoves, blackMoves);
         }
 
         /// <summary>
@@ -126,67 +166,74 @@ namespace ChessDecoderApi.Services
         public async Task<ChessGameResponse> ProcessImageAsync(string imagePath, string language = "English")
         {
             // Extract moves from the image
-            string[] moves = await ExtractMovesFromImageToStringAsync(imagePath, language);
-            // Validate moves and log any issues
-                ChessMoveValidationResult validationResult;
-                validationResult = _chessMoveValidator.ValidateMoves(moves);
-                foreach (var move in validationResult.Moves)
+            var (whiteMoves, blackMoves) = await ExtractMovesFromImageToStringAsync(imagePath, language);
+
+            // Validate white and black moves separately
+            var whiteValidation = _chessMoveValidator.ValidateMoves(whiteMoves.ToArray());
+            var blackValidation = _chessMoveValidator.ValidateMoves(blackMoves.ToArray());
+
+            // Log validation results for white moves
+            foreach (var move in whiteValidation.Moves)
+            {
+                switch (move.ValidationStatus)
                 {
-                    switch (move.ValidationStatus)
-                    {
-                        case "error":
-                            _logger.LogError("Move validation error: Move {MoveNumber} '{Move}': {Error}", 
-                                move.MoveNumber, move.Notation, move.ValidationText);
-                            break;
-                        case "warning":
-                            _logger.LogWarning("Move validation warning: Move {MoveNumber} '{Move}': {Warning}", 
-                                move.MoveNumber, move.Notation, move.ValidationText);
-                            break;
-                    }
+                    case "error":
+                        _logger.LogError("White move validation error: Move {MoveNumber} '{Move}': {Error}",
+                            move.MoveNumber, move.Notation, move.ValidationText);
+                        break;
+                    case "warning":
+                        _logger.LogWarning("White move validation warning: Move {MoveNumber} '{Move}': {Warning}",
+                            move.MoveNumber, move.Notation, move.ValidationText);
+                        break;
                 }
-                
-                 // Convert validation result to the new format
+            }
+
+            // Log validation results for black moves
+            foreach (var move in blackValidation.Moves)
+            {
+                switch (move.ValidationStatus)
+                {
+                    case "error":
+                        _logger.LogError("Black move validation error: Move {MoveNumber} '{Move}': {Error}",
+                            move.MoveNumber, move.Notation, move.ValidationText);
+                        break;
+                    case "warning":
+                        _logger.LogWarning("Black move validation warning: Move {MoveNumber} '{Move}': {Warning}",
+                            move.MoveNumber, move.Notation, move.ValidationText);
+                        break;
+                }
+            }
+
+            // Construct ChessMovePair list
             var validation = new ChessGameValidation
             {
                 GameId = Guid.NewGuid().ToString(),
                 Moves = new List<ChessMovePair>()
             };
-
-            // Group moves into pairs (white and black moves)
-            for (int i = 0; i < validationResult.Moves.Count; i += 2)
+            int maxMoves = Math.Max(whiteValidation.Moves.Count, blackValidation.Moves.Count);
+            for (int i = 0; i < maxMoves; i++)
             {
                 var movePair = new ChessMovePair
                 {
-                    MoveNumber = (i / 2) + 1,
-                    WhiteMove = new Models.ValidatedMove
-                    {
-                        Notation = validationResult.Moves[i].Notation,
-                        NormalizedNotation = validationResult.Moves[i].NormalizedNotation,
-                        ValidationStatus = validationResult.Moves[i].ValidationStatus,
-                        ValidationText = validationResult.Moves[i].ValidationText
-                    }
+                    MoveNumber = i + 1,
+                    WhiteMove = (i < whiteValidation.Moves.Count) ? new Models.ValidatedMove {
+                        Notation = whiteValidation.Moves[i].Notation,
+                        NormalizedNotation = whiteValidation.Moves[i].NormalizedNotation,
+                        ValidationStatus = whiteValidation.Moves[i].ValidationStatus,
+                        ValidationText = whiteValidation.Moves[i].ValidationText
+                    } : null,
+                    BlackMove = (i < blackValidation.Moves.Count) ? new Models.ValidatedMove {
+                        Notation = blackValidation.Moves[i].Notation,
+                        NormalizedNotation = blackValidation.Moves[i].NormalizedNotation,
+                        ValidationStatus = blackValidation.Moves[i].ValidationStatus,
+                        ValidationText = blackValidation.Moves[i].ValidationText
+                    } : null
                 };
-
-                // Add black move if it exists
-                if (i + 1 < validationResult.Moves.Count)
-                {
-                    movePair.BlackMove = new Models.ValidatedMove
-                    {
-                        Notation = validationResult.Moves[i + 1].Notation,
-                        NormalizedNotation = validationResult.Moves[i + 1].NormalizedNotation,
-                        ValidationStatus = validationResult.Moves[i + 1].ValidationStatus,
-                        ValidationText = validationResult.Moves[i + 1].ValidationText
-                    };
-                }
-
                 validation.Moves.Add(movePair);
             }
 
-
             // Generate the PGN content
-            var pgnContent = await GeneratePGNContentAsync(moves);
-
-           
+            var pgnContent = GeneratePGNContentAsync(whiteMoves, blackMoves);
 
             return new ChessGameResponse
             {
@@ -379,40 +426,39 @@ namespace ChessDecoderApi.Services
                 _ => Array.Empty<string>() // Return empty array for unsupported languages
             };
         }
-        
-        public async Task<string> GeneratePGNContentAsync(IEnumerable<string> moves)
+
+        public string GeneratePGNContentAsync(IEnumerable<string> whiteMoves, IEnumerable<string> blackMoves)
         {
             // Basic PGN structure
             var sb = new StringBuilder();
-            sb.AppendLine("[Event \"??\"]");
-            sb.AppendLine("[Site \"??\"]");
-            sb.AppendLine("[Date \"??\"]");
-            sb.AppendLine("[Round \"??\"]");
+            //sb.AppendLine("[Event \"??\"]");
+            //sb.AppendLine("[Site \"??\"]");
+            sb.AppendLine($"[Date \"{DateTime.Now:yyyy.MM.dd}\"]");
+            //sb.AppendLine("[Round \"??\"]");
             sb.AppendLine("[White \"??\"]");
             sb.AppendLine("[Black \"??\"]");
             sb.AppendLine("[Result \"*\"]");
             sb.AppendLine();
 
-            // Format moves
+            var whiteList = whiteMoves?.ToList() ?? new List<string>();
+            var blackList = blackMoves?.ToList() ?? new List<string>();
+            int maxMoves = Math.Max(whiteList.Count, blackList.Count);
             var moveList = new List<string>();
-            int moveNumber = 1;
-            bool whiteMove = true;
-
-            foreach (var move in moves.Where(m => !string.IsNullOrWhiteSpace(m)))
+            for (int i = 0; i < maxMoves; i++)
             {
-                if (whiteMove)
+                string white = i < whiteList.Count ? whiteList[i] ?? string.Empty : string.Empty;
+                string black = i < blackList.Count ? blackList[i] ?? string.Empty : string.Empty;
+                if (!string.IsNullOrWhiteSpace(white) || !string.IsNullOrWhiteSpace(black))
                 {
-                    moveList.Add($"{moveNumber}. {move}");
-                    whiteMove = false;
-                }
-                else
-                {
-                    moveList.Add(move);
-                    whiteMove = true;
-                    moveNumber++;
+                    if (!string.IsNullOrWhiteSpace(white))
+                        moveList.Add($"{i + 1}. {white}");
+                    if (!string.IsNullOrWhiteSpace(black))
+                    {
+                        moveList.Add(black);
+                        moveList.Add("\n");
+                    }
                 }
             }
-
             sb.AppendLine(string.Join(" ", moveList) + " *");
             return sb.ToString();
         }
@@ -504,6 +550,101 @@ namespace ChessDecoderApi.Services
             var messageContent = choices[0].GetProperty("message").GetProperty("content").GetString();
             
             return messageContent?.Replace("`", "") ?? string.Empty;
+        }
+
+        /// <summary>
+        /// Splits the input image into vertical columns based on projection profile and returns the column boundaries.
+        /// </summary>
+        /// <param name="imagePath">Path to the chess moves image</param>
+        /// <param name="expectedColumns">Expected number of columns (default: 6)</param>
+        /// <returns>List of column boundary indices (pixel positions)</returns>
+        public List<int> SplitImageIntoColumns(string imagePath, int expectedColumns = 6)
+        {
+            using var image = Image.Load<Rgba32>(imagePath);
+            image.Mutate(x => x.Grayscale());
+            int width = image.Width;
+            int height = image.Height;
+            double[] columnSums = new double[width];
+            // Binarize and sum binary values per column
+            for (int x = 0; x < width; x++)
+            {
+                double sum = 0;
+                for (int y = 0; y < height; y++)
+                {
+                    var pixel = image[x, y];
+                    int gray = pixel.R;
+                    int binary = gray > 128 ? 1 : 0; // Threshold at 128
+                    sum += binary;
+                }
+                columnSums[x] = sum;
+            }
+            int smoothWindow = Math.Max(3, width / 100);
+            double[] smoothed = new double[width];
+            for (int x = 0; x < width; x++)
+            {
+                int start = Math.Max(0, x - smoothWindow);
+                int end = Math.Min(width - 1, x + smoothWindow);
+                double avg = 0;
+                for (int i = start; i <= end; i++) avg += columnSums[i];
+                smoothed[x] = avg / (end - start + 1);
+            }
+            // Detect boundaries as before
+            List<int> detectedBoundaries = new List<int> { 0 };
+            double threshold = 3.0;
+            for (int x = 1; x < width - 1; x++)
+            {
+                double diff = Math.Abs(smoothed[x] - smoothed[x - 1]) + Math.Abs(smoothed[x] - smoothed[x + 1]);
+                bool bothNeighborsAreNegative = (smoothed[x] - smoothed[x - 1] < 0 ) && (smoothed[x] - smoothed[x + 1] < 0);
+                if (diff > threshold && bothNeighborsAreNegative)
+                {
+                    detectedBoundaries.Add(x);
+                }
+            }
+            detectedBoundaries.Add(width);
+            detectedBoundaries = detectedBoundaries.Distinct().OrderBy(b => b).ToList();
+
+            // Step 1: Create dummy slices (width/expectedColumns)
+            List<int> dummyEdges = new List<int>();
+            for (int i = 0; i <= expectedColumns; i++)
+            {
+                dummyEdges.Add(i * width / expectedColumns);
+            }
+
+            // Step 2: For each dummy edge (except 0 and width), adjust to closest detected boundary if within range
+            int maxAdjust = width / (expectedColumns * 2); // e.g., width/12 for 6 columns
+            List<int> finalEdges = new List<int> { 0 };
+            for (int i = 1; i < dummyEdges.Count - 1; i++)
+            {
+                int dummyEdge = dummyEdges[i];
+                int closestBoundary = detectedBoundaries
+                    .OrderBy(b => Math.Abs(b - dummyEdge))
+                    .FirstOrDefault();
+                if (Math.Abs(closestBoundary - dummyEdge) <= maxAdjust)
+                {
+                    // Prefer larger slices: if boundary is to the right, use it, else use dummyEdge
+                    if (closestBoundary > dummyEdge)
+                        finalEdges.Add(closestBoundary);
+                    else
+                        finalEdges.Add(dummyEdge);
+                }
+                else
+                {
+                    finalEdges.Add(dummyEdge);
+                }
+            }
+            finalEdges.Add(width);
+
+            // Ensure edges are sorted and unique, and at least 1 pixel apart
+            finalEdges = finalEdges.Distinct().OrderBy(e => e).ToList();
+            for (int i = finalEdges.Count - 1; i > 0; i--)
+            {
+                if (finalEdges[i] - finalEdges[i - 1] < 1)
+                {
+                    finalEdges.RemoveAt(i);
+                }
+            }
+
+            return finalEdges;
         }
     }
 } 

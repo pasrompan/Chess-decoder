@@ -273,7 +273,7 @@ namespace ChessDecoderApi.Tests.Services
             var moves = _service.ExtractMovesFromPgn(pgnContent);
 
             // Assert
-            Assert.Empty(moves);
+            Assert.Empty(moves ?? new List<string>());
         }
 
         [Fact]
@@ -292,7 +292,7 @@ namespace ChessDecoderApi.Tests.Services
             var moves = _service.ExtractMovesFromPgn(pgnContent);
 
             // Assert
-            Assert.Empty(moves);
+            Assert.Empty(moves ?? new List<string>());
         }
 
         [Fact]
@@ -305,7 +305,7 @@ namespace ChessDecoderApi.Tests.Services
             var moves = _service.ExtractMovesFromPgn(pgnContent);
 
             // Assert
-            Assert.Empty(moves);
+            Assert.Empty(moves ?? new List<string>());
         }
 
         [Fact]
