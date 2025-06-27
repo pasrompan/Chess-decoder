@@ -68,7 +68,7 @@ namespace ChessDecoderApi.Services
                 }
                 result.ExtractedMoves = extractedMoves;
                 _logger.LogInformation("Extracted {Count} moves directly from image", extractedMoves.Count);
-                result.GeneratedPgn = await _imageProcessingService.GeneratePGNContentAsync(whiteMoves, blackMoves);
+                result.GeneratedPgn = _imageProcessingService.GeneratePGNContentAsync(whiteMoves, blackMoves);
 
                 // Compute various distance metrics
                 result.ExactMatchScore = ComputeExactMatchScore(groundTruthMoves, extractedMoves);

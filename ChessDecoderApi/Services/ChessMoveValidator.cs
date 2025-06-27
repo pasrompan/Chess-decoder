@@ -27,7 +27,7 @@ namespace ChessDecoderApi.Services
         /// - Showing users what was actually detected from their input
         /// - Maintaining the original format for reference
         /// </summary>
-        public string Notation { get; set; }
+        public string? Notation { get; set; }
 
         /// <summary>
         /// The standardized version of the move notation.
@@ -39,17 +39,17 @@ namespace ChessDecoderApi.Services
         /// - Displaying moves in a standardized format
         /// - Supporting move validation rules that require consistent notation
         /// </summary>
-        public string NormalizedNotation { get; set; }
+        public string? NormalizedNotation { get; set; }
 
         /// <summary>
         /// The validation status of the move: "valid", "warning", or "error".
         /// </summary>
-        public string ValidationStatus { get; set; }
+        public string? ValidationStatus { get; set; }
 
         /// <summary>
         /// Detailed feedback about the validation result, including any warnings or errors.
         /// </summary>
-        public string ValidationText { get; set; }
+        public string? ValidationText { get; set; }
     }
 
     public class ChessMoveValidationResult

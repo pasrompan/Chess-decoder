@@ -68,7 +68,8 @@ namespace ChessDecoderApi.Tests.Services
                 }
                 result.ExtractedMoves = extractedMoves;
                 _logger.LogInformation($"Extracted {extractedMoves.Count} moves directly from image");
-                result.GeneratedPgn = await _imageProcessingService.GeneratePGNContentAsync(whiteMoves, blackMoves);
+                var pgn = _imageProcessingService.GeneratePGNContentAsync(whiteMoves, blackMoves);
+                result.GeneratedPgn = pgn;
 
                 // Compute various distance metrics
                 result.ExactMatchScore = ComputeExactMatchScore(groundTruthMoves, extractedMoves);
@@ -80,6 +81,8 @@ namespace ChessDecoderApi.Tests.Services
                 result.NormalizedScore = ComputeNormalizedScore(result);
 
                 result.IsSuccessful = true;
+
+                result.ProcessingTime = DateTime.UtcNow - startTime;
 
                 _logger.LogInformation("Evaluation completed. Normalized Score: {Score:F3}", result.NormalizedScore);
             }

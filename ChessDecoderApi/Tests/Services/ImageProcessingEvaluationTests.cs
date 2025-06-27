@@ -42,7 +42,7 @@ namespace ChessDecoderApi.Tests.Services
 
             mockImageService
                 .Setup(x => x.GeneratePGNContentAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<IEnumerable<string>>()))
-                .ReturnsAsync("[Event \"Test Game\"]\n\n1. e4 e5 2. Nf3 Nc6 3. Bb5 *");
+                .Returns("[Event \"Test Game\"]\n\n1. e4 e5 2. Nf3 Nc6 3. Bb5 *");
 
             var evaluationService = new ImageProcessingEvaluationService(
                 mockImageService.Object, 
@@ -125,7 +125,7 @@ namespace ChessDecoderApi.Tests.Services
 
             mockImageService
                 .Setup(x => x.GeneratePGNContentAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<IEnumerable<string>>()))
-                .ReturnsAsync("[Event \"Test Game\"]\n\n1. e4 c5 2. Nf3 Nc6 *");
+                .Returns("[Event \"Test Game\"]\n\n1. e4 c5 2. Nf3 Nc6 *");
 
             var evaluationService = new ImageProcessingEvaluationService(
                 mockImageService.Object, 

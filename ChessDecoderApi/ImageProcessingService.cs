@@ -65,7 +65,7 @@ namespace ChessDecoderApi.Services
         /// <param name="imagePath">Path to the chess image</param>
         /// <param name="language">Language for chess notation (default: English)</param>
         /// <returns>Tuple of two lists: whiteMoves and blackMoves</returns>
-        public virutal async Task<(List<string> whiteMoves, List<string> blackMoves)> ExtractMovesFromImageToStringAsync(string imagePath, string language = "English")
+        public virtual async Task<(List<string> whiteMoves, List<string> blackMoves)> ExtractMovesFromImageToStringAsync(string imagePath, string language = "English")
         {
             if (!File.Exists(imagePath))
             {
@@ -167,67 +167,73 @@ namespace ChessDecoderApi.Services
         {
             // Extract moves from the image
             var (whiteMoves, blackMoves) = await ExtractMovesFromImageToStringAsync(imagePath, language);
-            string[] moves = await ExtractMovesFromImageToStringAsync(imagePath, language);
-            // Validate moves and log any issues
-                ChessMoveValidationResult validationResult;
-                validationResult = _chessMoveValidator.ValidateMoves(moves);
-                foreach (var move in validationResult.Moves)
+
+            // Validate white and black moves separately
+            var whiteValidation = _chessMoveValidator.ValidateMoves(whiteMoves.ToArray());
+            var blackValidation = _chessMoveValidator.ValidateMoves(blackMoves.ToArray());
+
+            // Log validation results for white moves
+            foreach (var move in whiteValidation.Moves)
+            {
+                switch (move.ValidationStatus)
                 {
-                    switch (move.ValidationStatus)
-                    {
-                        case "error":
-                            _logger.LogError("Move validation error: Move {MoveNumber} '{Move}': {Error}", 
-                                move.MoveNumber, move.Notation, move.ValidationText);
-                            break;
-                        case "warning":
-                            _logger.LogWarning("Move validation warning: Move {MoveNumber} '{Move}': {Warning}", 
-                                move.MoveNumber, move.Notation, move.ValidationText);
-                            break;
-                    }
+                    case "error":
+                        _logger.LogError("White move validation error: Move {MoveNumber} '{Move}': {Error}",
+                            move.MoveNumber, move.Notation, move.ValidationText);
+                        break;
+                    case "warning":
+                        _logger.LogWarning("White move validation warning: Move {MoveNumber} '{Move}': {Warning}",
+                            move.MoveNumber, move.Notation, move.ValidationText);
+                        break;
                 }
-                
-                 // Convert validation result to the new format
+            }
+
+            // Log validation results for black moves
+            foreach (var move in blackValidation.Moves)
+            {
+                switch (move.ValidationStatus)
+                {
+                    case "error":
+                        _logger.LogError("Black move validation error: Move {MoveNumber} '{Move}': {Error}",
+                            move.MoveNumber, move.Notation, move.ValidationText);
+                        break;
+                    case "warning":
+                        _logger.LogWarning("Black move validation warning: Move {MoveNumber} '{Move}': {Warning}",
+                            move.MoveNumber, move.Notation, move.ValidationText);
+                        break;
+                }
+            }
+
+            // Construct ChessMovePair list
             var validation = new ChessGameValidation
             {
                 GameId = Guid.NewGuid().ToString(),
                 Moves = new List<ChessMovePair>()
             };
-
-            // Group moves into pairs (white and black moves)
-            for (int i = 0; i < validationResult.Moves.Count; i += 2)
+            int maxMoves = Math.Max(whiteValidation.Moves.Count, blackValidation.Moves.Count);
+            for (int i = 0; i < maxMoves; i++)
             {
                 var movePair = new ChessMovePair
                 {
-                    MoveNumber = (i / 2) + 1,
-                    WhiteMove = new Models.ValidatedMove
-                    {
-                        Notation = validationResult.Moves[i].Notation,
-                        NormalizedNotation = validationResult.Moves[i].NormalizedNotation,
-                        ValidationStatus = validationResult.Moves[i].ValidationStatus,
-                        ValidationText = validationResult.Moves[i].ValidationText
-                    }
+                    MoveNumber = i + 1,
+                    WhiteMove = (i < whiteValidation.Moves.Count) ? new Models.ValidatedMove {
+                        Notation = whiteValidation.Moves[i].Notation,
+                        NormalizedNotation = whiteValidation.Moves[i].NormalizedNotation,
+                        ValidationStatus = whiteValidation.Moves[i].ValidationStatus,
+                        ValidationText = whiteValidation.Moves[i].ValidationText
+                    } : null,
+                    BlackMove = (i < blackValidation.Moves.Count) ? new Models.ValidatedMove {
+                        Notation = blackValidation.Moves[i].Notation,
+                        NormalizedNotation = blackValidation.Moves[i].NormalizedNotation,
+                        ValidationStatus = blackValidation.Moves[i].ValidationStatus,
+                        ValidationText = blackValidation.Moves[i].ValidationText
+                    } : null
                 };
-
-                // Add black move if it exists
-                if (i + 1 < validationResult.Moves.Count)
-                {
-                    movePair.BlackMove = new Models.ValidatedMove
-                    {
-                        Notation = validationResult.Moves[i + 1].Notation,
-                        NormalizedNotation = validationResult.Moves[i + 1].NormalizedNotation,
-                        ValidationStatus = validationResult.Moves[i + 1].ValidationStatus,
-                        ValidationText = validationResult.Moves[i + 1].ValidationText
-                    };
-                }
-
                 validation.Moves.Add(movePair);
             }
 
-
             // Generate the PGN content
-            var pgnContent = await GeneratePGNContentAsync(moves);
-
-           
+            var pgnContent = GeneratePGNContentAsync(whiteMoves, blackMoves);
 
             return new ChessGameResponse
             {
@@ -421,7 +427,7 @@ namespace ChessDecoderApi.Services
             };
         }
 
-        public Task<string> GeneratePGNContentAsync(IEnumerable<string> whiteMoves, IEnumerable<string> blackMoves)
+        public string GeneratePGNContentAsync(IEnumerable<string> whiteMoves, IEnumerable<string> blackMoves)
         {
             // Basic PGN structure
             var sb = new StringBuilder();
