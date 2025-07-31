@@ -64,7 +64,8 @@ namespace ChessDecoderApi.Services
         private static readonly Regex _validMovePattern = new(@"^([KQRBN]?[a-h]?[1-8]?x?[a-h][1-8](=[QRBN])?[+#]?|O-O(-O)?[+#]?)$", RegexOptions.Compiled);
         private static readonly HashSet<string> _validPieces = new() { "K", "Q", "R", "B", "N" };
         private static readonly HashSet<string> _validPromotions = new() { "=Q", "=R", "=B", "=N" };
-        private static readonly Regex _castlingPattern = new(@"^[0Oo]-[0Oo](-[0Oo])?[+#]?$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        private static readonly Regex _castlingPattern = new(@"^[0OoΟοОо]-[0OoΟοОо](-[0OoΟοОо])?[+#]?$", RegexOptions.Compiled);
+
 
         public ChessMoveValidator(ILogger<ChessMoveValidator> logger)
         {
@@ -157,13 +158,13 @@ namespace ChessDecoderApi.Services
                 result.IsValid = false;
                 validatedMove.ValidationStatus = "error";
                 validatedMove.ValidationText = $"Invalid move syntax '{move}'";
-                
+
                 // Add promotion suggestion if applicable
                 if (move.Contains("=") && !_validPromotions.Any(p => move.EndsWith(p)))
                 {
                     validatedMove.ValidationText += "; Invalid promotion piece. Valid promotions are: =Q, =R, =B, =N";
                 }
-                
+
                 result.Moves.Add(validatedMove);
                 return result;
             }
@@ -207,14 +208,14 @@ namespace ChessDecoderApi.Services
                     // Update the validation status and text for both moves
                     currentMove.ValidationStatus = currentMove.ValidationStatus == "valid" ? "warning" : currentMove.ValidationStatus;
                     nextMove.ValidationStatus = nextMove.ValidationStatus == "valid" ? "warning" : nextMove.ValidationStatus;
-                    
+
                     var warningText = "Consecutive checks detected. Please verify these moves.";
-                    currentMove.ValidationText = string.IsNullOrEmpty(currentMove.ValidationText) ? 
+                    currentMove.ValidationText = string.IsNullOrEmpty(currentMove.ValidationText) ?
                         warningText : currentMove.ValidationText + "; " + warningText;
-                    nextMove.ValidationText = string.IsNullOrEmpty(nextMove.ValidationText) ? 
+                    nextMove.ValidationText = string.IsNullOrEmpty(nextMove.ValidationText) ?
                         warningText : nextMove.ValidationText + "; " + warningText;
                 }
             }
         }
     }
-} 
+}
