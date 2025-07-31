@@ -23,13 +23,18 @@ namespace ChessDecoderApi.Services
         private static readonly Dictionary<string, string> GreekToEnglishMap = new()
         {
             { "Π", "R" }, // Πύργος (Rook)
-            { "Α", "B" }, // Αλογο (Knight)
+            { "Α", "B" }, // Αξιωματικός (Bishop)
+            { "A", "B" }, // Αξιωματικός (Bishop)
             { "Β", "Q" }, // Βασίλισσα (Queen)
+            // { "B", "Q" }, // Βασίλισσα (Queen) - Don't add english B as well, as it transforms the Bishop to Queen...
             { "Ι", "N" }, // Ιππος (Knight)
+            { "I", "N" }, // Ιππος (Knight)
             { "Ρ", "K" }, // Ρήγας (King)
+            { "P", "K" }, // Ρήγας (King)
             { "0", "0" }, // Castling short
+            { "Ο", "0" }, // Castling short
             { "O", "0" }, // Castling short
-            { "x", "x" }, // Capture
+            { "χ", "x" }, // Capture
             { "+", "+" }, // Check
             { "#", "#" }, // Checkmate
             { "α", "a" }, // File letters
@@ -411,15 +416,15 @@ namespace ChessDecoderApi.Services
             {
                 "Greek" => new[]
                 {
-                    "Π", "Α", "Β", "Ι", "Ρ", // Greek piece names
-                    "0", "O", "x", "+", "#", // Special symbols
+                    "Π", "Α", "Β", "Ι", "Ρ", "A", "B", "I", "P", // Greek piece names
+                    "0", "O", "χ", "Ο", "x", "О", "о", "+", "#", "=", // Special symbols
                     "α", "β", "γ", "δ", "ε", "ζ", "η", "θ", // Greek file letters
                     "1", "2", "3", "4", "5", "6", "7", "8", // Rank numbers
                 },
                 "English" => new[]
                 {
                     "R", "N", "B", "Q", "K", // English piece names
-                    "x", "+", "#", "0", "=", // Special symbols
+                    "0", "Ο", "x", "+", "#", "=", // Special symbols
                     "a", "b", "c", "d", "e", "f", "g", "h", // File letters
                     "1", "2", "3", "4", "5", "6", "7", "8", // Rank numbers
                 },
