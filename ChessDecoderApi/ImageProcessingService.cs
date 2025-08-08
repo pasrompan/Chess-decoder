@@ -117,25 +117,6 @@ namespace ChessDecoderApi.Services
                         _logger.LogWarning($"No valid moves were extracted from column {i}");
                         continue;
                     }
-
-                    // Validate moves and log any issues
-                    var validationResult = _chessMoveValidator.ValidateMoves(moves);
-                    foreach (var move in validationResult.Moves)
-                    {
-                        switch (move.ValidationStatus)
-                        {
-                            case "error":
-                                _logger.LogError("Move validation error: Move {MoveNumber} '{Move}': {Error}", 
-                                    move.MoveNumber, move.Notation, move.ValidationText);
-                                break;
-                            case "warning":
-                                _logger.LogWarning("Move validation warning: Move {MoveNumber} '{Move}': {Warning}", 
-                                    move.MoveNumber, move.Notation, move.ValidationText);
-                                break;
-                        }
-                    }
-
-                    _logger.LogInformation($"Successfully processed {moves.Length} moves from column {i}");
                 }
                 catch (Exception ex)
                 {
@@ -298,7 +279,7 @@ namespace ChessDecoderApi.Services
 
                 var requestData = new
                 {
-                    model = "chatgpt-4o-latest",
+                    model = "o4-mini",
                     messages = new[]
                     {
                         new
@@ -321,8 +302,8 @@ namespace ChessDecoderApi.Services
                                 }
                             }
                         }
-                    },
-                    max_tokens = 1000
+                    }
+                    //max_tokens = 1000
                 };
 
                 var content = new StringContent(
