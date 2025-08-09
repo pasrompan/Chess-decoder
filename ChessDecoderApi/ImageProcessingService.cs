@@ -284,7 +284,7 @@ namespace ChessDecoderApi.Services
 
                 var requestData = new
                 {
-                    model = "o4-mini",
+                    model = "chatgpt-4o-latest",
                     messages = new[]
                     {
                         new
@@ -308,7 +308,7 @@ namespace ChessDecoderApi.Services
                             }
                         }
                     }
-                    //max_tokens = 1000
+                    max_tokens = 1000
                 };
 
                 var content = new StringContent(
