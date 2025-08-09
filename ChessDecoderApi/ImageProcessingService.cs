@@ -307,7 +307,7 @@ namespace ChessDecoderApi.Services
                                 }
                             }
                         }
-                    }
+                    },
                     max_tokens = 1000
                 };
 
