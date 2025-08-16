@@ -284,7 +284,7 @@ namespace ChessDecoderApi.Services
 
                 var requestData = new
                 {
-                    model = "chatgpt-4o-latest",
+                    model = "gpt-5-chat-latest",
                     messages = new[]
                     {
                         new
@@ -484,7 +484,7 @@ namespace ChessDecoderApi.Services
 
             var requestData = new
             {
-                model = "chatgpt-4o-latest",
+                model = "gpt-5-chat-latest",
                 messages = new[]
                 {
                     new

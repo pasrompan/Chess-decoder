@@ -33,15 +33,20 @@ namespace ChessDecoderApi.Services
                 if (jsonStartIndex == -1)
                 {
                     jsonStartIndex = rawText.IndexOf("json\r\n");
-                    if (jsonStartIndex == -1)
-                    {
-                        _logger.LogError("Invalid response format: 'json' indicator not found");
-                        throw new ArgumentException("Invalid response format: 'json' indicator not found");
-                    }
                 }
 
+                var jsonPart = string.Empty;
+
                 // Extract the JSON array part after the "json" indicator and newline
-                var jsonPart = rawText.Substring(jsonStartIndex + 5); // 5 is length of "json\n"
+                if (jsonStartIndex > -1)
+                {
+                    jsonPart = rawText.Substring(jsonStartIndex + 5); // 5 is length of "json\n"
+                }
+                else
+                {
+                    jsonPart = rawText;
+                }
+                
                 
                 // Parse the inner JSON array
                 var moves = JsonSerializer.Deserialize<string[]>(jsonPart);
