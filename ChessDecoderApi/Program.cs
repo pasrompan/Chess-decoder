@@ -16,6 +16,7 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddScoped<IImageProcessingService, ImageProcessingService>();
 builder.Services.AddScoped<IChessMoveProcessor, ChessMoveProcessor>();
 builder.Services.AddScoped<IChessMoveValidator, ChessMoveValidator>();
+builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddHttpClient();
 
 // Load environment variables - includes both .env and system environment variables
@@ -28,13 +29,30 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("CorsPolicy", policy =>
     {
-        policy.WithOrigins(
-                builder.Configuration.GetSection("AllowedOrigins").Get<string[]>() ?? 
-                new[] { "https://chess-scribe-convert.lovable.app", "https://62ad5c43-6c34-4327-a33d-f77c21343ea5.lovableproject.com", "http://localhost:8080" }
-            )
-            .AllowAnyMethod()
-            .AllowAnyHeader()
-            .AllowCredentials();
+        // Log the current environment for CORS configuration
+        Console.WriteLine($"[CORS Policy] Configuring for environment: '{builder.Environment.EnvironmentName}'");
+
+        if (builder.Environment.IsDevelopment())
+        {
+            // More permissive for development
+            Console.WriteLine("[CORS Policy] Development environment: Allowing any origin, method, and header.");
+            policy.AllowAnyOrigin()
+                  .AllowAnyMethod()
+                  .AllowAnyHeader();
+        }
+        else
+        {
+            // Restrictive for production
+            var allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>();
+            var originsToUse = allowedOrigins ?? new[] { "https://chess-scribe-convert.lovable.app", "https://62ad5c43-6c34-4327-a33d-f77c21343ea5.lovableproject.com", "http://localhost:8080", "http://localhost:5100" };
+
+            Console.WriteLine($"[CORS Policy] Production environment: Restricting to origins: {string.Join(", ", originsToUse)}");
+            
+            policy.WithOrigins(originsToUse)
+                .AllowAnyMethod()
+                .AllowAnyHeader()
+                .AllowCredentials();
+        }
     });
 });
 
@@ -49,6 +67,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+// CORS must be applied before Authorization
 app.UseCors("CorsPolicy");
 
 app.UseAuthorization();
