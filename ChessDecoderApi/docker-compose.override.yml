@@ -1,0 +1,42 @@
+# Development override for Docker Compose
+# This file adds the API service for local development
+version: '3.8'
+
+services:
+  # API Service (only for development)
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: chess-decoder-api
+    ports:
+      - "5100:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - ConnectionStrings_DefaultConnection=Host=postgres;Port=5432;Database=chessdecoder;Username=chessdecoder_user;Password=chessdecoder_password_dev
+    volumes:
+      - ./uploads:/app/uploads
+      - ./outputs:/app/outputs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - chess-decoder-network
+    restart: unless-stopped
+
+  # Development-specific PostgreSQL settings
+  postgres:
+    environment:
+      POSTGRES_PASSWORD: chessdecoder_password_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data_dev:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+
+volumes:
+  postgres_data_dev:
+    driver: local

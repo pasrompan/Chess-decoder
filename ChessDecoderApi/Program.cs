@@ -1,5 +1,7 @@
 using ChessDecoderApi.Services;
+using ChessDecoderApi.Data;
 using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 
 // Load environment variables from .env file
@@ -12,11 +14,36 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+// Add Entity Framework Core
+builder.Services.AddDbContext<ChessDecoderDbContext>(options =>
+{
+    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+    
+    // Use Google Cloud connection string if available and in production
+    if (builder.Environment.IsProduction())
+    {
+        var cloudConnectionString = builder.Configuration.GetConnectionString("GoogleCloudConnection");
+        if (!string.IsNullOrEmpty(cloudConnectionString))
+        {
+            connectionString = cloudConnectionString;
+        }
+    }
+    
+    options.UseNpgsql(connectionString, npgsqlOptions =>
+    {
+        npgsqlOptions.EnableRetryOnFailure(
+            maxRetryCount: 3,
+            maxRetryDelay: TimeSpan.FromSeconds(30),
+            errorCodesToAdd: null);
+    });
+});
+
 // Register services
 builder.Services.AddScoped<IImageProcessingService, ImageProcessingService>();
 builder.Services.AddScoped<IChessMoveProcessor, ChessMoveProcessor>();
 builder.Services.AddScoped<IChessMoveValidator, ChessMoveValidator>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<ICreditService, CreditService>();
 builder.Services.AddHttpClient();
 
 // Load environment variables - includes both .env and system environment variables

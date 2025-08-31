@@ -1,0 +1,98 @@
+# Production Docker Compose configuration
+version: '3.8'
+
+services:
+  # API Service (Production)
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: final
+    container_name: chess-decoder-api-prod
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:80;https://+:443
+    volumes:
+      - ./uploads:/app/uploads
+      - ./outputs:/app/outputs
+      - ./appsettings.Production.json:/app/appsettings.Production.json
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - chess-decoder-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+
+  # PostgreSQL Database (Production)
+  postgres:
+    image: postgres:15-alpine
+    container_name: chess-decoder-postgres-prod
+    environment:
+      POSTGRES_DB: chessdecoder
+      POSTGRES_USER: chessdecoder_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-chessdecoder_prod_password}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data_prod:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chessdecoder_user -d chessdecoder"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - chess-decoder-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+
+  # Redis Cache (Production)
+  redis:
+    image: redis:7-alpine
+    container_name: chess-decoder-redis-prod
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data_prod:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - chess-decoder-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+
+volumes:
+  postgres_data_prod:
+    driver: local
+  redis_data_prod:
+    driver: local
+
+networks:
+  chess-decoder-network:
+    driver: bridge
