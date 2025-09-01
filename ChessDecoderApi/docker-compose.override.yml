@@ -15,6 +15,9 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:80
       - ConnectionStrings_DefaultConnection=Host=postgres;Port=5432;Database=chessdecoder;Username=chessdecoder_user;Password=chessdecoder_password_dev
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GOOGLE_VISION_API_KEY=${GOOGLE_VISION_API_KEY}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
     volumes:
       - ./uploads:/app/uploads
       - ./outputs:/app/outputs

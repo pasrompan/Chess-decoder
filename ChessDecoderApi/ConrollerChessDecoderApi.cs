@@ -1,6 +1,8 @@
 using ChessDecoderApi.Models;
 using ChessDecoderApi.Services;
+using ChessDecoderApi.Data;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System.Text;
 
 namespace ChessDecoderApi.Controllers
@@ -114,9 +116,12 @@ namespace ChessDecoderApi.Controllers
         [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> UploadImageV2(IFormFile? image, [FromForm] string language = "English")
+        public async Task<IActionResult> UploadImageV2(
+            IFormFile? image, 
+            [FromForm] string language = "English",
+            [FromForm] string userId = "")
         {
-            _logger.LogInformation("Processing image upload request (v2)");
+            _logger.LogInformation("Processing image upload request (v2) for user: {UserId}", userId);
 
             if (image == null || image.Length == 0)
             {
@@ -125,6 +130,16 @@ namespace ChessDecoderApi.Controllers
                 { 
                     Status = StatusCodes.Status400BadRequest, 
                     Message = "No image file provided" 
+                });
+            }
+
+            if (string.IsNullOrEmpty(userId))
+            {
+                _logger.LogWarning("User ID is required for image processing");
+                return BadRequest(new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status400BadRequest, 
+                    Message = "User ID is required" 
                 });
             }
 
@@ -141,33 +156,118 @@ namespace ChessDecoderApi.Controllers
 
             try
             {
-                // Save to temp file
-                var tempFilePath = Path.GetTempFileName();
-                try
+                // Check if user has enough credits
+                var creditService = HttpContext.RequestServices.GetRequiredService<ICreditService>();
+                if (!await creditService.HasEnoughCreditsAsync(userId, 1))
                 {
-                    using (var stream = new FileStream(tempFilePath, FileMode.Create))
-                    {
-                        await image.CopyToAsync(stream);
-                    }
-
-                    // Process the image
-                    var result = await _imageProcessingService.ProcessImageAsync(tempFilePath, language);
-
-                    // Return both PGN content and validation data
-                    return Ok(new
-                    {
-                        pgnContent = result.PgnContent,
-                        validation = result.Validation
+                    _logger.LogWarning("User {UserId} has insufficient credits for image processing", userId);
+                    return BadRequest(new ErrorResponse 
+                    { 
+                        Status = StatusCodes.Status400BadRequest, 
+                        Message = "Insufficient credits. Please purchase more credits to process images." 
                     });
                 }
-                finally
+
+                // Create uploads directory if it doesn't exist
+                var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "uploads");
+                if (!Directory.Exists(uploadsDir))
                 {
-                    // Clean up temp file
-                    if (System.IO.File.Exists(tempFilePath))
-                    {
-                        System.IO.File.Delete(tempFilePath);
-                    }
+                    Directory.CreateDirectory(uploadsDir);
                 }
+
+                // Generate unique filename for the uploaded image
+                var fileName = $"{Guid.NewGuid()}_{image.FileName}";
+                var filePath = Path.Combine(uploadsDir, fileName);
+
+                // Save the uploaded image
+                using (var stream = new FileStream(filePath, FileMode.Create))
+                {
+                    await image.CopyToAsync(stream);
+                }
+
+                _logger.LogInformation("Image saved to: {FilePath}", filePath);
+
+                // Process the image
+                var startTime = DateTime.UtcNow;
+                var result = await _imageProcessingService.ProcessImageAsync(filePath, language);
+                var processingTime = DateTime.UtcNow - startTime;
+
+                // Get database context
+                var dbContext = HttpContext.RequestServices.GetRequiredService<ChessDecoderDbContext>();
+
+                // Create ChessGame record
+                var chessGame = new ChessGame
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = userId,
+                    Title = $"Chess Game - {DateTime.UtcNow:yyyy-MM-dd HH:mm}",
+                    Description = $"Processed chess game from image upload. Language: {language}",
+                    PgnContent = result.PgnContent ?? "",
+                    ProcessedAt = DateTime.UtcNow,
+                    ProcessingTimeMs = (int)processingTime.TotalMilliseconds,
+                    IsValid = result.Validation?.Moves?.All(m => 
+                        (m.WhiteMove?.ValidationStatus == "valid" || m.WhiteMove?.ValidationStatus == "warning") &&
+                        (m.BlackMove?.ValidationStatus == "valid" || m.BlackMove?.ValidationStatus == "warning")) ?? false
+                };
+
+                dbContext.ChessGames.Add(chessGame);
+
+                // Create GameImage record
+                var gameImage = new GameImage
+                {
+                    Id = Guid.NewGuid(),
+                    ChessGameId = chessGame.Id,
+                    FileName = fileName,
+                    FilePath = filePath,
+                    UploadedAt = DateTime.UtcNow
+                };
+
+                dbContext.GameImages.Add(gameImage);
+
+                // Create GameStatistics record
+                var totalMoves = result.Validation?.Moves?.Count ?? 0;
+                var validMoves = result.Validation?.Moves?.Count(m => 
+                    (m.WhiteMove?.ValidationStatus == "valid" || m.WhiteMove?.ValidationStatus == "warning") &&
+                    (m.BlackMove?.ValidationStatus == "valid" || m.BlackMove?.ValidationStatus == "warning")) ?? 0;
+                var invalidMoves = totalMoves - validMoves;
+
+                var gameStats = new GameStatistics
+                {
+                    Id = Guid.NewGuid(),
+                    ChessGameId = chessGame.Id,
+                    TotalMoves = totalMoves,
+                    ValidMoves = validMoves,
+                    InvalidMoves = invalidMoves,
+                    Opening = ExtractOpening(result.PgnContent ?? ""),
+                    Result = "In Progress" // Could be enhanced to detect game end
+                };
+
+                dbContext.GameStatistics.Add(gameStats);
+
+                // Deduct credits before saving to ensure it's part of the same transaction
+                var user = await dbContext.Users.FindAsync(userId);
+                if (user != null)
+                {
+                    user.Credits -= 1;
+                    _logger.LogInformation("Deducting 1 credit from user {UserId}. New balance will be: {NewBalance}", 
+                        userId, user.Credits);
+                }
+
+                // Save all changes to database (including credit deduction)
+                await dbContext.SaveChangesAsync();
+
+                _logger.LogInformation("Successfully processed image for user {UserId}. Game ID: {GameId}", 
+                    userId, chessGame.Id);
+
+                // Return both PGN content and validation data, plus game info
+                return Ok(new
+                {
+                    gameId = chessGame.Id,
+                    pgnContent = result.PgnContent,
+                    validation = result.Validation,
+                    processingTime = processingTime.TotalMilliseconds,
+                    creditsRemaining = await creditService.GetUserCreditsAsync(userId)
+                });
             }
             catch (UnauthorizedAccessException)
             {
@@ -180,13 +280,41 @@ namespace ChessDecoderApi.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error processing image");
+                _logger.LogError(ex, "Error processing image for user {UserId}", userId);
                 return StatusCode(StatusCodes.Status500InternalServerError, new ErrorResponse 
                 { 
                     Status = StatusCodes.Status500InternalServerError, 
                     Message = "Failed to process image" 
                 });
             }
+        }
+
+        private string ExtractOpening(string pgnContent)
+        {
+            // Simple opening detection based on first few moves
+            var moves = pgnContent.Split('\n')
+                .Where(line => !line.StartsWith('[') && !string.IsNullOrWhiteSpace(line))
+                .SelectMany(line => line.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+                .Where(move => !string.IsNullOrWhiteSpace(move) && !move.Contains('.'))
+                .Take(6) // First 3 moves (6 half-moves)
+                .ToArray();
+
+            if (moves.Length >= 2)
+            {
+                var firstMoves = string.Join(" ", moves.Take(2));
+                return firstMoves switch
+                {
+                    "e4 e5" => "Open Game",
+                    "d4 d5" => "Closed Game",
+                    "e4 c5" => "Sicilian Defense",
+                    "d4 Nf6" => "Indian Defense",
+                    "e4 e6" => "French Defense",
+                    "e4 d5" => "Scandinavian Defense",
+                    _ => "Custom Opening"
+                };
+            }
+
+            return "Unknown Opening";
         }
 
         [HttpPost("evaluate")]
