@@ -14,28 +14,31 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Add Entity Framework Core
+// Add Entity Framework Core with SQLite support
 builder.Services.AddDbContext<ChessDecoderDbContext>(options =>
 {
     var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
     
-    // Use Google Cloud connection string if available and in production
-    if (builder.Environment.IsProduction())
+    if (string.IsNullOrEmpty(connectionString))
     {
-        var cloudConnectionString = builder.Configuration.GetConnectionString("GoogleCloudConnection");
-        if (!string.IsNullOrEmpty(cloudConnectionString))
+        // Default to SQLite for cost-effective deployment
+        var dbPath = Path.Combine(Directory.GetCurrentDirectory(), "data", "chessdecoder.db");
+        var dbDir = Path.GetDirectoryName(dbPath);
+        
+        if (!Directory.Exists(dbDir))
         {
-            connectionString = cloudConnectionString;
+            Directory.CreateDirectory(dbDir!);
         }
+        
+        options.UseSqlite($"Data Source={dbPath}");
+        Console.WriteLine($"[Database] Using SQLite database at: {dbPath}");
     }
-    
-    options.UseNpgsql(connectionString, npgsqlOptions =>
+    else
     {
-        npgsqlOptions.EnableRetryOnFailure(
-            maxRetryCount: 3,
-            maxRetryDelay: TimeSpan.FromSeconds(30),
-            errorCodesToAdd: null);
-    });
+        // SQLite connection
+        options.UseSqlite(connectionString);
+        Console.WriteLine("[Database] Using SQLite database");
+    }
 });
 
 // Register services
@@ -84,6 +87,31 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+// Initialize database on startup
+using (var scope = app.Services.CreateScope())
+{
+    var context = scope.ServiceProvider.GetRequiredService<ChessDecoderDbContext>();
+    
+    try
+    {
+        // Ensure database is created
+        await context.Database.EnsureCreatedAsync();
+        Console.WriteLine("[Database] Database initialized successfully");
+        
+        // Apply any pending migrations
+        if (context.Database.GetPendingMigrations().Any())
+        {
+            await context.Database.MigrateAsync();
+            Console.WriteLine("[Database] Migrations applied successfully");
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[Database] Error initializing database: {ex.Message}");
+        throw;
+    }
+}
 
 // Configure middleware
 if (app.Environment.IsDevelopment())

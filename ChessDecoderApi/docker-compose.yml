@@ -1,28 +1,4 @@
-version: '3.8'
-
 services:
-  # PostgreSQL Database
-  postgres:
-    image: postgres:15-alpine
-    container_name: chess-decoder-postgres
-    environment:
-      POSTGRES_DB: chessdecoder
-      POSTGRES_USER: chessdecoder_user
-      POSTGRES_PASSWORD: chessdecoder_password
-      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U chessdecoder_user -d chessdecoder"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - chess-decoder-network
-
   # Redis for caching (optional but recommended)
   redis:
     image: redis:7-alpine
@@ -39,30 +15,8 @@ services:
     networks:
       - chess-decoder-network
 
-  # pgAdmin for database management (optional)
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: chess-decoder-pgadmin
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@chessdecoder.com
-      PGADMIN_DEFAULT_PASSWORD: admin123
-      PGADMIN_CONFIG_SERVER_MODE: 'False'
-    ports:
-      - "8081:80"
-    volumes:
-      - pgadmin_data:/var/lib/pgadmin
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - chess-decoder-network
-
 volumes:
-  postgres_data:
-    driver: local
   redis_data:
-    driver: local
-  pgadmin_data:
     driver: local
 
 networks:

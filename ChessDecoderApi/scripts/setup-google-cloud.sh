@@ -1,174 +1,97 @@
 #!/bin/bash
 
-# Chess Decoder API - Google Cloud Database Setup Script
-# This script helps set up PostgreSQL on Google Cloud
-
+# Chess Decoder API - Google Cloud Setup Script
 set -e
 
-echo "☁️  Setting up Google Cloud PostgreSQL for Chess Decoder API..."
+echo "☁️ Setting up Chess Decoder API on Google Cloud..."
 
 # Check if gcloud is installed
 if ! command -v gcloud &> /dev/null; then
-    echo "❌ Google Cloud CLI is not installed. Please install it first:"
-    echo "   macOS: brew install google-cloud-sdk"
-    echo "   Linux: curl https://sdk.cloud.google.com | bash"
-    echo "   Windows: Download from https://cloud.google.com/sdk/docs/install"
+    echo "❌ gcloud CLI not found. Please install it first:"
+    echo "   https://cloud.google.com/sdk/docs/install"
     exit 1
 fi
 
-# Check if user is authenticated
-if ! gcloud auth list --filter=status:ACTIVE --format="value(account)" | grep -q .; then
-    echo "🔐 Please authenticate with Google Cloud first:"
-    echo "   gcloud auth login"
-    exit 1
-fi
-
-# Get project configuration
-echo ""
-echo "📝 Google Cloud Configuration:"
-
-# Get current project
-CURRENT_PROJECT=$(gcloud config get-value project 2>/dev/null)
-if [ -z "$CURRENT_PROJECT" ]; then
-    echo "❌ No project is set. Please set a project first:"
+# Get project ID
+PROJECT_ID=$(gcloud config get-value project 2>/dev/null)
+if [ -z "$PROJECT_ID" ]; then
+    echo "❌ No project ID set. Please run:"
     echo "   gcloud config set project YOUR_PROJECT_ID"
     exit 1
 fi
 
-echo "Current project: $CURRENT_PROJECT"
-read -p "Use this project? (y/n) [y]: " USE_CURRENT
-USE_CURRENT=${USE_CURRENT:-y}
-
-if [[ "$USE_CURRENT" =~ ^[Nn]$ ]]; then
-    read -p "Enter project ID: " PROJECT_ID
-    gcloud config set project $PROJECT_ID
-    CURRENT_PROJECT=$PROJECT_ID
-fi
-
-# Get region
-read -p "Region [us-central1]: " REGION
-REGION=${REGION:-us-central1}
-
-# Get instance name
-read -p "Instance name [chess-decoder-db]: " INSTANCE_NAME
-INSTANCE_NAME=${INSTANCE_NAME:-chess-decoder-db}
-
-# Get database name
-read -p "Database name [chessdecoder]: " DB_NAME
-DB_NAME=${DB_NAME:-chessdecoder}
-
-# Get username
-read -p "Database username [chessdecoder_user]: " DB_USER
-DB_USER=${DB_USER:-chessdecoder_user}
-
-# Get password
-read -s -p "Database password: " DB_PASSWORD
-echo ""
-
-read -s -p "Confirm password: " DB_PASSWORD_CONFIRM
-echo ""
-
-if [ "$DB_PASSWORD" != "$DB_PASSWORD_CONFIRM" ]; then
-    echo "❌ Passwords do not match!"
-    exit 1
-fi
-
-echo ""
-echo "🔧 Setting up Google Cloud PostgreSQL..."
+echo "📁 Project ID: $PROJECT_ID"
 
 # Enable required APIs
-echo "📡 Enabling required APIs..."
-gcloud services enable sqladmin.googleapis.com
+echo "🔌 Enabling required APIs..."
 gcloud services enable cloudbuild.googleapis.com
+gcloud services enable run.googleapis.com
+gcloud services enable storage.googleapis.com
+gcloud services enable secretmanager.googleapis.com
 
-# Create Cloud SQL instance
-echo "🏗️  Creating Cloud SQL instance..."
-gcloud sql instances create $INSTANCE_NAME \
-    --database-version=POSTGRES_15 \
-    --tier=db-f1-micro \
-    --region=$REGION \
-    --storage-type=SSD \
-    --storage-size=10GB \
-    --backup-start-time=02:00 \
-    --maintenance-window-day=SUN \
-    --maintenance-window-hour=03:00 \
-    --root-password=$DB_PASSWORD
+# Create buckets
+echo "🪣 Creating Cloud Storage buckets..."
 
-# Create database
-echo "🗄️  Creating database..."
-gcloud sql databases create $DB_NAME --instance=$INSTANCE_NAME
+# Database bucket
+DB_BUCKET="chessdecoder-db-$PROJECT_ID"
+gcloud storage buckets create gs://$DB_BUCKET \
+    --project=$PROJECT_ID \
+    --location=US \
+    --uniform-bucket-level-access
 
-# Create user
-echo "👤 Creating database user..."
-gcloud sql users create $DB_USER \
-    --instance=$INSTANCE_NAME \
-    --password=$DB_PASSWORD
+# Images bucket
+IMAGES_BUCKET="chessdecoder-images-$PROJECT_ID"
+gcloud storage buckets create gs://$IMAGES_BUCKET \
+    --project=$PROJECT_ID \
+    --location=US \
+    --uniform-bucket-level-access
 
-# Get connection info
-echo "🔍 Getting connection information..."
-CONNECTION_NAME=$(gcloud sql instances describe $INSTANCE_NAME --format="value(connectionName)")
+# Make images bucket public for CDN
+gcloud storage buckets add-iam-policy-binding gs://$IMAGES_BUCKET \
+    --member="allUsers" \
+    --role="roles/storage.objectViewer"
 
+# Create secrets
+echo "🔐 Creating secrets..."
+echo -n "$(read -p "Enter OpenAI API Key: " -s)" | gcloud secrets create openai-api-key --data-file=-
+echo -n "$(read -p "Enter Google Vision API Key: " -s)" | gcloud secrets create google-vision-api-key --data-file=-
+echo -n "$(read -p "Enter Google Client ID: " -s)" | gcloud secrets create google-client-id --data-file=-
+
+# Grant Cloud Run access to secrets
+echo "🔑 Granting Cloud Run access to secrets..."
+gcloud secrets add-iam-policy-binding openai-api-key \
+    --member="serviceAccount:$PROJECT_ID@appspot.gserviceaccount.com" \
+    --role="roles/secretmanager.secretAccessor"
+
+gcloud secrets add-iam-policy-binding google-vision-api-key \
+    --member="serviceAccount:$PROJECT_ID@appspot.gserviceaccount.com" \
+    --role="roles/secretmanager.secretAccessor"
+
+gcloud secrets add-iam-policy-binding google-client-id \
+    --member="serviceAccount:$PROJECT_ID@appspot.gserviceaccount.com" \
+    --role="roles/secretmanager.secretAccessor"
+
+# Grant Cloud Run access to buckets
+echo "🪣 Granting Cloud Run access to buckets..."
+gcloud storage buckets add-iam-policy-binding gs://$DB_BUCKET \
+    --member="serviceAccount:$PROJECT_ID@appspot.gserviceaccount.com" \
+    --role="roles/storage.objectAdmin"
+
+gcloud storage buckets add-iam-policy-binding gs://$IMAGES_BUCKET \
+    --member="serviceAccount:$PROJECT_ID@appspot.gserviceaccount.com" \
+    --role="roles/storage.objectAdmin"
+
+echo "✅ Google Cloud setup complete!"
 echo ""
-echo "✅ Google Cloud PostgreSQL setup completed successfully!"
+echo "📝 Next steps:"
+echo "1. Update appsettings.Production.json with bucket names:"
+echo "   - DatabaseBucketName: $DB_BUCKET"
+echo "   - ImagesBucketName: $IMAGES_BUCKET"
 echo ""
-echo "Connection Information:"
-echo "  Project ID: $CURRENT_PROJECT"
-echo "  Region: $REGION"
-echo "  Instance: $INSTANCE_NAME"
-echo "  Database: $DB_NAME"
-echo "  Username: $DB_USER"
-echo "  Connection Name: $CONNECTION_NAME"
+echo "2. Deploy to Cloud Run:"
+echo "   gcloud run deploy chess-decoder-api --source ."
 echo ""
-
-# Update appsettings.json
-echo "📝 Updating appsettings.json..."
-GOOGLE_CLOUD_CONNECTION="Host=/cloudsql/$CONNECTION_NAME;Database=$DB_NAME;Username=$DB_USER;Password=$DB_PASSWORD"
-
-# Create backup of original file
-cp appsettings.json appsettings.json.backup
-
-# Update connection string
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    # macOS
-    sed -i '' "s|Host=/cloudsql/PROJECT_ID:REGION:INSTANCE_NAME;Database=chessdecoder;Username=postgres;Password=your_password_here|$GOOGLE_CLOUD_CONNECTION|g" appsettings.json
-else
-    # Linux
-    sed -i "s|Host=/cloudsql/PROJECT_ID:REGION:INSTANCE_NAME;Database=chessdecoder;Username=postgres;Password=your_password_here|$GOOGLE_CLOUD_CONNECTION|g" appsettings.json
-fi
-
-echo "✅ appsettings.json updated!"
-
-# Update .env file
-echo "📝 Updating .env file..."
-cat >> .env << EOF
-
-# Google Cloud Configuration
-GOOGLE_CLOUD_PROJECT=$CURRENT_PROJECT
-GOOGLE_CLOUD_REGION=$REGION
-GOOGLE_CLOUD_SQL_INSTANCE=$INSTANCE_NAME
-GOOGLE_CLOUD_CONNECTION_NAME=$CONNECTION_NAME
-EOF
-
-echo "✅ .env file updated!"
-
+echo "3. Or use Cloud Build:"
+echo "   gcloud builds submit --config cloudbuild.yaml"
 echo ""
-echo "🎉 Google Cloud database setup completed!"
-echo ""
-echo "Next steps:"
-echo "1. Deploy your application to Google Cloud"
-echo "2. Set ASPNETCORE_ENVIRONMENT=Production"
-echo "3. Run migrations: dotnet ef database update"
-echo ""
-echo "Important notes:"
-echo "  • Instance tier: db-f1-micro (free tier eligible)"
-echo "  • Storage: 10GB SSD"
-echo "  • Backups: Daily at 2:00 AM"
-echo "  • Maintenance: Sundays at 3:00 AM"
-echo ""
-echo "Files modified:"
-echo "  ✅ appsettings.json (updated with Google Cloud connection)"
-echo "  ✅ .env (updated with Google Cloud configuration)"
-echo "  ✅ appsettings.json.backup (backup of original file)"
-echo ""
-echo "To connect from your local machine (for development):"
-echo "  gcloud sql connect $INSTANCE_NAME --user=postgres"
+echo "💰 Estimated monthly cost: ~$5-15 (depending on usage)"
