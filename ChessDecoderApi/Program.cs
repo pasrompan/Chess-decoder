@@ -17,13 +17,23 @@ builder.Services.AddSwaggerGen();
 // Add Entity Framework Core with SQLite support
 builder.Services.AddDbContext<ChessDecoderDbContext>(options =>
 {
+    // Try multiple ways to get the connection string
     var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+    var envConnectionString = Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection");
     
-    if (string.IsNullOrEmpty(connectionString))
+    Console.WriteLine($"[Database] Configuration connection string: '{connectionString}'");
+    Console.WriteLine($"[Database] Environment connection string: '{envConnectionString}'");
+    
+    // Use environment variable if available, otherwise use configuration
+    var finalConnectionString = !string.IsNullOrEmpty(envConnectionString) ? envConnectionString : connectionString;
+    
+    if (string.IsNullOrEmpty(finalConnectionString))
     {
         // Default to SQLite for cost-effective deployment
         var dbPath = Path.Combine("/app", "data", "chessdecoder.db");
         var dbDir = Path.GetDirectoryName(dbPath);
+        
+        Console.WriteLine($"[Database] No connection string found, using default path: {dbPath}");
         
         try
         {
@@ -33,12 +43,24 @@ builder.Services.AddDbContext<ChessDecoderDbContext>(options =>
                 Console.WriteLine($"[Database] Created directory: {dbDir}");
             }
             
+            // Verify directory was created and is writable
+            if (Directory.Exists(dbDir))
+            {
+                Console.WriteLine($"[Database] Directory exists and is accessible: {dbDir}");
+            }
+            else
+            {
+                throw new DirectoryNotFoundException($"Failed to create directory: {dbDir}");
+            }
+            
             options.UseSqlite($"Data Source={dbPath}");
             Console.WriteLine($"[Database] Using SQLite database at: {dbPath}");
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[Database] Error setting up database path: {ex.Message}");
+            Console.WriteLine($"[Database] Stack trace: {ex.StackTrace}");
+            
             // Fallback to current directory
             var fallbackPath = Path.Combine(Directory.GetCurrentDirectory(), "chessdecoder.db");
             options.UseSqlite($"Data Source={fallbackPath}");
@@ -47,9 +69,9 @@ builder.Services.AddDbContext<ChessDecoderDbContext>(options =>
     }
     else
     {
-        // SQLite connection
-        options.UseSqlite(connectionString);
-        Console.WriteLine("[Database] Using SQLite database");
+        // Use the provided connection string
+        options.UseSqlite(finalConnectionString);
+        Console.WriteLine($"[Database] Using provided connection string: {finalConnectionString}");
     }
 });
 

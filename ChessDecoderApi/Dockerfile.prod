@@ -31,6 +31,10 @@ COPY --from=publish /app/publish .
 RUN mkdir -p /app/data /app/uploads /app/outputs && \
     chmod 755 /app/data /app/uploads /app/outputs
 
+# Copy and setup startup script
+COPY startup.sh /app/startup.sh
+RUN chmod +x /app/startup.sh
+
 # Set environment variables for production
 ENV ASPNETCORE_URLS=http://+:${PORT:-8080}
 ENV ASPNETCORE_ENVIRONMENT=Production
@@ -40,4 +44,4 @@ ENV PORT=8080
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT:-8080}/api/test/health || exit 1
 
-ENTRYPOINT ["dotnet", "ChessDecoderApi.dll"]
+ENTRYPOINT ["/app/startup.sh"]
