@@ -19,14 +19,33 @@ public class CloudStorageService : ICloudStorageService
         _configuration = configuration;
         _logger = logger;
         
-        _databaseBucketName = _configuration["CloudStorage:DatabaseBucketName"] ?? "chessdecoder-db";
-        _imagesBucketName = _configuration["CloudStorage:ImagesBucketName"] ?? "chessdecoder-images";
+        // Get bucket names from environment variables first, then configuration
+        _databaseBucketName = Environment.GetEnvironmentVariable("GOOGLE_CLOUD_DATABASE_BUCKET") 
+            ?? _configuration["CloudStorage:DatabaseBucketName"] 
+            ?? "chessdecoder-db";
+        _imagesBucketName = Environment.GetEnvironmentVariable("GOOGLE_CLOUD_IMAGES_BUCKET") 
+            ?? _configuration["CloudStorage:ImagesBucketName"] 
+            ?? "chessdecoder-images";
         _databaseFileName = "chessdecoder.db";
+        
+        // Check if we have the required configuration for Google Cloud
+        var hasCredentials = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GOOGLE_APPLICATION_CREDENTIALS")) ||
+                           File.Exists(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config", "gcloud", "application_default_credentials.json"));
+        
+        if (!hasCredentials)
+        {
+            _logger.LogWarning("Google Cloud credentials not found. Running in local-only mode. To enable cloud storage:");
+            _logger.LogWarning("1. Run 'gcloud auth application-default login' for local development");
+            _logger.LogWarning("2. Or set GOOGLE_APPLICATION_CREDENTIALS environment variable to your service account key file");
+            _storageClient = null!;
+            return;
+        }
         
         try
         {
             _storageClient = StorageClient.Create();
-            _logger.LogInformation("Google Cloud Storage client initialized successfully");
+            _logger.LogInformation("Google Cloud Storage client initialized successfully with buckets: {DatabaseBucket}, {ImagesBucket}", 
+                _databaseBucketName, _imagesBucketName);
         }
         catch (Exception ex)
         {
@@ -71,6 +90,17 @@ public class CloudStorageService : ICloudStorageService
                 Directory.CreateDirectory(dbDir!);
             }
 
+            // Check if the object exists in the bucket first
+            try
+            {
+                await _storageClient.GetObjectAsync(_databaseBucketName, _databaseFileName);
+            }
+            catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                _logger.LogInformation("No database found in Cloud Storage bucket {Bucket}. Will create a new local database.", _databaseBucketName);
+                return false; // This is not an error - just no cloud database exists yet
+            }
+
             using var stream = new MemoryStream();
             await _storageClient.DownloadObjectAsync(_databaseBucketName, _databaseFileName, stream);
             
@@ -80,6 +110,11 @@ public class CloudStorageService : ICloudStorageService
             
             _logger.LogInformation("Database synced from Cloud Storage: {Bucket}/{FileName}", _databaseBucketName, _databaseFileName);
             return true;
+        }
+        catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            _logger.LogInformation("No database found in Cloud Storage bucket {Bucket}. Will create a new local database.", _databaseBucketName);
+            return false; // This is not an error - just no cloud database exists yet
         }
         catch (Exception ex)
         {

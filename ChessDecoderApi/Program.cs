@@ -47,6 +47,7 @@ builder.Services.AddScoped<IChessMoveProcessor, ChessMoveProcessor>();
 builder.Services.AddScoped<IChessMoveValidator, ChessMoveValidator>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ICreditService, CreditService>();
+builder.Services.AddScoped<ICloudStorageService, CloudStorageService>();
 builder.Services.AddHttpClient();
 
 // Load environment variables - includes both .env and system environment variables
@@ -74,7 +75,16 @@ builder.Services.AddCors(options =>
         {
             // Restrictive for production
             var allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>();
-            var originsToUse = allowedOrigins ?? new[] { "https://chess-scribe-convert.lovable.app", "https://62ad5c43-6c34-4327-a33d-f77c21343ea5.lovableproject.com", "http://localhost:8080", "http://localhost:5100" };
+            
+            // Also check environment variable for CORS origins
+            var envOrigins = Environment.GetEnvironmentVariable("ALLOWED_ORIGINS");
+            if (!string.IsNullOrEmpty(envOrigins))
+            {
+                allowedOrigins = envOrigins.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(o => o.Trim()).ToArray();
+            }
+            
+            var originsToUse = allowedOrigins ?? new[] { "https://chess-scribe-convert.lovable.app" };
 
             Console.WriteLine($"[CORS Policy] Production environment: Restricting to origins: {string.Join(", ", originsToUse)}");
             
@@ -92,9 +102,25 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<ChessDecoderDbContext>();
+    var cloudStorage = scope.ServiceProvider.GetRequiredService<ICloudStorageService>();
     
     try
     {
+        // Try to sync database from cloud first (in production)
+        if (!app.Environment.IsDevelopment())
+        {
+            Console.WriteLine("[Database] Attempting to sync database from Cloud Storage...");
+            var synced = await cloudStorage.SyncDatabaseFromCloudAsync();
+            if (synced)
+            {
+                Console.WriteLine("[Database] Database synced from Cloud Storage successfully");
+            }
+            else
+            {
+                Console.WriteLine("[Database] No cloud database found, will create a new local database");
+            }
+        }
+        
         // Ensure database is created
         await context.Database.EnsureCreatedAsync();
         Console.WriteLine("[Database] Database initialized successfully");
@@ -104,6 +130,21 @@ using (var scope = app.Services.CreateScope())
         {
             await context.Database.MigrateAsync();
             Console.WriteLine("[Database] Migrations applied successfully");
+        }
+        
+        // Sync database to cloud after initialization (in production)
+        if (!app.Environment.IsDevelopment())
+        {
+            Console.WriteLine("[Database] Syncing database to Cloud Storage...");
+            var cloudSynced = await cloudStorage.SyncDatabaseToCloudAsync();
+            if (cloudSynced)
+            {
+                Console.WriteLine("[Database] Database synced to Cloud Storage successfully");
+            }
+            else
+            {
+                Console.WriteLine("[Database] Failed to sync database to Cloud Storage - continuing with local database");
+            }
         }
     }
     catch (Exception ex)
