@@ -51,6 +51,10 @@ gcloud storage buckets add-iam-policy-binding gs://$IMAGES_BUCKET \
     --member="allUsers" \
     --role="roles/storage.objectViewer"
 
+# Set default object ACL for the images bucket to make new objects public
+gcloud storage buckets update gs://$IMAGES_BUCKET \
+    --default-object-acl=public-read
+
 # Create secrets
 echo "🔐 Creating secrets..."
 echo -n "$(read -p "Enter OpenAI API Key: " -s)" | gcloud secrets create openai-api-key --data-file=-

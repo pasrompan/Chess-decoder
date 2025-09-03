@@ -35,3 +35,4 @@ ChessDecoderApi/Data/chessdecoder.db
 ChessDecoderApi/Data/chessdecoder.db-shm
 ChessDecoderApi/Data/chessdecoder.db-wal
 ChessDecoderApi/bin/Debug/net9.0/ChessDecoderApi.deps.json
+ChessDecoderApi/bin/Debug/net9.0/appsettings.Production.json

@@ -10,4 +10,5 @@ public interface ICloudStorageService
     Task<bool> DeleteGameImageAsync(string fileName);
     Task<Stream> DownloadGameImageAsync(string fileName);
     Task<string> GetImageUrlAsync(string fileName);
+    Task<bool> DeleteGameImageByObjectNameAsync(string objectName);
 }

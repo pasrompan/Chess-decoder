@@ -58,6 +58,13 @@ public class GameImage
     
     public DateTime UploadedAt { get; set; } = DateTime.UtcNow;
     
+    // Cloud Storage properties
+    public string? CloudStorageUrl { get; set; }
+    
+    public string? CloudStorageObjectName { get; set; }
+    
+    public bool IsStoredInCloud { get; set; } = false;
+    
     // Navigation property
     [ForeignKey("ChessGameId")]
     public virtual ChessGame ChessGame { get; set; } = null!;

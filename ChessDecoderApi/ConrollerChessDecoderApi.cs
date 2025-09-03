@@ -168,28 +168,80 @@ namespace ChessDecoderApi.Controllers
                     });
                 }
 
-                // Create uploads directory if it doesn't exist
-                var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "uploads");
-                if (!Directory.Exists(uploadsDir))
-                {
-                    Directory.CreateDirectory(uploadsDir);
-                }
-
+                // Get Cloud Storage service
+                var cloudStorageService = HttpContext.RequestServices.GetRequiredService<ICloudStorageService>();
+                
                 // Generate unique filename for the uploaded image
                 var fileName = $"{Guid.NewGuid()}_{image.FileName}";
-                var filePath = Path.Combine(uploadsDir, fileName);
+                string filePath = string.Empty;
+                string? cloudStorageUrl = null;
+                string? cloudStorageObjectName = null;
+                bool isStoredInCloud = false;
 
-                // Save the uploaded image
-                using (var stream = new FileStream(filePath, FileMode.Create))
+                // Try to upload to Cloud Storage first
+                try
                 {
-                    await image.CopyToAsync(stream);
+                    using var imageStream = new MemoryStream();
+                    await image.CopyToAsync(imageStream);
+                    imageStream.Position = 0;
+                    
+                    cloudStorageObjectName = await cloudStorageService.UploadGameImageAsync(
+                        imageStream, 
+                        fileName, 
+                        image.ContentType);
+                    
+                    cloudStorageUrl = await cloudStorageService.GetImageUrlAsync(cloudStorageObjectName);
+                    isStoredInCloud = true;
+                    
+                    _logger.LogInformation("Image uploaded to Cloud Storage: {CloudStorageUrl}", cloudStorageUrl);
+                    
+                    // Test if the image is accessible for processing
+                    try
+                    {
+                        using var testClient = new HttpClient();
+                        var testResponse = await testClient.GetAsync(cloudStorageUrl);
+                        if (!testResponse.IsSuccessStatusCode)
+                        {
+                            _logger.LogWarning("Cloud Storage image not accessible for processing (Status: {StatusCode}), falling back to local storage", testResponse.StatusCode);
+                            throw new Exception("Cloud Storage image not accessible");
+                        }
+                    }
+                    catch (Exception testEx)
+                    {
+                        _logger.LogWarning(testEx, "Cloud Storage image accessibility test failed, falling back to local storage");
+                        throw;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to upload to Cloud Storage or image not accessible, falling back to local storage");
+                    
+                    // Reset Cloud Storage variables
+                    cloudStorageObjectName = null;
+                    cloudStorageUrl = null;
+                    isStoredInCloud = false;
+                    
+                    // Fallback to local storage
+                    var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "uploads");
+                    if (!Directory.Exists(uploadsDir))
+                    {
+                        Directory.CreateDirectory(uploadsDir);
+                    }
+                    
+                    filePath = Path.Combine(uploadsDir, fileName);
+                    
+                    using (var stream = new FileStream(filePath, FileMode.Create))
+                    {
+                        await image.CopyToAsync(stream);
+                    }
+                    
+                    _logger.LogInformation("Image saved locally to: {FilePath}", filePath);
                 }
 
-                _logger.LogInformation("Image saved to: {FilePath}", filePath);
-
-                // Process the image
+                // Process the image - use Cloud Storage URL if available, otherwise local path
+                var imagePathForProcessing = isStoredInCloud ? cloudStorageUrl! : filePath;
                 var startTime = DateTime.UtcNow;
-                var result = await _imageProcessingService.ProcessImageAsync(filePath, language);
+                var result = await _imageProcessingService.ProcessImageAsync(imagePathForProcessing, language);
                 var processingTime = DateTime.UtcNow - startTime;
 
                 // Get database context
@@ -219,6 +271,11 @@ namespace ChessDecoderApi.Controllers
                     ChessGameId = chessGame.Id,
                     FileName = fileName,
                     FilePath = filePath,
+                    FileType = image.ContentType,
+                    FileSizeBytes = image.Length,
+                    CloudStorageUrl = cloudStorageUrl,
+                    CloudStorageObjectName = cloudStorageObjectName,
+                    IsStoredInCloud = isStoredInCloud,
                     UploadedAt = DateTime.UtcNow
                 };
 

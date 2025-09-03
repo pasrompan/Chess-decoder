@@ -132,6 +132,9 @@ public class CloudStorageService : ICloudStorageService
             var objectName = $"game-images/{DateTime.UtcNow:yyyy/MM/dd}/{fileName}";
             await _storageClient.UploadObjectAsync(_imagesBucketName, objectName, contentType, imageStream);
             
+            // Note: Bucket should be configured as public during setup
+            _logger.LogInformation("Image uploaded to Cloud Storage bucket (bucket should be public): {Bucket}/{ObjectName}", _imagesBucketName, objectName);
+            
             _logger.LogInformation("Game image uploaded to Cloud Storage: {Bucket}/{ObjectName}", _imagesBucketName, objectName);
             return objectName;
         }
@@ -177,20 +180,37 @@ public class CloudStorageService : ICloudStorageService
         }
     }
 
-    public async Task<string> GetImageUrlAsync(string fileName)
+    public Task<string> GetImageUrlAsync(string fileName)
     {
-        if (_storageClient == null) return string.Empty;
+        if (_storageClient == null) return Task.FromResult(string.Empty);
 
         try
         {
             var url = $"https://storage.googleapis.com/{_imagesBucketName}/{fileName}";
             _logger.LogInformation("Generated image URL: {Url}", url);
-            return url;
+            return Task.FromResult(url);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to generate image URL");
-            return string.Empty;
+            return Task.FromResult(string.Empty);
+        }
+    }
+
+    public async Task<bool> DeleteGameImageByObjectNameAsync(string objectName)
+    {
+        if (_storageClient == null) return false;
+
+        try
+        {
+            await _storageClient.DeleteObjectAsync(_imagesBucketName, objectName);
+            _logger.LogInformation("Game image deleted from Cloud Storage: {Bucket}/{ObjectName}", _imagesBucketName, objectName);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to delete game image from Cloud Storage: {ObjectName}", objectName);
+            return false;
         }
     }
 }
