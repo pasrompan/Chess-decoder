@@ -67,23 +67,35 @@ namespace ChessDecoderApi.Services
         /// <summary>
         /// Extracts chess moves from an image and returns two lists: white and black moves.
         /// </summary>
-        /// <param name="imagePath">Path to the chess image</param>
+        /// <param name="imagePath">Path to the chess image or URL</param>
         /// <param name="language">Language for chess notation (default: English)</param>
         /// <returns>Tuple of two lists: whiteMoves and blackMoves</returns>
         public virtual async Task<(List<string> whiteMoves, List<string> blackMoves)> ExtractMovesFromImageToStringAsync(string imagePath, string language = "English")
         {
-            if (!File.Exists(imagePath))
+            Image<Rgba32> image;
+            
+            // Check if it's a URL or local file path
+            if (Uri.TryCreate(imagePath, UriKind.Absolute, out var uri) && (uri.Scheme == "http" || uri.Scheme == "https"))
             {
-                throw new FileNotFoundException("Image file not found", imagePath);
+                // Download image from URL
+                using var httpClient = _httpClientFactory.CreateClient();
+                var imageBytes = await httpClient.GetByteArrayAsync(imagePath);
+                image = Image.Load<Rgba32>(imageBytes);
             }
-
-            // Load the image
-            using var image = Image.Load<Rgba32>(imagePath);
+            else
+            {
+                // Local file path
+                if (!File.Exists(imagePath))
+                {
+                    throw new FileNotFoundException("Image file not found", imagePath);
+                }
+                image = Image.Load<Rgba32>(imagePath);
+            }
             int width = image.Width;
             int height = image.Height;
 
-            // Get column boundaries
-            var boundaries = SplitImageIntoColumns(imagePath, 6);
+            // Get column boundaries - we need to pass the image directly since we already loaded it
+            var boundaries = SplitImageIntoColumns(image, 6);
             var whiteMoves = new List<string>();
             var blackMoves = new List<string>();
 
@@ -146,7 +158,7 @@ namespace ChessDecoderApi.Services
         /// <summary>
         /// Processes a chess image and returns the moves as a PGN string
         /// </summary>
-        /// <param name="imagePath">Path to the chess image</param>
+        /// <param name="imagePath">Path to the chess image or URL</param>
         /// <param name="language">Language for chess notation (default: English)</param>
         /// <returns>PGN formatted string containing the chess moves</returns>
         public async Task<ChessGameResponse> ProcessImageAsync(string imagePath, string language = "English")
@@ -541,12 +553,11 @@ namespace ChessDecoderApi.Services
         /// <summary>
         /// Splits the input image into vertical columns based on projection profile and returns the column boundaries.
         /// </summary>
-        /// <param name="imagePath">Path to the chess moves image</param>
+        /// <param name="image">The chess moves image</param>
         /// <param name="expectedColumns">Expected number of columns (default: 6)</param>
         /// <returns>List of column boundary indices (pixel positions)</returns>
-        public List<int> SplitImageIntoColumns(string imagePath, int expectedColumns = 6)
+        public List<int> SplitImageIntoColumns(Image<Rgba32> image, int expectedColumns = 6)
         {
-            using var image = Image.Load<Rgba32>(imagePath);
             image.Mutate(x => x.Grayscale());
             int width = image.Width;
             int height = image.Height;
@@ -631,6 +642,18 @@ namespace ChessDecoderApi.Services
             }
 
             return finalEdges;
+        }
+
+        /// <summary>
+        /// Splits the input image into vertical columns based on projection profile and returns the column boundaries.
+        /// </summary>
+        /// <param name="imagePath">Path to the chess moves image</param>
+        /// <param name="expectedColumns">Expected number of columns (default: 6)</param>
+        /// <returns>List of column boundary indices (pixel positions)</returns>
+        public List<int> SplitImageIntoColumns(string imagePath, int expectedColumns = 6)
+        {
+            using var image = Image.Load<Rgba32>(imagePath);
+            return SplitImageIntoColumns(image, expectedColumns);
         }
     }
 } 

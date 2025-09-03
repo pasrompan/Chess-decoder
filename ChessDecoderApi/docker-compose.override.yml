@@ -1,0 +1,31 @@
+# Development override for Docker Compose
+# This file adds the API service for local development
+services:
+  # API Service (only for development)
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: chess-decoder-api
+    ports:
+      - "5100:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - ConnectionStrings__DefaultConnection=Data Source=data/chessdecoder.db
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GOOGLE_VISION_API_KEY=${GOOGLE_VISION_API_KEY}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+    volumes:
+      - ./uploads:/app/uploads
+      - ./outputs:/app/outputs
+      - ./data:/app/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - chess-decoder-network
+    restart: unless-stopped
+
+volumes:
+  # No PostgreSQL volumes needed for SQLite

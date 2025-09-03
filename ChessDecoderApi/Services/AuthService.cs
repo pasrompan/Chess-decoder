@@ -1,8 +1,10 @@
 using ChessDecoderApi.Models;
+using ChessDecoderApi.Data;
 using Google.Apis.Auth;
 using Microsoft.Extensions.Configuration;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore;
 
 namespace ChessDecoderApi.Services;
 
@@ -11,16 +13,14 @@ public class AuthService : IAuthService
     private readonly IConfiguration _configuration;
     private readonly ILogger<AuthService> _logger;
     private readonly HttpClient _httpClient;
-    
-    // In-memory user storage for development
-    // In production, you'd use a database
-    private static readonly Dictionary<string, User> _users = new();
+    private readonly ChessDecoderDbContext _context;
 
-    public AuthService(IConfiguration configuration, ILogger<AuthService> logger, HttpClient httpClient)
+    public AuthService(IConfiguration configuration, ILogger<AuthService> logger, HttpClient httpClient, ChessDecoderDbContext context)
     {
         _configuration = configuration;
         _logger = logger;
         _httpClient = httpClient;
+        _context = context;
     }
 
     public async Task<AuthResponse> VerifyGoogleTokenAsync(string accessToken)
@@ -86,30 +86,26 @@ public class AuthService : IAuthService
         }
     }
 
-    public Task<User?> GetUserProfileAsync(string userId)
+    public async Task<User?> GetUserProfileAsync(string userId)
     {
-        if (_users.TryGetValue(userId, out var user))
-        {
-            return Task.FromResult<User?>(user);
-        }
-
-        return Task.FromResult<User?>(null);
+        return await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
     }
 
-    public Task<User> UpdateUserProfileAsync(string userId, UserProfileRequest request)
+    public async Task<User> UpdateUserProfileAsync(string userId, UserProfileRequest request)
     {
-        if (_users.TryGetValue(userId, out var user))
+        var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
+        if (user == null)
         {
-            if (!string.IsNullOrEmpty(request.Name))
-            {
-                user.Name = request.Name;
-            }
-
-            _users[userId] = user;
-            return Task.FromResult(user);
+            throw new InvalidOperationException("User not found");
         }
 
-        throw new InvalidOperationException("User not found");
+        if (!string.IsNullOrEmpty(request.Name))
+        {
+            user.Name = request.Name;
+        }
+
+        await _context.SaveChangesAsync();
+        return user;
     }
 
     public Task<bool> SignOutUserAsync(string userId)
@@ -125,11 +121,14 @@ public class AuthService : IAuthService
 
     private async Task<User> GetOrCreateUserAsync(string userId, string email, string name, string? picture)
     {
-        if (_users.TryGetValue(userId, out var existingUser))
+        // Check if user exists in database
+        var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
+        
+        if (existingUser != null)
         {
             // Update last login time
             existingUser.LastLoginAt = DateTime.UtcNow;
-            _users[userId] = existingUser;
+            await _context.SaveChangesAsync();
             return existingUser;
         }
 
@@ -142,12 +141,14 @@ public class AuthService : IAuthService
             Picture = picture,
             Provider = "google",
             CreatedAt = DateTime.UtcNow,
-            LastLoginAt = DateTime.UtcNow
+            LastLoginAt = DateTime.UtcNow,
+            Credits = 10 // Default credits for new users
         };
 
-        _users[userId] = newUser;
-        _logger.LogInformation("Created new user: {Email}", email);
-
+        _context.Users.Add(newUser);
+        await _context.SaveChangesAsync();
+        
+        _logger.LogInformation("Created new user in database: {Email}", email);
         return newUser;
     }
 }

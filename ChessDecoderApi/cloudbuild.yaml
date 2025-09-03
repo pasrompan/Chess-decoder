@@ -1,0 +1,44 @@
+steps:
+  # Build the application
+  - name: 'gcr.io/cloud-builders/dotnet'
+    args: ['publish', '-c', 'Release', '-o', 'publish']
+    dir: 'ChessDecoderApi'
+
+  # Build the Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-f', 'Dockerfile.prod', '-t', 'gcr.io/$PROJECT_ID/chess-decoder-api:$COMMIT_SHA', '.']
+
+  # Push the image to Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/chess-decoder-api:$COMMIT_SHA']
+
+  # Deploy to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'chess-decoder-api'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/chess-decoder-api:$COMMIT_SHA'
+      - '--region'
+      - 'us-central1'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--memory'
+      - '1Gi'
+      - '--cpu'
+      - '1'
+      - '--max-instances'
+      - '10'
+      - '--set-env-vars'
+      - 'ASPNETCORE_ENVIRONMENT=Production,ConnectionStrings__DefaultConnection=Data Source=data/chessdecoder.db'
+      - '--set-secrets'
+      - 'OPENAI_API_KEY=openai-api-key:latest,GOOGLE_VISION_API_KEY=google-vision-api-key:latest,GOOGLE_CLIENT_ID=google-client-id:latest'
+
+images:
+  - 'gcr.io/$PROJECT_ID/chess-decoder-api:$COMMIT_SHA'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
