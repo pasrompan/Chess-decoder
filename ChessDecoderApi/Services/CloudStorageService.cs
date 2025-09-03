@@ -28,19 +28,8 @@ public class CloudStorageService : ICloudStorageService
             ?? "chessdecoder-images";
         _databaseFileName = "chessdecoder.db";
         
-        // Check if we have the required configuration for Google Cloud
-        var hasCredentials = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GOOGLE_APPLICATION_CREDENTIALS")) ||
-                           File.Exists(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config", "gcloud", "application_default_credentials.json"));
-        
-        if (!hasCredentials)
-        {
-            _logger.LogWarning("Google Cloud credentials not found. Running in local-only mode. To enable cloud storage:");
-            _logger.LogWarning("1. Run 'gcloud auth application-default login' for local development");
-            _logger.LogWarning("2. Or set GOOGLE_APPLICATION_CREDENTIALS environment variable to your service account key file");
-            _storageClient = null!;
-            return;
-        }
-        
+        // Try to initialize Google Cloud Storage client
+        // In Cloud Run, credentials are automatically available via the default service account
         try
         {
             _storageClient = StorageClient.Create();
@@ -50,6 +39,10 @@ public class CloudStorageService : ICloudStorageService
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to initialize Google Cloud Storage client. Running in local-only mode.");
+            _logger.LogWarning("To enable cloud storage:");
+            _logger.LogWarning("1. Run 'gcloud auth application-default login' for local development");
+            _logger.LogWarning("2. Or set GOOGLE_APPLICATION_CREDENTIALS environment variable to your service account key file");
+            _logger.LogWarning("3. Or ensure Cloud Run service account has proper permissions");
             _storageClient = null!;
         }
     }

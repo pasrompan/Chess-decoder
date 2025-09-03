@@ -37,9 +37,33 @@ steps:
       - '--concurrency'
       - '80'
       - '--set-env-vars'
-      - 'ASPNETCORE_ENVIRONMENT=Production,ConnectionStrings__DefaultConnection=Data Source=/app/data/chessdecoder.db,PORT=8080'
+      - 'ASPNETCORE_ENVIRONMENT=Production,ConnectionStrings__DefaultConnection=Data Source=/app/data/chessdecoder.db,PORT=8080,GOOGLE_CLOUD_PROJECT=$PROJECT_ID'
       - '--set-secrets'
       - 'OPENAI_API_KEY=openai-api-key:latest,GOOGLE_VISION_API_KEY=google-vision-api-key:latest,GOOGLE_CLIENT_ID=google-client-id:latest'
+
+  # Grant Cloud Run service account permissions for Cloud Storage
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: bash
+    args:
+      - '-c'
+      - |
+        # Get the default compute service account
+        SERVICE_ACCOUNT=$$(gcloud run services describe chess-decoder-api --region=us-central1 --format="value(spec.template.spec.serviceAccountName)")
+        if [ -z "$$SERVICE_ACCOUNT" ]; then
+          SERVICE_ACCOUNT=$$PROJECT_ID-compute@developer.gserviceaccount.com
+        fi
+        
+        echo "Granting Cloud Storage permissions to service account: $$SERVICE_ACCOUNT"
+        
+        # Grant Storage Object Admin role for database bucket
+        gcloud projects add-iam-policy-binding $$PROJECT_ID \
+          --member="serviceAccount:$$SERVICE_ACCOUNT" \
+          --role="roles/storage.objectAdmin"
+        
+        # Grant Storage Object Viewer role for images bucket (if different)
+        gcloud projects add-iam-policy-binding $$PROJECT_ID \
+          --member="serviceAccount:$$SERVICE_ACCOUNT" \
+          --role="roles/storage.objectViewer"
 
 images:
   - 'gcr.io/$PROJECT_ID/chess-decoder-api:$COMMIT_SHA'
