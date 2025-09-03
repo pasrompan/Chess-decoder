@@ -37,7 +37,7 @@ steps:
       - '--concurrency'
       - '80'
       - '--set-env-vars'
-      - 'ASPNETCORE_ENVIRONMENT=Production,ConnectionStrings__DefaultConnection=Data Source=data/chessdecoder.db,PORT=8080'
+      - 'ASPNETCORE_ENVIRONMENT=Production,ConnectionStrings__DefaultConnection=Data Source=/app/data/chessdecoder.db,PORT=8080'
       - '--set-secrets'
       - 'OPENAI_API_KEY=openai-api-key:latest,GOOGLE_VISION_API_KEY=google-vision-api-key:latest,GOOGLE_CLIENT_ID=google-client-id:latest'
 

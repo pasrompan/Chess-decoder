@@ -3,8 +3,12 @@ FROM mcr.microsoft.com/dotnet/aspnet:9.0-alpine AS base
 WORKDIR /app
 EXPOSE 8080
 
-# Install required packages for SQLite
-RUN apk add --no-cache sqlite
+# Install required packages for SQLite and other dependencies
+RUN apk add --no-cache \
+    sqlite \
+    sqlite-dev \
+    libc6-compat \
+    && rm -rf /var/cache/apk/*
 
 # Build stage
 FROM mcr.microsoft.com/dotnet/sdk:9.0-alpine AS build
@@ -23,16 +27,17 @@ FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
 
-# Create data directory for SQLite
-RUN mkdir -p /app/data
+# Create data directory for SQLite with proper permissions
+RUN mkdir -p /app/data /app/uploads /app/outputs && \
+    chmod 755 /app/data /app/uploads /app/outputs
 
 # Set environment variables for production
 ENV ASPNETCORE_URLS=http://+:${PORT:-8080}
 ENV ASPNETCORE_ENVIRONMENT=Production
 ENV PORT=8080
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
+# Health check with longer startup period
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT:-8080}/api/test/health || exit 1
 
 ENTRYPOINT ["dotnet", "ChessDecoderApi.dll"]

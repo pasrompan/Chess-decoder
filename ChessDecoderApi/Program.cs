@@ -22,16 +22,28 @@ builder.Services.AddDbContext<ChessDecoderDbContext>(options =>
     if (string.IsNullOrEmpty(connectionString))
     {
         // Default to SQLite for cost-effective deployment
-        var dbPath = Path.Combine(Directory.GetCurrentDirectory(), "data", "chessdecoder.db");
+        var dbPath = Path.Combine("/app", "data", "chessdecoder.db");
         var dbDir = Path.GetDirectoryName(dbPath);
         
-        if (!Directory.Exists(dbDir))
+        try
         {
-            Directory.CreateDirectory(dbDir!);
+            if (!Directory.Exists(dbDir))
+            {
+                Directory.CreateDirectory(dbDir!);
+                Console.WriteLine($"[Database] Created directory: {dbDir}");
+            }
+            
+            options.UseSqlite($"Data Source={dbPath}");
+            Console.WriteLine($"[Database] Using SQLite database at: {dbPath}");
         }
-        
-        options.UseSqlite($"Data Source={dbPath}");
-        Console.WriteLine($"[Database] Using SQLite database at: {dbPath}");
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Database] Error setting up database path: {ex.Message}");
+            // Fallback to current directory
+            var fallbackPath = Path.Combine(Directory.GetCurrentDirectory(), "chessdecoder.db");
+            options.UseSqlite($"Data Source={fallbackPath}");
+            Console.WriteLine($"[Database] Using fallback SQLite database at: {fallbackPath}");
+        }
     }
     else
     {
@@ -110,50 +122,81 @@ using (var scope = app.Services.CreateScope())
     
     try
     {
+        Console.WriteLine("[Database] Starting database initialization...");
+        
+        // Test database connection first
+        Console.WriteLine("[Database] Testing database connection...");
+        var canConnect = await context.Database.CanConnectAsync();
+        Console.WriteLine($"[Database] Database connection test result: {canConnect}");
+        
         // Try to sync database from cloud first (in production)
         if (!app.Environment.IsDevelopment())
         {
             Console.WriteLine("[Database] Attempting to sync database from Cloud Storage...");
-            var synced = await cloudStorage.SyncDatabaseFromCloudAsync();
-            if (synced)
+            try
             {
-                Console.WriteLine("[Database] Database synced from Cloud Storage successfully");
+                var synced = await cloudStorage.SyncDatabaseFromCloudAsync();
+                if (synced)
+                {
+                    Console.WriteLine("[Database] Database synced from Cloud Storage successfully");
+                }
+                else
+                {
+                    Console.WriteLine("[Database] No cloud database found, will create a new local database");
+                }
             }
-            else
+            catch (Exception syncEx)
             {
-                Console.WriteLine("[Database] No cloud database found, will create a new local database");
+                Console.WriteLine($"[Database] Cloud sync failed (non-critical): {syncEx.Message}");
             }
         }
         
         // Ensure database is created
+        Console.WriteLine("[Database] Ensuring database is created...");
         await context.Database.EnsureCreatedAsync();
-        Console.WriteLine("[Database] Database initialized successfully");
+        Console.WriteLine("[Database] Database created/verified successfully");
         
         // Apply any pending migrations
-        if (context.Database.GetPendingMigrations().Any())
+        var pendingMigrations = context.Database.GetPendingMigrations().ToList();
+        if (pendingMigrations.Any())
         {
+            Console.WriteLine($"[Database] Applying {pendingMigrations.Count} pending migrations...");
             await context.Database.MigrateAsync();
             Console.WriteLine("[Database] Migrations applied successfully");
+        }
+        else
+        {
+            Console.WriteLine("[Database] No pending migrations");
         }
         
         // Sync database to cloud after initialization (in production)
         if (!app.Environment.IsDevelopment())
         {
             Console.WriteLine("[Database] Syncing database to Cloud Storage...");
-            var cloudSynced = await cloudStorage.SyncDatabaseToCloudAsync();
-            if (cloudSynced)
+            try
             {
-                Console.WriteLine("[Database] Database synced to Cloud Storage successfully");
+                var cloudSynced = await cloudStorage.SyncDatabaseToCloudAsync();
+                if (cloudSynced)
+                {
+                    Console.WriteLine("[Database] Database synced to Cloud Storage successfully");
+                }
+                else
+                {
+                    Console.WriteLine("[Database] Failed to sync database to Cloud Storage - continuing with local database");
+                }
             }
-            else
+            catch (Exception syncEx)
             {
-                Console.WriteLine("[Database] Failed to sync database to Cloud Storage - continuing with local database");
+                Console.WriteLine($"[Database] Cloud sync failed (non-critical): {syncEx.Message}");
             }
         }
+        
+        Console.WriteLine("[Database] Database initialization completed successfully");
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"[Database] Error initializing database: {ex.Message}");
+        Console.WriteLine($"[Database] Critical error initializing database: {ex.Message}");
+        Console.WriteLine($"[Database] Stack trace: {ex.StackTrace}");
         throw;
     }
 }
