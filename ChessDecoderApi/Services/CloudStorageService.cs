@@ -20,12 +20,18 @@ public class CloudStorageService : ICloudStorageService
         _logger = logger;
         
         // Get bucket names from environment variables first, then configuration
-        _databaseBucketName = Environment.GetEnvironmentVariable("GOOGLE_CLOUD_DATABASE_BUCKET") 
-            ?? _configuration["CloudStorage:DatabaseBucketName"] 
-            ?? "chessdecoder-db";
-        _imagesBucketName = Environment.GetEnvironmentVariable("GOOGLE_CLOUD_IMAGES_BUCKET") 
-            ?? _configuration["CloudStorage:ImagesBucketName"] 
-            ?? "chessdecoder-images";
+        var envDbBucket = Environment.GetEnvironmentVariable("GOOGLE_CLOUD_DATABASE_BUCKET");
+        var envImagesBucket = Environment.GetEnvironmentVariable("GOOGLE_CLOUD_IMAGES_BUCKET");
+        var configDbBucket = _configuration["CloudStorage:DatabaseBucketName"];
+        var configImagesBucket = _configuration["CloudStorage:ImagesBucketName"];
+        
+        _logger.LogInformation("Environment variables - GOOGLE_CLOUD_DATABASE_BUCKET: '{EnvDbBucket}', GOOGLE_CLOUD_IMAGES_BUCKET: '{EnvImagesBucket}'", 
+            envDbBucket ?? "null", envImagesBucket ?? "null");
+        _logger.LogInformation("Configuration values - DatabaseBucketName: '{ConfigDbBucket}', ImagesBucketName: '{ConfigImagesBucket}'", 
+            configDbBucket ?? "null", configImagesBucket ?? "null");
+        
+        _databaseBucketName = envDbBucket ?? configDbBucket ?? "chessdecoder-db";
+        _imagesBucketName = envImagesBucket ?? configImagesBucket ?? "chessdecoder-images";
             
         // Validate bucket names
         if (string.IsNullOrWhiteSpace(_databaseBucketName))
@@ -37,7 +43,7 @@ public class CloudStorageService : ICloudStorageService
             _imagesBucketName = "chessdecoder-images";
         }
         
-        _logger.LogInformation("Using bucket names - Database: '{DatabaseBucket}', Images: '{ImagesBucket}'", 
+        _logger.LogInformation("Final bucket names - Database: '{DatabaseBucket}', Images: '{ImagesBucket}'", 
             _databaseBucketName, _imagesBucketName);
         _databaseFileName = "chessdecoder.db";
         

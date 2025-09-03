@@ -12,6 +12,36 @@ steps:
   - name: 'gcr.io/cloud-builders/docker'
     args: ['push', 'gcr.io/$PROJECT_ID/chess-decoder-api:$COMMIT_SHA']
 
+  # Create Cloud Storage buckets first
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: bash
+    args:
+      - '-c'
+      - |
+        # Create Cloud Storage buckets if they don't exist
+        DATABASE_BUCKET="chessdecoder-db-$$PROJECT_ID"
+        IMAGES_BUCKET="chessdecoder-images-$$PROJECT_ID"
+        
+        echo "Creating Cloud Storage buckets..."
+        
+        # Create database bucket
+        if ! gsutil ls -b gs://$$DATABASE_BUCKET 2>/dev/null; then
+          echo "Creating database bucket: $$DATABASE_BUCKET"
+          gsutil mb -p $$PROJECT_ID -c STANDARD -l us-central1 gs://$$DATABASE_BUCKET
+        else
+          echo "Database bucket already exists: $$DATABASE_BUCKET"
+        fi
+        
+        # Create images bucket
+        if ! gsutil ls -b gs://$$IMAGES_BUCKET 2>/dev/null; then
+          echo "Creating images bucket: $$IMAGES_BUCKET"
+          gsutil mb -p $$PROJECT_ID -c STANDARD -l us-central1 gs://$$IMAGES_BUCKET
+          # Make images bucket public for serving images
+          gsutil iam ch allUsers:objectViewer gs://$$IMAGES_BUCKET
+        else
+          echo "Images bucket already exists: $$IMAGES_BUCKET"
+        fi
+
   # Deploy to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
@@ -41,36 +71,12 @@ steps:
       - '--set-secrets'
       - 'OPENAI_API_KEY=openai-api-key:latest,GOOGLE_VISION_API_KEY=google-vision-api-key:latest,GOOGLE_CLIENT_ID=google-client-id:latest'
 
-  # Create Cloud Storage buckets and grant permissions
+  # Grant Cloud Run service account permissions for Cloud Storage
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: bash
     args:
       - '-c'
       - |
-        # Create Cloud Storage buckets if they don't exist
-        DATABASE_BUCKET="chessdecoder-db-$$PROJECT_ID"
-        IMAGES_BUCKET="chessdecoder-images-$$PROJECT_ID"
-        
-        echo "Creating Cloud Storage buckets..."
-        
-        # Create database bucket
-        if ! gsutil ls -b gs://$$DATABASE_BUCKET 2>/dev/null; then
-          echo "Creating database bucket: $$DATABASE_BUCKET"
-          gsutil mb -p $$PROJECT_ID -c STANDARD -l us-central1 gs://$$DATABASE_BUCKET
-        else
-          echo "Database bucket already exists: $$DATABASE_BUCKET"
-        fi
-        
-        # Create images bucket
-        if ! gsutil ls -b gs://$$IMAGES_BUCKET 2>/dev/null; then
-          echo "Creating images bucket: $$IMAGES_BUCKET"
-          gsutil mb -p $$PROJECT_ID -c STANDARD -l us-central1 gs://$$IMAGES_BUCKET
-          # Make images bucket public for serving images
-          gsutil iam ch allUsers:objectViewer gs://$$IMAGES_BUCKET
-        else
-          echo "Images bucket already exists: $$IMAGES_BUCKET"
-        fi
-        
         # Get the default compute service account
         SERVICE_ACCOUNT=$$(gcloud run services describe chess-decoder-api --region=us-central1 --format="value(spec.template.spec.serviceAccountName)" 2>/dev/null || echo "")
         if [ -z "$$SERVICE_ACCOUNT" ]; then
