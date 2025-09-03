@@ -173,22 +173,54 @@ using (var scope = app.Services.CreateScope())
             }
         }
         
-        // Ensure database is created
-        Console.WriteLine("[Database] Ensuring database is created...");
-        await context.Database.EnsureCreatedAsync();
-        Console.WriteLine("[Database] Database created/verified successfully");
+        // Check if database exists and apply migrations
+        Console.WriteLine("[Database] Checking database and applying migrations...");
         
-        // Apply any pending migrations
-        var pendingMigrations = context.Database.GetPendingMigrations().ToList();
-        if (pendingMigrations.Any())
+        try
         {
-            Console.WriteLine($"[Database] Applying {pendingMigrations.Count} pending migrations...");
-            await context.Database.MigrateAsync();
-            Console.WriteLine("[Database] Migrations applied successfully");
+            // Check if database exists
+            var databaseExists = await context.Database.CanConnectAsync();
+            Console.WriteLine($"[Database] Database exists: {databaseExists}");
+            
+            if (!databaseExists)
+            {
+                Console.WriteLine("[Database] Database does not exist, creating...");
+                await context.Database.EnsureCreatedAsync();
+                Console.WriteLine("[Database] Database created successfully");
+            }
+            else
+            {
+                Console.WriteLine("[Database] Database exists, checking for pending migrations...");
+                
+                // Apply any pending migrations
+                var pendingMigrations = context.Database.GetPendingMigrations().ToList();
+                if (pendingMigrations.Any())
+                {
+                    Console.WriteLine($"[Database] Applying {pendingMigrations.Count} pending migrations...");
+                    await context.Database.MigrateAsync();
+                    Console.WriteLine("[Database] Migrations applied successfully");
+                }
+                else
+                {
+                    Console.WriteLine("[Database] No pending migrations");
+                }
+            }
         }
-        else
+        catch (Exception dbEx)
         {
-            Console.WriteLine("[Database] No pending migrations");
+            Console.WriteLine($"[Database] Error with database operations: {dbEx.Message}");
+            // Try to create database if it doesn't exist
+            try
+            {
+                Console.WriteLine("[Database] Attempting to create database...");
+                await context.Database.EnsureCreatedAsync();
+                Console.WriteLine("[Database] Database created successfully");
+            }
+            catch (Exception createEx)
+            {
+                Console.WriteLine($"[Database] Failed to create database: {createEx.Message}");
+                throw;
+            }
         }
         
         // Sync database to cloud after initialization (in production)

@@ -26,6 +26,19 @@ public class CloudStorageService : ICloudStorageService
         _imagesBucketName = Environment.GetEnvironmentVariable("GOOGLE_CLOUD_IMAGES_BUCKET") 
             ?? _configuration["CloudStorage:ImagesBucketName"] 
             ?? "chessdecoder-images";
+            
+        // Validate bucket names
+        if (string.IsNullOrWhiteSpace(_databaseBucketName))
+        {
+            _databaseBucketName = "chessdecoder-db";
+        }
+        if (string.IsNullOrWhiteSpace(_imagesBucketName))
+        {
+            _imagesBucketName = "chessdecoder-images";
+        }
+        
+        _logger.LogInformation("Using bucket names - Database: '{DatabaseBucket}', Images: '{ImagesBucket}'", 
+            _databaseBucketName, _imagesBucketName);
         _databaseFileName = "chessdecoder.db";
         
         // Try to initialize Google Cloud Storage client
