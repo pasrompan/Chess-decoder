@@ -1,6 +1,7 @@
 using ChessDecoderApi.Models;
 using ChessDecoderApi.Services;
 using ChessDecoderApi.Data;
+using ChessDecoderApi.Exceptions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Text;
@@ -156,6 +157,19 @@ namespace ChessDecoderApi.Controllers
 
             try
             {
+                // Check if user exists first
+                var dbContext = HttpContext.RequestServices.GetRequiredService<ChessDecoderDbContext>();
+                var userExists = await dbContext.Users.AnyAsync(u => u.Id == userId);
+                if (!userExists)
+                {
+                    _logger.LogWarning("User {UserId} not found when processing image upload", userId);
+                    return NotFound(new ErrorResponse 
+                    { 
+                        Status = StatusCodes.Status404NotFound, 
+                        Message = "User not found" 
+                    });
+                }
+
                 // Check if user has enough credits
                 var creditService = HttpContext.RequestServices.GetRequiredService<ICreditService>();
                 if (!await creditService.HasEnoughCreditsAsync(userId, 1))
@@ -244,8 +258,7 @@ namespace ChessDecoderApi.Controllers
                 var result = await _imageProcessingService.ProcessImageAsync(imagePathForProcessing, language);
                 var processingTime = DateTime.UtcNow - startTime;
 
-                // Get database context
-                var dbContext = HttpContext.RequestServices.GetRequiredService<ChessDecoderDbContext>();
+                // Reuse the database context from earlier
 
                 // Create ChessGame record
                 var chessGame = new ChessGame
@@ -324,6 +337,15 @@ namespace ChessDecoderApi.Controllers
                     validation = result.Validation,
                     processingTime = processingTime.TotalMilliseconds,
                     creditsRemaining = await creditService.GetUserCreditsAsync(userId)
+                });
+            }
+            catch (UserNotFoundException ex)
+            {
+                _logger.LogWarning("User {UserId} not found when processing image upload", ex.UserId);
+                return NotFound(new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status404NotFound, 
+                    Message = "User not found" 
                 });
             }
             catch (UnauthorizedAccessException)
@@ -581,7 +603,7 @@ namespace ChessDecoderApi.Controllers
                         new { moveNumber = 48, whiteMove = new { notation = "f6", normalizedNotation = "f6", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "Nxf6+", normalizedNotation = "Nxf6+", validationStatus = "valid", validationText = "" } },
                         new { moveNumber = 49, whiteMove = new { notation = "Kg5", normalizedNotation = "Kg5", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "b3", normalizedNotation = "b3", validationStatus = "valid", validationText = "" } },
                         new { moveNumber = 50, whiteMove = new { notation = "h4", normalizedNotation = "h4", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "b2", normalizedNotation = "b2", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 51, whiteMove = new { notation = "Kf4", normalizedNotation = "Kf4", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "b1=Q", normalizedNotation = "b1=Q", validationStatus = "valid", validationText = "" } },
+                        new { moveNumber = 51, whiteMove = new { notation = "Kf4", normalizedNotation = "Gf4", validationStatus = "invalid", validationText = "" }, blackMove = new { notation = "b1=Q", normalizedNotation = "b1=Q", validationStatus = "valid", validationText = "" } },
                         new { moveNumber = 52, whiteMove = new { notation = "Ke5", normalizedNotation = "Ke5", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "Qe4+", normalizedNotation = "Qe4+", validationStatus = "valid", validationText = "" } },
                         new { moveNumber = 53, whiteMove = new { notation = "Kd6", normalizedNotation = "Kd6", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "Rc6#", normalizedNotation = "Rc6#", validationStatus = "valid", validationText = "" } }
                     }

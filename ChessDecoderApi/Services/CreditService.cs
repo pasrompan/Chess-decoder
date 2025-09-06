@@ -1,5 +1,6 @@
 using ChessDecoderApi.Data;
 using ChessDecoderApi.Models;
+using ChessDecoderApi.Exceptions;
 using Microsoft.EntityFrameworkCore;
 
 namespace ChessDecoderApi.Services;
@@ -75,7 +76,16 @@ public class CreditService : ICreditService
                 .Select(u => u.Credits)
                 .FirstOrDefaultAsync();
 
+            if (user == 0 && !await _context.Users.AnyAsync(u => u.Id == userId))
+            {
+                throw new UserNotFoundException(userId);
+            }
+
             return user;
+        }
+        catch (UserNotFoundException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -91,8 +101,7 @@ public class CreditService : ICreditService
             var user = await _context.Users.FindAsync(userId);
             if (user == null)
             {
-                _logger.LogWarning("User {UserId} not found for adding credits", userId);
-                return false;
+                throw new UserNotFoundException(userId);
             }
 
             user.Credits += creditsToAdd;
@@ -102,6 +111,10 @@ public class CreditService : ICreditService
                 creditsToAdd, userId, user.Credits);
 
             return true;
+        }
+        catch (UserNotFoundException)
+        {
+            throw;
         }
         catch (Exception ex)
         {

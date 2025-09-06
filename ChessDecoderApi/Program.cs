@@ -132,9 +132,12 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-// Configure the port for Cloud Run
-var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
-app.Urls.Add($"http://0.0.0.0:{port}");
+// Configure the port - only override for Cloud Run (production)
+if (!app.Environment.IsDevelopment())
+{
+    var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
+    app.Urls.Add($"http://0.0.0.0:{port}");
+}
 
 // Initialize database on startup
 using (var scope = app.Services.CreateScope())

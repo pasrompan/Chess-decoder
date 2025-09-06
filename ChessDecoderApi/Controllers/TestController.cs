@@ -1,6 +1,7 @@
 using ChessDecoderApi.Data;
 using ChessDecoderApi.Models;
 using ChessDecoderApi.Services;
+using ChessDecoderApi.Exceptions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -83,6 +84,11 @@ public class TestController : ControllerBase
             var credits = await _creditService.GetUserCreditsAsync(userId);
             return Ok(new { userId, credits });
         }
+        catch (UserNotFoundException ex)
+        {
+            _logger.LogWarning("User {UserId} not found when retrieving credits", ex.UserId);
+            return NotFound(new { error = "User not found" });
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving credits for user {UserId}", userId);
@@ -103,6 +109,11 @@ public class TestController : ControllerBase
             }
             
             return BadRequest(new { error = "Failed to add credits" });
+        }
+        catch (UserNotFoundException ex)
+        {
+            _logger.LogWarning("User {UserId} not found when adding credits", ex.UserId);
+            return NotFound(new { error = "User not found" });
         }
         catch (Exception ex)
         {
