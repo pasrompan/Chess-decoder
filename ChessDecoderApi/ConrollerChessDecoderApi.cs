@@ -5,6 +5,9 @@ using ChessDecoderApi.Exceptions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Text;
+using System.Linq;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
 
 namespace ChessDecoderApi.Controllers
 {
@@ -696,6 +699,434 @@ namespace ChessDecoderApi.Controllers
                     Status = StatusCodes.Status500InternalServerError, 
                     Message = "Failed to process debug image" 
                 });
+            }
+        }
+
+        [HttpPost("debug/split-columns")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> DebugSplitColumns(
+            IFormFile? image, 
+            [FromForm] int expectedColumns = 6)
+        {
+            _logger.LogInformation("Processing debug split columns request with expected columns: {ExpectedColumns}", expectedColumns);
+
+            if (image == null || image.Length == 0)
+            {
+                _logger.LogWarning("No image file provided");
+                return BadRequest(new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status400BadRequest, 
+                    Message = "No image file provided" 
+                });
+            }
+
+            // Validate file is an image
+            if (!image.ContentType.StartsWith("image/"))
+            {
+                _logger.LogWarning("Uploaded file is not an image");
+                return BadRequest(new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status400BadRequest, 
+                    Message = "Uploaded file must be an image" 
+                });
+            }
+
+            // Validate expected columns parameter
+            if (expectedColumns < 1 || expectedColumns > 20)
+            {
+                _logger.LogWarning("Invalid expected columns value: {ExpectedColumns}", expectedColumns);
+                return BadRequest(new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status400BadRequest, 
+                    Message = "Expected columns must be between 1 and 20" 
+                });
+            }
+
+            try
+            {
+                // Save to temp file
+                var tempFilePath = Path.GetTempFileName();
+                try
+                {
+                    using (var stream = new FileStream(tempFilePath, FileMode.Create))
+                    {
+                        await image.CopyToAsync(stream);
+                    }
+
+                    // Load image and find column boundaries
+                    using var loadedImage = Image.Load<Rgba32>(tempFilePath);
+                    var boundaries = _imageProcessingService.SplitImageIntoColumns(loadedImage, expectedColumns);
+                    
+                    // Find table boundaries
+                    var tableBoundaries = _imageProcessingService.FindTableBoundaries(loadedImage);
+
+                    // Calculate column widths for frontend visualization
+                    var columnWidths = new List<int>();
+                    for (int i = 0; i < boundaries.Count - 1; i++)
+                    {
+                        columnWidths.Add(boundaries[i + 1] - boundaries[i]);
+                    }
+
+                    // Return the boundaries and related data for frontend visualization
+                    return Ok(new 
+                    { 
+                        imageFileName = image.FileName,
+                        imageWidth = boundaries.Last(), // Total width is the last boundary
+                        imageHeight = loadedImage.Height,
+                        expectedColumns = expectedColumns,
+                        actualColumns = boundaries.Count - 1,
+                        boundaries = boundaries,
+                        columnWidths = columnWidths,
+                        columnData = boundaries.Take(boundaries.Count - 1).Select((start, index) => new
+                        {
+                            columnIndex = index,
+                            startPosition = start,
+                            endPosition = boundaries[index + 1],
+                            width = boundaries[index + 1] - start
+                        }).ToArray(),
+                        tableBoundaries = new
+                        {
+                            x = tableBoundaries.X,
+                            y = tableBoundaries.Y,
+                            width = tableBoundaries.Width,
+                            height = tableBoundaries.Height
+                        }
+                    });
+                }
+                finally
+                {
+                    // Clean up temp file
+                    if (System.IO.File.Exists(tempFilePath))
+                    {
+                        System.IO.File.Delete(tempFilePath);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing debug split columns");
+                return StatusCode(StatusCodes.Status500InternalServerError, new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status500InternalServerError, 
+                    Message = "Failed to process image column splitting: " + ex.Message 
+                });
+            }
+        }
+
+        [HttpPost("debug/image-with-boundaries")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> DebugImageWithBoundaries(
+            IFormFile? image, 
+            [FromForm] int expectedColumns = 6)
+        {
+            _logger.LogInformation("Processing debug image with boundaries request with expected columns: {ExpectedColumns}", expectedColumns);
+
+            if (image == null || image.Length == 0)
+            {
+                _logger.LogWarning("No image file provided");
+                return BadRequest(new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status400BadRequest, 
+                    Message = "No image file provided" 
+                });
+            }
+
+            // Validate file is an image
+            if (!image.ContentType.StartsWith("image/"))
+            {
+                _logger.LogWarning("Uploaded file is not an image");
+                return BadRequest(new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status400BadRequest, 
+                    Message = "Uploaded file must be an image" 
+                });
+            }
+
+            // Validate expected columns parameter
+            if (expectedColumns < 1 || expectedColumns > 20)
+            {
+                _logger.LogWarning("Invalid expected columns value: {ExpectedColumns}", expectedColumns);
+                return BadRequest(new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status400BadRequest, 
+                    Message = "Expected columns must be between 1 and 20" 
+                });
+            }
+
+            try
+            {
+                // Save to temp file
+                var tempFilePath = Path.GetTempFileName();
+                try
+                {
+                    using (var stream = new FileStream(tempFilePath, FileMode.Create))
+                    {
+                        await image.CopyToAsync(stream);
+                    }
+
+                    // Create image with boundaries drawn
+                    var imageWithBoundaries = await _imageProcessingService.CreateImageWithBoundariesAsync(tempFilePath, expectedColumns);
+
+                    // Return the image with boundaries as JPEG
+                    return File(imageWithBoundaries, "image/jpeg", $"boundaries_{image.FileName}");
+                }
+                finally
+                {
+                    // Clean up temp file
+                    if (System.IO.File.Exists(tempFilePath))
+                    {
+                        System.IO.File.Delete(tempFilePath);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing debug image with boundaries");
+                return StatusCode(StatusCodes.Status500InternalServerError, new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status500InternalServerError, 
+                    Message = "Failed to process image with boundaries: " + ex.Message 
+                });
+            }
+        }
+
+        [HttpPost("debug/table-boundaries")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> DebugTableBoundaries(IFormFile? image)
+        {
+            _logger.LogInformation("Processing debug table boundaries request");
+
+            if (image == null || image.Length == 0)
+            {
+                _logger.LogWarning("No image file provided");
+                return BadRequest(new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status400BadRequest, 
+                    Message = "No image file provided" 
+                });
+            }
+
+            // Validate file is an image
+            if (!image.ContentType.StartsWith("image/"))
+            {
+                _logger.LogWarning("Uploaded file is not an image");
+                return BadRequest(new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status400BadRequest, 
+                    Message = "Uploaded file must be an image" 
+                });
+            }
+
+            try
+            {
+                // Save to temp file
+                var tempFilePath = Path.GetTempFileName();
+                try
+                {
+                    using (var stream = new FileStream(tempFilePath, FileMode.Create))
+                    {
+                        await image.CopyToAsync(stream);
+                    }
+
+                    // Load image and find table boundaries
+                    using var loadedImage = Image.Load<Rgba32>(tempFilePath);
+                    var tableBoundaries = _imageProcessingService.FindTableBoundaries(loadedImage);
+                    
+                    // Create image with only table boundaries
+                    using var imageWithTableBoundaries = loadedImage.Clone();
+                    DrawTableBoundariesOnImage(imageWithTableBoundaries, tableBoundaries);
+                    
+                    // Convert to byte array
+                    using var ms = new MemoryStream();
+                    await imageWithTableBoundaries.SaveAsJpegAsync(ms);
+                    var imageBytes = ms.ToArray();
+
+                    // Return the image with table boundaries as JPEG
+                    return File(imageBytes, "image/jpeg", $"table_boundaries_{image.FileName}");
+                }
+                finally
+                {
+                    // Clean up temp file
+                    if (System.IO.File.Exists(tempFilePath))
+                    {
+                        System.IO.File.Delete(tempFilePath);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing debug table boundaries");
+                return StatusCode(StatusCodes.Status500InternalServerError, new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status500InternalServerError, 
+                    Message = "Failed to process table boundaries: " + ex.Message 
+                });
+            }
+        }
+
+        [HttpPost("debug/table-analysis")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> DebugTableAnalysis(IFormFile? image)
+        {
+            _logger.LogInformation("Processing debug table analysis request");
+
+            if (image == null || image.Length == 0)
+            {
+                _logger.LogWarning("No image file provided");
+                return BadRequest(new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status400BadRequest, 
+                    Message = "No image file provided" 
+                });
+            }
+
+            // Validate file is an image
+            if (!image.ContentType.StartsWith("image/"))
+            {
+                _logger.LogWarning("Uploaded file is not an image");
+                return BadRequest(new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status400BadRequest, 
+                    Message = "Uploaded file must be an image" 
+                });
+            }
+
+            try
+            {
+                // Save to temp file
+                var tempFilePath = Path.GetTempFileName();
+                try
+                {
+                    using (var stream = new FileStream(tempFilePath, FileMode.Create))
+                    {
+                        await image.CopyToAsync(stream);
+                    }
+
+                    // Load image and analyze
+                    using var loadedImage = Image.Load<Rgba32>(tempFilePath);
+                    var tableBoundaries = _imageProcessingService.FindTableBoundaries(loadedImage);
+                    
+                    // Calculate some statistics
+                    var imageWidth = loadedImage.Width;
+                    var imageHeight = loadedImage.Height;
+                    var tableArea = tableBoundaries.Width * tableBoundaries.Height;
+                    var imageArea = imageWidth * imageHeight;
+                    var tablePercentage = (double)tableArea / imageArea * 100;
+                    
+                    // Return detailed analysis
+                    return Ok(new
+                    {
+                        success = true,
+                        imageDimensions = new { width = imageWidth, height = imageHeight },
+                        tableBoundaries = new
+                        {
+                            x = tableBoundaries.X,
+                            y = tableBoundaries.Y,
+                            width = tableBoundaries.Width,
+                            height = tableBoundaries.Height
+                        },
+                        analysis = new
+                        {
+                            tableArea = tableArea,
+                            imageArea = imageArea,
+                            tablePercentage = Math.Round(tablePercentage, 2),
+                            tableCenterX = tableBoundaries.X + tableBoundaries.Width / 2,
+                            tableCenterY = tableBoundaries.Y + tableBoundaries.Height / 2,
+                            imageCenterX = imageWidth / 2,
+                            imageCenterY = imageHeight / 2
+                        },
+                        debugInfo = new
+                        {
+                            tableXPercentage = Math.Round((double)tableBoundaries.X / imageWidth * 100, 2),
+                            tableYPercentage = Math.Round((double)tableBoundaries.Y / imageHeight * 100, 2),
+                            tableWidthPercentage = Math.Round((double)tableBoundaries.Width / imageWidth * 100, 2),
+                            tableHeightPercentage = Math.Round((double)tableBoundaries.Height / imageHeight * 100, 2)
+                        }
+                    });
+                }
+                finally
+                {
+                    // Clean up temp file
+                    if (System.IO.File.Exists(tempFilePath))
+                    {
+                        System.IO.File.Delete(tempFilePath);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing debug table analysis");
+                return StatusCode(StatusCodes.Status500InternalServerError, new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status500InternalServerError, 
+                    Message = "Failed to process table analysis: " + ex.Message 
+                });
+            }
+        }
+
+        private void DrawTableBoundariesOnImage(Image<Rgba32> image, Rectangle tableBoundaries)
+        {
+            var blue = new Rgba32(0, 0, 255, 255); // Blue color
+            int thickness = 6; // Thicker than column boundaries
+            
+            // Draw top boundary
+            for (int x = tableBoundaries.X; x < tableBoundaries.X + tableBoundaries.Width; x++)
+            {
+                for (int offset = 0; offset < thickness; offset++)
+                {
+                    int y = tableBoundaries.Y + offset;
+                    if (x >= 0 && x < image.Width && y >= 0 && y < image.Height)
+                    {
+                        image[x, y] = blue;
+                    }
+                }
+            }
+            
+            // Draw bottom boundary
+            for (int x = tableBoundaries.X; x < tableBoundaries.X + tableBoundaries.Width; x++)
+            {
+                for (int offset = 0; offset < thickness; offset++)
+                {
+                    int y = tableBoundaries.Y + tableBoundaries.Height - offset;
+                    if (x >= 0 && x < image.Width && y >= 0 && y < image.Height)
+                    {
+                        image[x, y] = blue;
+                    }
+                }
+            }
+            
+            // Draw left boundary
+            for (int y = tableBoundaries.Y; y < tableBoundaries.Y + tableBoundaries.Height; y++)
+            {
+                for (int offset = 0; offset < thickness; offset++)
+                {
+                    int x = tableBoundaries.X + offset;
+                    if (x >= 0 && x < image.Width && y >= 0 && y < image.Height)
+                    {
+                        image[x, y] = blue;
+                    }
+                }
+            }
+            
+            // Draw right boundary
+            for (int y = tableBoundaries.Y; y < tableBoundaries.Y + tableBoundaries.Height; y++)
+            {
+                for (int offset = 0; offset < thickness; offset++)
+                {
+                    int x = tableBoundaries.X + tableBoundaries.Width - offset;
+                    if (x >= 0 && x < image.Width && y >= 0 && y < image.Height)
+                    {
+                        image[x, y] = blue;
+                    }
+                }
             }
         }
     }

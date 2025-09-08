@@ -655,5 +655,310 @@ namespace ChessDecoderApi.Services
             using var image = Image.Load<Rgba32>(imagePath);
             return SplitImageIntoColumns(image, expectedColumns);
         }
+
+        /// <summary>
+        /// Creates an image with column boundaries drawn on it for visualization.
+        /// </summary>
+        /// <param name="imagePath">Path to the chess moves image</param>
+        /// <param name="expectedColumns">Expected number of columns (default: 6)</param>
+        /// <returns>Byte array of the image with boundaries drawn</returns>
+        public async Task<byte[]> CreateImageWithBoundariesAsync(string imagePath, int expectedColumns = 6)
+        {
+            using var image = Image.Load<Rgba32>(imagePath);
+            var boundaries = SplitImageIntoColumns(image, expectedColumns);
+            var tableBoundaries = FindTableBoundaries(image);
+            
+            // Clone the image to draw on
+            using var imageWithBoundaries = image.Clone();
+            
+            // Draw table boundaries first (blue, thicker)
+            DrawTableBoundariesOnImage(imageWithBoundaries, tableBoundaries);
+            
+            // Draw column boundaries on top (red, thinner)
+            DrawBoundariesOnImage(imageWithBoundaries, boundaries);
+            
+            // Convert to byte array
+            using var ms = new MemoryStream();
+            await imageWithBoundaries.SaveAsJpegAsync(ms);
+            return ms.ToArray();
+        }
+
+        /// <summary>
+        /// Finds the external boundaries of the chess notation table in the image.
+        /// </summary>
+        /// <param name="image">The image to analyze</param>
+        /// <returns>Rectangle representing the table boundaries</returns>
+        public Rectangle FindTableBoundaries(Image<Rgba32> image)
+        {
+            int width = image.Width;
+            int height = image.Height;
+            
+            _logger.LogInformation($"Analyzing table boundaries for image {width}x{height}");
+            
+            // Convert to grayscale for analysis
+            using var grayscaleImage = image.Clone();
+            grayscaleImage.Mutate(x => x.Grayscale());
+            
+            // Calculate horizontal projection profile (sum of pixel intensities per row)
+            double[] horizontalProfile = new double[height];
+            for (int y = 0; y < height; y++)
+            {
+                double sum = 0;
+                for (int x = 0; x < width; x++)
+                {
+                    var pixel = grayscaleImage[x, y];
+                    int gray = pixel.R;
+                    int binary = gray < 200 ? 1 : 0; // Invert threshold - look for dark content
+                    sum += binary;
+                }
+                horizontalProfile[y] = sum;
+            }
+            
+            // Calculate vertical projection profile (sum of pixel intensities per column)
+            double[] verticalProfile = new double[width];
+            for (int x = 0; x < width; x++)
+            {
+                double sum = 0;
+                for (int y = 0; y < height; y++)
+                {
+                    var pixel = grayscaleImage[x, y];
+                    int gray = pixel.R;
+                    int binary = gray < 200 ? 1 : 0; // Invert threshold - look for dark content
+                    sum += binary;
+                }
+                verticalProfile[x] = sum;
+            }
+            
+            // Log profile statistics for debugging
+            _logger.LogInformation($"Horizontal profile - Max: {horizontalProfile.Max():F2}, Avg: {horizontalProfile.Average():F2}, Min: {horizontalProfile.Min():F2}");
+            _logger.LogInformation($"Vertical profile - Max: {verticalProfile.Max():F2}, Avg: {verticalProfile.Average():F2}, Min: {verticalProfile.Min():F2}");
+            
+            // Find table boundaries using improved algorithm
+            int top = FindTableEdgeImproved(horizontalProfile, true, height);
+            int bottom = FindTableEdgeImproved(horizontalProfile, false, height);
+            int left = FindTableEdgeImproved(verticalProfile, true, width);
+            int right = FindTableEdgeImproved(verticalProfile, false, width);
+            
+            // Log detected boundaries
+            _logger.LogInformation($"Raw detected boundaries - Top: {top}, Bottom: {bottom}, Left: {left}, Right: {right}");
+            
+            // Ensure boundaries are within image bounds
+            top = Math.Max(0, top);
+            bottom = Math.Min(height - 1, bottom);
+            left = Math.Max(0, left);
+            right = Math.Min(width - 1, right);
+            
+            var result = new Rectangle(left, top, right - left, bottom - top);
+            _logger.LogInformation($"Final table boundaries - X: {result.X}, Y: {result.Y}, Width: {result.Width}, Height: {result.Height}");
+            
+            return result;
+        }
+        
+        /// <summary>
+        /// Improved helper method to find table edges using projection profiles.
+        /// </summary>
+        /// <param name="profile">Projection profile array</param>
+        /// <param name="fromStart">True to search from start, false to search from end</param>
+        /// <param name="dimension">Width or height for context</param>
+        /// <returns>Edge position</returns>
+        private int FindTableEdgeImproved(double[] profile, bool fromStart, int dimension)
+        {
+            int length = profile.Length;
+            
+            // Calculate a more sophisticated threshold
+            double maxValue = profile.Max();
+            double avgValue = profile.Average();
+            double threshold = Math.Max(maxValue * 0.3, avgValue * 1.5); // Higher threshold to avoid noise
+            
+            _logger.LogInformation($"Edge detection - Direction: {(fromStart ? "Start" : "End")}, Threshold: {threshold:F2}, Max: {maxValue:F2}, Avg: {avgValue:F2}");
+            
+            // Smooth the profile to reduce noise
+            double[] smoothedProfile = SmoothProfile(profile);
+            
+            if (fromStart)
+            {
+                // Find first significant peak from the start, but skip only the very first pixels
+                int startSearch = Math.Max(0, 10); // Skip only first 10 pixels
+                int endSearch = length / 2; // Only search first half
+                
+                _logger.LogInformation($"Searching from {startSearch} to {endSearch} (first half)");
+                
+                for (int i = startSearch; i < endSearch; i++)
+                {
+                    if (smoothedProfile[i] > threshold)
+                    {
+                        _logger.LogInformation($"Found candidate at position {i} with value {smoothedProfile[i]:F2}");
+                        
+                        // Look for the actual start of the table (where content becomes consistent)
+                        for (int j = i; j >= startSearch; j--)
+                        {
+                            if (smoothedProfile[j] < threshold * 0.5)
+                            {
+                                _logger.LogInformation($"Found table start at position {j + 1}");
+                                return j + 1;
+                            }
+                        }
+                        _logger.LogInformation($"Using candidate position {i} as table start");
+                        return i;
+                    }
+                }
+                _logger.LogWarning($"No table edge found in first half, using fallback {length / 10}");
+            }
+            else
+            {
+                // Find last significant peak from the end, but skip only the very last pixels
+                int startSearch = length / 2; // Start from middle
+                int endSearch = Math.Min(length - 1, length - 10); // Skip only last 10 pixels
+                
+                _logger.LogInformation($"Searching from {endSearch} to {startSearch} (second half)");
+                
+                for (int i = endSearch; i >= startSearch; i--)
+                {
+                    if (smoothedProfile[i] > threshold)
+                    {
+                        _logger.LogInformation($"Found candidate at position {i} with value {smoothedProfile[i]:F2}");
+                        
+                        // Look for the actual end of the table (where content becomes consistent)
+                        for (int j = i; j <= endSearch; j++)
+                        {
+                            if (smoothedProfile[j] < threshold * 0.5)
+                            {
+                                _logger.LogInformation($"Found table end at position {j - 1}");
+                                return j - 1;
+                            }
+                        }
+                        _logger.LogInformation($"Using candidate position {i} as table end");
+                        return i;
+                    }
+                }
+                _logger.LogWarning($"No table edge found in second half, using fallback {length - length / 10}");
+            }
+            
+            return fromStart ? length / 10 : length - length / 10; // Fallback to reasonable defaults
+        }
+        
+        /// <summary>
+        /// Smooths a profile array to reduce noise.
+        /// </summary>
+        /// <param name="profile">Input profile array</param>
+        /// <returns>Smoothed profile array</returns>
+        private double[] SmoothProfile(double[] profile)
+        {
+            int length = profile.Length;
+            double[] smoothed = new double[length];
+            int windowSize = Math.Max(3, length / 100); // Adaptive window size
+            
+            for (int i = 0; i < length; i++)
+            {
+                int start = Math.Max(0, i - windowSize / 2);
+                int end = Math.Min(length - 1, i + windowSize / 2);
+                double sum = 0;
+                int count = 0;
+                
+                for (int j = start; j <= end; j++)
+                {
+                    sum += profile[j];
+                    count++;
+                }
+                
+                smoothed[i] = sum / count;
+            }
+            
+            return smoothed;
+        }
+
+        /// <summary>
+        /// Draws table boundaries on the image for visualization.
+        /// </summary>
+        /// <param name="image">The image to draw boundaries on</param>
+        /// <param name="tableBoundaries">Rectangle representing the table boundaries</param>
+        private void DrawTableBoundariesOnImage(Image<Rgba32> image, Rectangle tableBoundaries)
+        {
+            var blue = new Rgba32(0, 0, 255, 255); // Blue color
+            int thickness = 6; // Thicker than column boundaries
+            
+            // Draw top boundary
+            for (int x = tableBoundaries.X; x < tableBoundaries.X + tableBoundaries.Width; x++)
+            {
+                for (int offset = 0; offset < thickness; offset++)
+                {
+                    int y = tableBoundaries.Y + offset;
+                    if (x >= 0 && x < image.Width && y >= 0 && y < image.Height)
+                    {
+                        image[x, y] = blue;
+                    }
+                }
+            }
+            
+            // Draw bottom boundary
+            for (int x = tableBoundaries.X; x < tableBoundaries.X + tableBoundaries.Width; x++)
+            {
+                for (int offset = 0; offset < thickness; offset++)
+                {
+                    int y = tableBoundaries.Y + tableBoundaries.Height - offset;
+                    if (x >= 0 && x < image.Width && y >= 0 && y < image.Height)
+                    {
+                        image[x, y] = blue;
+                    }
+                }
+            }
+            
+            // Draw left boundary
+            for (int y = tableBoundaries.Y; y < tableBoundaries.Y + tableBoundaries.Height; y++)
+            {
+                for (int offset = 0; offset < thickness; offset++)
+                {
+                    int x = tableBoundaries.X + offset;
+                    if (x >= 0 && x < image.Width && y >= 0 && y < image.Height)
+                    {
+                        image[x, y] = blue;
+                    }
+                }
+            }
+            
+            // Draw right boundary
+            for (int y = tableBoundaries.Y; y < tableBoundaries.Y + tableBoundaries.Height; y++)
+            {
+                for (int offset = 0; offset < thickness; offset++)
+                {
+                    int x = tableBoundaries.X + tableBoundaries.Width - offset;
+                    if (x >= 0 && x < image.Width && y >= 0 && y < image.Height)
+                    {
+                        image[x, y] = blue;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Draws column boundaries on the image for visualization.
+        /// </summary>
+        /// <param name="image">The image to draw boundaries on</param>
+        /// <param name="boundaries">List of column boundary positions</param>
+        private void DrawBoundariesOnImage(Image<Rgba32> image, List<int> boundaries)
+        {
+            int height = image.Height;
+            var red = new Rgba32(255, 0, 0, 255); // Red color
+            
+            // Draw vertical lines for each boundary (except the first and last which are edges)
+            for (int i = 1; i < boundaries.Count - 1; i++)
+            {
+                int x = boundaries[i];
+                
+                // Draw thick vertical line (5-pixel wide for better visibility)
+                for (int y = 0; y < height; y++)
+                {
+                    // Draw 5-pixel wide line
+                    for (int offset = -2; offset <= 2; offset++)
+                    {
+                        int lineX = x + offset;
+                        if (lineX >= 0 && lineX < image.Width)
+                        {
+                            image[lineX, y] = red;
+                        }
+                    }
+                }
+            }
+        }
     }
 } 
