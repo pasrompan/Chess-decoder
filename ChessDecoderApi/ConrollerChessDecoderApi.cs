@@ -708,9 +708,10 @@ namespace ChessDecoderApi.Controllers
         [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> DebugSplitColumns(
             IFormFile? image, 
-            [FromForm] int expectedColumns = 6)
+            [FromForm] int expectedColumns = 6,
+            [FromForm] int expectedRows = 0)
         {
-            _logger.LogInformation("Processing debug split columns request with expected columns: {ExpectedColumns}", expectedColumns);
+            _logger.LogInformation("Processing debug split columns request with expected columns: {ExpectedColumns}, expected rows: {ExpectedRows} (0 = auto-detect)", expectedColumns, expectedRows);
 
             if (image == null || image.Length == 0)
             {
@@ -744,6 +745,17 @@ namespace ChessDecoderApi.Controllers
                 });
             }
 
+            // Validate expected rows parameter (0 means auto-detection)
+            if (expectedRows < 0 || expectedRows > 20)
+            {
+                _logger.LogWarning("Invalid expected rows value: {ExpectedRows}", expectedRows);
+                return BadRequest(new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status400BadRequest, 
+                    Message = "Expected rows must be between 0 (auto-detect) and 20" 
+                });
+            }
+
             try
             {
                 // Save to temp file
@@ -755,36 +767,55 @@ namespace ChessDecoderApi.Controllers
                         await image.CopyToAsync(stream);
                     }
 
-                    // Load image and find column boundaries
+                    // Load image and find column and row boundaries
                     using var loadedImage = Image.Load<Rgba32>(tempFilePath);
-                    var boundaries = _imageProcessingService.SplitImageIntoColumns(loadedImage, expectedColumns);
+                    var columnBoundaries = _imageProcessingService.SplitImageIntoColumns(loadedImage, expectedColumns);
+                    var rowBoundaries = _imageProcessingService.SplitImageIntoRows(loadedImage, expectedRows);
                     
                     // Find table boundaries
                     var tableBoundaries = _imageProcessingService.FindTableBoundaries(loadedImage);
 
                     // Calculate column widths for frontend visualization
                     var columnWidths = new List<int>();
-                    for (int i = 0; i < boundaries.Count - 1; i++)
+                    for (int i = 0; i < columnBoundaries.Count - 1; i++)
                     {
-                        columnWidths.Add(boundaries[i + 1] - boundaries[i]);
+                        columnWidths.Add(columnBoundaries[i + 1] - columnBoundaries[i]);
+                    }
+
+                    // Calculate row heights for frontend visualization
+                    var rowHeights = new List<int>();
+                    for (int i = 0; i < rowBoundaries.Count - 1; i++)
+                    {
+                        rowHeights.Add(rowBoundaries[i + 1] - rowBoundaries[i]);
                     }
 
                     // Return the boundaries and related data for frontend visualization
                     return Ok(new 
                     { 
                         imageFileName = image.FileName,
-                        imageWidth = boundaries.Last(), // Total width is the last boundary
+                        imageWidth = columnBoundaries.Last(), // Total width is the last boundary
                         imageHeight = loadedImage.Height,
                         expectedColumns = expectedColumns,
-                        actualColumns = boundaries.Count - 1,
-                        boundaries = boundaries,
+                        expectedRows = expectedRows,
+                        actualColumns = columnBoundaries.Count - 1,
+                        actualRows = rowBoundaries.Count - 1,
+                        columnBoundaries = columnBoundaries,
+                        rowBoundaries = rowBoundaries,
                         columnWidths = columnWidths,
-                        columnData = boundaries.Take(boundaries.Count - 1).Select((start, index) => new
+                        rowHeights = rowHeights,
+                        columnData = columnBoundaries.Take(columnBoundaries.Count - 1).Select((start, index) => new
                         {
                             columnIndex = index,
                             startPosition = start,
-                            endPosition = boundaries[index + 1],
-                            width = boundaries[index + 1] - start
+                            endPosition = columnBoundaries[index + 1],
+                            width = columnBoundaries[index + 1] - start
+                        }).ToArray(),
+                        rowData = rowBoundaries.Take(rowBoundaries.Count - 1).Select((start, index) => new
+                        {
+                            rowIndex = index,
+                            startPosition = start,
+                            endPosition = rowBoundaries[index + 1],
+                            height = rowBoundaries[index + 1] - start
                         }).ToArray(),
                         tableBoundaries = new
                         {
@@ -821,9 +852,10 @@ namespace ChessDecoderApi.Controllers
         [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> DebugImageWithBoundaries(
             IFormFile? image, 
-            [FromForm] int expectedColumns = 6)
+            [FromForm] int expectedColumns = 6,
+            [FromForm] int expectedRows = 0)
         {
-            _logger.LogInformation("Processing debug image with boundaries request with expected columns: {ExpectedColumns}", expectedColumns);
+            _logger.LogInformation("Processing debug image with boundaries request with expected columns: {ExpectedColumns}, expected rows: {ExpectedRows} (0 = auto-detect)", expectedColumns, expectedRows);
 
             if (image == null || image.Length == 0)
             {
@@ -869,7 +901,7 @@ namespace ChessDecoderApi.Controllers
                     }
 
                     // Create image with boundaries drawn
-                    var imageWithBoundaries = await _imageProcessingService.CreateImageWithBoundariesAsync(tempFilePath, expectedColumns);
+                    var imageWithBoundaries = await _imageProcessingService.CreateImageWithBoundariesAsync(tempFilePath, expectedColumns, expectedRows);
 
                     // Return the image with boundaries as JPEG
                     return File(imageWithBoundaries, "image/jpeg", $"boundaries_{image.FileName}");
