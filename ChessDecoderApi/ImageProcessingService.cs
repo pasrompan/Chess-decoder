@@ -94,8 +94,12 @@ namespace ChessDecoderApi.Services
             int width = image.Width;
             int height = image.Height;
 
-            // Get column boundaries - we need to pass the image directly since we already loaded it
-            var boundaries = SplitImageIntoColumns(image, 6);
+            // Step 1: Find table boundaries first for more accurate column detection
+            var tableBoundaries = FindTableBoundaries(image);
+            _logger.LogInformation($"Found table boundaries for move extraction: X={tableBoundaries.X}, Y={tableBoundaries.Y}, Width={tableBoundaries.Width}, Height={tableBoundaries.Height}");
+
+            // Step 2: Automatically detect chess columns within the table area
+            var boundaries = DetectChessColumnsAutomatically(image, tableBoundaries);
             var whiteMoves = new List<string>();
             var blackMoves = new List<string>();
 
@@ -558,37 +562,650 @@ namespace ChessDecoderApi.Services
         /// <returns>List of column boundary indices (pixel positions)</returns>
         public List<int> SplitImageIntoColumns(Image<Rgba32> image, int expectedColumns = 6)
         {
-            image.Mutate(x => x.Grayscale());
-            int width = image.Width;
-            int height = image.Height;
-            double[] columnSums = new double[width];
-            // Binarize and sum binary values per column
-            for (int x = 0; x < width; x++)
+            return SplitImageIntoColumns(image, expectedColumns, null);
+        }
+
+        /// <summary>
+        /// Automatically detects chess move columns by analyzing width patterns and content distribution.
+        /// Finds 6 consecutive columns of similar width that likely contain chess moves.
+        /// </summary>
+        /// <param name="image">The chess moves image</param>
+        /// <param name="searchRegion">Rectangle to search within (null for entire image)</param>
+        /// <returns>List of column boundary indices for the 6 chess move columns</returns>
+        public List<int> DetectChessColumnsAutomatically(Image<Rgba32> image, Rectangle? searchRegion = null)
+        {
+            Rectangle region = searchRegion ?? new Rectangle(0, 0, image.Width, image.Height);
+            _logger.LogInformation($"Starting automatic chess column detection within region: {region.Width}x{region.Height}");
+            
+            // Calculate minimum column width based on table size (each column should be ~1/6 of table, with some tolerance)
+            double minExpectedWidth = region.Width / 6.0 * 0.5; // At least 50% of expected width
+            double maxExpectedWidth = region.Width / 6.0 * 2.0; // At most 200% of expected width
+            
+            _logger.LogInformation($"Expected column width range: {minExpectedWidth:F1}px - {maxExpectedWidth:F1}px");
+
+            // Step 1: Detect significant column boundaries
+            var allBoundaries = DetectAllColumnBoundaries(image, region);
+            _logger.LogInformation($"Detected {allBoundaries.Count - 1} significant column boundaries");
+
+            if (allBoundaries.Count < 4) // Need at least 4 boundaries for 3 columns (minimum)
             {
+                _logger.LogWarning("Not enough column boundaries detected, falling back to equal division");
+                return CreateEqualDivisionColumns(region, 6);
+            }
+
+            // Step 2: Analyze column widths and filter out obviously inappropriate ones
+            var columnData = AnalyzeColumnWidths(allBoundaries, region);
+            var reasonableColumns = columnData.Where(c => c.Width >= minExpectedWidth * 0.3).ToList(); // Very lenient for initial filtering
+            
+            _logger.LogInformation($"Filtered to {reasonableColumns.Count} columns with reasonable widths");
+            
+            // Step 3: Find the best sequence of 6 consecutive columns that cover most of the table
+            var chessColumns = FindChessColumnSequence(reasonableColumns, region);
+            
+            if (chessColumns != null)
+            {
+                double totalWidth = chessColumns[6] - chessColumns[0];
+                double avgWidth = totalWidth / 6.0;
+                double coverage = totalWidth / region.Width;
+                _logger.LogInformation($"Found chess columns covering {coverage:P1} of table width, avg column width: {avgWidth:F1}px");
+                return chessColumns;
+            }
+            
+            _logger.LogWarning("Could not automatically detect chess columns, falling back to equal division");
+            return CreateEqualDivisionColumns(region, 6);
+        }
+
+        /// <summary>
+        /// Detects all column boundaries with high sensitivity, then filters appropriately.
+        /// </summary>
+        private List<int> DetectAllColumnBoundaries(Image<Rgba32> image, Rectangle region)
+        {
+            image.Mutate(x => x.Grayscale());
+            int regionWidth = region.Width;
+            int regionHeight = region.Height;
+            double[] columnSums = new double[regionWidth];
+            
+            // Calculate column projection profile
+            for (int relativeX = 0; relativeX < regionWidth; relativeX++)
+            {
+                int absoluteX = region.X + relativeX;
+                if (absoluteX >= image.Width) break;
+                
                 double sum = 0;
-                for (int y = 0; y < height; y++)
+                for (int relativeY = 0; relativeY < regionHeight; relativeY++)
                 {
-                    var pixel = image[x, y];
+                    int absoluteY = region.Y + relativeY;
+                    if (absoluteY >= image.Height) break;
+                    
+                    var pixel = image[absoluteX, absoluteY];
+                    int gray = pixel.R;
+                    int binary = gray > 128 ? 1 : 0;
+                    sum += binary;
+                }
+                columnSums[relativeX] = sum;
+            }
+            
+            // Light smoothing to preserve boundaries but reduce noise
+            int smoothWindow = Math.Max(2, regionWidth / 200);
+            double[] smoothed = SmoothProfile(columnSums, smoothWindow);
+            
+            // Log projection profile statistics for debugging
+            double minValue = smoothed.Min();
+            double maxValue = smoothed.Max();
+            double avgValue = smoothed.Average();
+            _logger.LogInformation($"Projection profile - Min: {minValue:F2}, Max: {maxValue:F2}, Avg: {avgValue:F2}, Range: {maxValue - minValue:F2}");
+            
+            // Use multiple detection methods for better coverage
+            List<int> allBoundaries = new List<int> { 0 };
+            
+            // Method 1: Valley detection (original approach but more sensitive)
+            var valleyBoundaries = DetectValleys(smoothed, regionWidth);
+            _logger.LogInformation($"Valley detection found {valleyBoundaries.Count} boundaries: [{string.Join(", ", valleyBoundaries)}]");
+            allBoundaries.AddRange(valleyBoundaries);
+            
+            // Method 2: Gradient-based detection for sharp transitions
+            var gradientBoundaries = DetectGradientBoundaries(smoothed, regionWidth);
+            _logger.LogInformation($"Gradient detection found {gradientBoundaries.Count} boundaries: [{string.Join(", ", gradientBoundaries)}]");
+            allBoundaries.AddRange(gradientBoundaries);
+            
+            // Method 3: Local minima detection
+            var minimaBoundaries = DetectLocalMinima(smoothed, regionWidth);
+            _logger.LogInformation($"Local minima detection found {minimaBoundaries.Count} boundaries: [{string.Join(", ", minimaBoundaries)}]");
+            allBoundaries.AddRange(minimaBoundaries);
+            
+            allBoundaries.Add(regionWidth);
+            
+            // Remove duplicates and sort
+            allBoundaries = allBoundaries.Distinct().OrderBy(b => b).ToList();
+            
+            // Now apply intelligent filtering - remove boundaries that are too close together
+            List<int> filteredBoundaries = new List<int> { allBoundaries[0] };
+            int minSeparation = Math.Max(3, regionWidth / 100); // Minimum 1% separation or 3px
+            
+            for (int i = 1; i < allBoundaries.Count; i++)
+            {
+                int separation = allBoundaries[i] - filteredBoundaries.Last();
+                if (separation >= minSeparation || i == allBoundaries.Count - 1) // Always keep the last boundary
+                {
+                    filteredBoundaries.Add(allBoundaries[i]);
+                }
+            }
+            
+            // Convert to absolute coordinates
+            for (int i = 0; i < filteredBoundaries.Count; i++)
+            {
+                filteredBoundaries[i] += region.X;
+            }
+            
+            _logger.LogInformation($"Detected {filteredBoundaries.Count - 1} column boundaries using multi-method approach (min separation: {minSeparation}px)");
+            return filteredBoundaries;
+        }
+
+        /// <summary>
+        /// Detects valleys in the projection profile.
+        /// </summary>
+        private List<int> DetectValleys(double[] smoothed, int width)
+        {
+            var boundaries = new List<int>();
+            double avgValue = smoothed.Average();
+            double threshold = Math.Max(1.0, avgValue * 0.05); // Very low threshold
+            
+            for (int x = 1; x < width - 1; x++)
+            {
+                double diff = Math.Abs(smoothed[x] - smoothed[x - 1]) + Math.Abs(smoothed[x] - smoothed[x + 1]);
+                bool isValley = smoothed[x] < smoothed[x - 1] && smoothed[x] < smoothed[x + 1];
+                if (diff > threshold && isValley)
+                {
+                    boundaries.Add(x);
+                }
+            }
+            
+            return boundaries;
+        }
+
+        /// <summary>
+        /// Detects boundaries based on gradient analysis.
+        /// </summary>
+        private List<int> DetectGradientBoundaries(double[] smoothed, int width)
+        {
+            var boundaries = new List<int>();
+            double[] gradient = new double[width - 1];
+            
+            // Calculate gradient
+            for (int i = 0; i < width - 1; i++)
+            {
+                gradient[i] = smoothed[i + 1] - smoothed[i];
+            }
+            
+            // Find zero crossings in gradient (transition points)
+            for (int i = 1; i < gradient.Length - 1; i++)
+            {
+                if ((gradient[i - 1] > 0 && gradient[i] < 0) || (gradient[i - 1] < 0 && gradient[i] > 0))
+                {
+                    double magnitude = Math.Abs(gradient[i - 1]) + Math.Abs(gradient[i]);
+                    if (magnitude > smoothed.Average() * 0.02) // Threshold for significant transitions
+                    {
+                        boundaries.Add(i);
+                    }
+                }
+            }
+            
+            return boundaries;
+        }
+
+        /// <summary>
+        /// Detects local minima in the projection profile.
+        /// </summary>
+        private List<int> DetectLocalMinima(double[] smoothed, int width)
+        {
+            var boundaries = new List<int>();
+            int windowSize = Math.Max(3, width / 100);
+            
+            for (int i = windowSize; i < width - windowSize; i++)
+            {
+                bool isMinimum = true;
+                double centerValue = smoothed[i];
+                
+                // Check if this point is lower than all points in the window
+                for (int j = i - windowSize; j <= i + windowSize; j++)
+                {
+                    if (j != i && smoothed[j] <= centerValue)
+                    {
+                        isMinimum = false;
+                        break;
+                    }
+                }
+                
+                if (isMinimum && centerValue < smoothed.Average() * 0.8) // Below average
+                {
+                    boundaries.Add(i);
+                }
+            }
+            
+            return boundaries;
+        }
+
+        /// <summary>
+        /// Analyzes column widths to identify patterns.
+        /// </summary>
+        private List<ColumnInfo> AnalyzeColumnWidths(List<int> boundaries, Rectangle region)
+        {
+            var columns = new List<ColumnInfo>();
+            
+            for (int i = 0; i < boundaries.Count - 1; i++)
+            {
+                int width = boundaries[i + 1] - boundaries[i];
+                columns.Add(new ColumnInfo
+                {
+                    Index = i,
+                    StartX = boundaries[i],
+                    EndX = boundaries[i + 1],
+                    Width = width,
+                    RelativeWidth = (double)width / region.Width
+                });
+            }
+            
+            _logger.LogInformation($"Column width analysis: {string.Join(", ", columns.Select(c => $"{c.Width}px"))}");
+            return columns;
+        }
+
+        /// <summary>
+        /// Finds the best sequence of 6 consecutive columns that likely contain chess moves.
+        /// Detects and skips comment columns (significantly wider than chess columns).
+        /// </summary>
+        private List<int>? FindChessColumnSequence(List<ColumnInfo> columns, Rectangle region)
+        {
+            if (columns.Count < 3) 
+            {
+                _logger.LogWarning($"Not enough columns ({columns.Count}) to attempt chess column detection (need at least 3)");
+                return null;
+            }
+            
+            // Step 1: Identify and exclude outlier columns (comments, numbers, etc.)
+            var filteredColumns = FilterOutlierColumns(columns, region);
+            _logger.LogInformation($"After outlier filtering: {filteredColumns.Count} columns remaining");
+            
+            if (filteredColumns.Count < 3)
+            {
+                _logger.LogInformation("Too few columns after outlier filtering, using original set");
+                filteredColumns = columns; // Fallback to original set
+            }
+            else if (filteredColumns.Count < 6)
+            {
+                _logger.LogInformation($"Only {filteredColumns.Count} columns after filtering, but proceeding to see what we can detect");
+                // Continue with filtered set even if < 6 columns
+            }
+            
+            var candidates = new List<ColumnSequence>();
+            
+            // Determine how many columns to look for (prefer 6, but work with what we have)
+            int targetColumns = Math.Min(6, filteredColumns.Count);
+            _logger.LogInformation($"Looking for sequences of {targetColumns} columns");
+            
+            // Find all possible sequences of target number of consecutive columns
+            for (int start = 0; start <= filteredColumns.Count - targetColumns; start++)
+            {
+                var sequence = filteredColumns.Skip(start).Take(targetColumns).ToList();
+                
+                // Verify this is actually a consecutive sequence (no major gaps in column indices)
+                bool isReasonablyConsecutive = IsReasonablyConsecutive(sequence);
+                
+                if (!isReasonablyConsecutive) continue;
+                
+                var candidate = AnalyzeColumnSequence(sequence, region);
+                if (candidate != null)
+                {
+                    candidates.Add(candidate);
+                }
+            }
+            
+            // If no sequences found with filtered columns, try with original set
+            if (!candidates.Any() && filteredColumns != columns)
+            {
+                _logger.LogInformation("No sequences found with filtered columns, trying original set");
+                int originalTargetColumns = Math.Min(6, columns.Count);
+                for (int start = 0; start <= columns.Count - originalTargetColumns; start++)
+                {
+                    var sequence = columns.Skip(start).Take(originalTargetColumns).ToList();
+                    var candidate = AnalyzeColumnSequence(sequence, region);
+                    if (candidate != null)
+                    {
+                        candidates.Add(candidate);
+                    }
+                }
+            }
+            
+            if (!candidates.Any()) 
+            {
+                _logger.LogWarning("No valid column sequences found");
+                return null;
+            }
+            
+            // Select the best candidate based on multiple criteria, preferring those without outliers
+            var bestCandidate = candidates
+                .OrderByDescending(c => c.Score)
+                .ThenByDescending(c => c.WidthUniformity) // Prefer uniform widths
+                .First();
+                
+            double coverage = (bestCandidate.EndX - bestCandidate.StartX) / (double)region.Width;
+            _logger.LogInformation($"Selected column sequence with score {bestCandidate.Score:F2}, avg width {bestCandidate.AverageWidth:F1}px, coverage {coverage:P1}");
+            
+            // Return the boundaries for the selected sequence
+            var result = new List<int> { bestCandidate.StartX };
+            result.AddRange(bestCandidate.Columns.Select(c => c.EndX));
+            
+            // If we have fewer than 6 columns but good quality, try to extrapolate to 6
+            if (bestCandidate.Columns.Count < 6 && bestCandidate.Score > 0.7)
+            {
+                result = ExtrapolateTo6Columns(result, bestCandidate, region);
+            }
+            else if (bestCandidate.Columns.Count < 6)
+            {
+                _logger.LogWarning($"Found only {bestCandidate.Columns.Count} columns with low score {bestCandidate.Score:F2}, falling back to equal division");
+                return CreateEqualDivisionColumns(region, 6);
+            }
+            
+            return result;
+        }
+
+        /// <summary>
+        /// Extrapolates a good column sequence to exactly 6 columns.
+        /// </summary>
+        private List<int> ExtrapolateTo6Columns(List<int> boundaries, ColumnSequence sequence, Rectangle region)
+        {
+            int currentColumns = sequence.Columns.Count;
+            int neededColumns = 6 - currentColumns;
+            
+            _logger.LogInformation($"Extrapolating {currentColumns} columns to 6 columns (need {neededColumns} more)");
+            
+            if (neededColumns <= 0) return boundaries;
+            
+            double avgWidth = sequence.AverageWidth;
+            var result = new List<int>(boundaries);
+            
+            // Strategy: Add columns at the end by extending with average width
+            int lastBoundary = result.Last();
+            for (int i = 0; i < neededColumns; i++)
+            {
+                int newBoundary = lastBoundary + (int)avgWidth;
+                // Make sure we don't exceed the region
+                newBoundary = Math.Min(newBoundary, region.X + region.Width);
+                result.Add(newBoundary);
+                lastBoundary = newBoundary;
+            }
+            
+            _logger.LogInformation($"Extrapolated to 6 columns: added {neededColumns} columns with avg width {avgWidth:F1}px");
+            return result;
+        }
+
+        /// <summary>
+        /// Filters out columns that are likely comments or numbers (significantly different widths).
+        /// </summary>
+        private List<ColumnInfo> FilterOutlierColumns(List<ColumnInfo> columns, Rectangle region)
+        {
+            if (columns.Count < 3) return columns;
+            
+            // Calculate statistics
+            var widths = columns.Select(c => c.Width).ToList();
+            double medianWidth = widths.OrderBy(w => w).Skip(widths.Count / 2).First();
+            double avgWidth = widths.Average();
+            double expectedChessWidth = region.Width / 6.0; // Expected chess column width
+            
+            _logger.LogInformation($"Column width analysis - Median: {medianWidth:F1}px, Average: {avgWidth:F1}px, Expected chess: {expectedChessWidth:F1}px");
+            
+            // Identify outliers using statistical analysis
+            var filtered = new List<ColumnInfo>();
+            
+            foreach (var column in columns)
+            {
+                double deviationFromMedian = Math.Abs(column.Width - medianWidth) / medianWidth;
+                double deviationFromExpected = Math.Abs(column.Width - expectedChessWidth) / expectedChessWidth;
+                
+                // Consider a column an outlier if:
+                // 1. It's more than 50% different from the median width, OR
+                // 2. It's more than 80% different from expected chess column width, OR  
+                // 3. It's the first column and significantly larger (common comment pattern)
+                bool isOutlier = deviationFromMedian > 0.5 || 
+                                deviationFromExpected > 0.8 ||
+                                (column.Index == 0 && column.Width > medianWidth * 1.4);
+                
+                if (isOutlier)
+                {
+                    _logger.LogInformation($"Column {column.Index} (width {column.Width}px) identified as outlier - deviation from median: {deviationFromMedian:P1}");
+                }
+                else
+                {
+                    filtered.Add(column);
+                }
+            }
+            
+            return filtered;
+        }
+
+        /// <summary>
+        /// Checks if a sequence of columns is reasonably consecutive (allowing small gaps).
+        /// </summary>
+        private bool IsReasonablyConsecutive(List<ColumnInfo> sequence)
+        {
+            if (sequence.Count < 2) return true;
+            
+            // Allow gaps of up to 2 indices (in case we filtered out some columns)
+            for (int i = 1; i < sequence.Count; i++)
+            {
+                int gap = sequence[i].Index - sequence[i-1].Index;
+                if (gap > 3) // Too large a gap
+                {
+                    return false;
+                }
+            }
+            
+            return true;
+        }
+
+        /// <summary>
+        /// Analyzes a sequence of columns to determine if they're suitable for chess moves.
+        /// Ensures columns occupy 80-100% of table width with uniform widths.
+        /// Applies strict uniformity checks to reject wildly inconsistent widths.
+        /// </summary>
+        private ColumnSequence? AnalyzeColumnSequence(List<ColumnInfo> sequence, Rectangle region)
+        {
+            if (sequence.Count < 3) return null; // Need at least 3 columns to analyze
+            
+            int sequenceCount = sequence.Count;
+            _logger.LogInformation($"Analyzing sequence of {sequenceCount} columns");
+            
+            var widths = sequence.Select(c => c.Width).ToArray();
+            double avgWidth = widths.Average();
+            double minWidth = widths.Min();
+            double maxWidth = widths.Max();
+            double widthRange = maxWidth - minWidth;
+            double widthVariance = widths.Select(w => Math.Pow(w - avgWidth, 2)).Average();
+            double standardDeviation = Math.Sqrt(widthVariance);
+            
+            // Calculate width uniformity metrics
+            double coefficientOfVariation = standardDeviation / avgWidth; // Lower is better
+            double widthRangeRatio = widthRange / avgWidth; // Lower is better
+            double minMaxRatio = minWidth / maxWidth; // Higher is better (closer to 1)
+            
+            _logger.LogInformation($"Width analysis: min={minWidth:F0}px, max={maxWidth:F0}px, avg={avgWidth:F1}px, range={widthRange:F0}px, CV={coefficientOfVariation:F2}, ratio={minMaxRatio:F2}");
+            
+            // Strict uniformity checks - reject sequences with wildly different column widths
+            if (coefficientOfVariation > 0.4) // Standard deviation > 40% of mean
+            {
+                _logger.LogInformation($"Rejecting sequence: high coefficient of variation ({coefficientOfVariation:F2} > 0.4)");
+                return null;
+            }
+            
+            if (minMaxRatio < 0.5) // Smallest column less than 50% of largest
+            {
+                _logger.LogInformation($"Rejecting sequence: width ratio too low ({minMaxRatio:F2} < 0.5)");
+                return null;
+            }
+            
+            if (widthRangeRatio > 1.0) // Range greater than average width
+            {
+                _logger.LogInformation($"Rejecting sequence: width range too large ({widthRangeRatio:F2} > 1.0)");
+                return null;
+            }
+            
+            // Calculate how much of the table width this sequence covers
+            double totalWidth = region.Width;
+            double sequenceWidth = sequence.Last().EndX - sequence.First().StartX;
+            double coverageRatio = sequenceWidth / totalWidth;
+            
+            // Ideal coverage should be 80-100% of table width
+            double coverageScore = 0.0;
+            if (coverageRatio >= 0.8 && coverageRatio <= 1.0)
+            {
+                coverageScore = 1.0; // Perfect coverage
+            }
+            else if (coverageRatio >= 0.7 && coverageRatio < 0.8)
+            {
+                coverageScore = (coverageRatio - 0.7) / 0.1; // Linear scale from 70-80%
+            }
+            else
+            {
+                coverageScore = Math.Max(0, 1.0 - Math.Abs(coverageRatio - 0.9) / 0.5); // Penalty for poor coverage
+            }
+            
+            // Calculate uniformity score based on multiple metrics
+            double uniformityScore = (1.0 - coefficientOfVariation) * 0.4 + minMaxRatio * 0.4 + (1.0 - widthRangeRatio / 2.0) * 0.2;
+            uniformityScore = Math.Max(0, Math.Min(1, uniformityScore));
+            
+            // Calculate position score (prefer columns not at the very edges)
+            double sequenceStart = sequence.First().StartX - region.X;
+            double sequenceEnd = sequence.Last().EndX - region.X;
+            double centeredness = 1.0 - Math.Abs((sequenceStart + sequenceEnd) / 2.0 - totalWidth / 2.0) / (totalWidth / 2.0);
+            
+            // Combined score with emphasis on uniformity and coverage
+            double score = uniformityScore * 0.5 + coverageScore * 0.4 + centeredness * 0.1;
+            
+            // Strict minimum thresholds - adjust based on actual number of columns
+            double expectedWidth = totalWidth / sequenceCount;
+            double minColumnWidth = expectedWidth * 0.4; // At least 40% of expected width
+            double maxColumnWidth = expectedWidth * 2.5; // At most 250% of expected width
+            
+            if (coverageRatio < 0.7 || avgWidth < minColumnWidth || avgWidth > maxColumnWidth)
+            {
+                _logger.LogInformation($"Rejecting sequence: coverage={coverageRatio:F2}, avgWidth={avgWidth:F1}px (expected={expectedWidth:F1}px, range={minColumnWidth:F1}-{maxColumnWidth:F1}px)");
+                return null;
+            }
+            
+            // Additional check: reject if any individual column is extremely different
+            foreach (var column in sequence)
+            {
+                double deviationFromExpected = Math.Abs(column.Width - expectedWidth) / expectedWidth;
+                if (deviationFromExpected > 1.5) // More than 150% deviation
+                {
+                    _logger.LogInformation($"Rejecting sequence: column {column.Index} width {column.Width}px deviates {deviationFromExpected:P0} from expected {expectedWidth:F1}px");
+                    return null;
+                }
+            }
+            
+            _logger.LogInformation($"Candidate sequence: coverage={coverageRatio:F2}, avgWidth={avgWidth:F1}px, uniformity={uniformityScore:F2}, score={score:F2}");
+            
+            return new ColumnSequence
+            {
+                Columns = sequence,
+                StartX = sequence.First().StartX,
+                EndX = sequence.Last().EndX,
+                AverageWidth = avgWidth,
+                WidthUniformity = uniformityScore,
+                Centeredness = centeredness,
+                SizeScore = coverageScore,
+                Score = score
+            };
+        }
+
+        /// <summary>
+        /// Creates equal-division columns as fallback.
+        /// </summary>
+        private List<int> CreateEqualDivisionColumns(Rectangle region, int columnCount)
+        {
+            var boundaries = new List<int>();
+            for (int i = 0; i <= columnCount; i++)
+            {
+                boundaries.Add(region.X + i * region.Width / columnCount);
+            }
+            return boundaries;
+        }
+
+        /// <summary>
+        /// Smooths a profile array with specified window size.
+        /// </summary>
+        private double[] SmoothProfile(double[] profile, int windowSize)
+        {
+            var smoothed = new double[profile.Length];
+            for (int i = 0; i < profile.Length; i++)
+            {
+                int start = Math.Max(0, i - windowSize / 2);
+                int end = Math.Min(profile.Length - 1, i + windowSize / 2);
+                double sum = 0;
+                int count = 0;
+                for (int j = start; j <= end; j++)
+                {
+                    sum += profile[j];
+                    count++;
+                }
+                smoothed[i] = sum / count;
+            }
+            return smoothed;
+        }
+
+        /// <summary>
+        /// Splits the input image into vertical columns based on projection profile and returns the column boundaries within a specified region.
+        /// </summary>
+        /// <param name="image">The chess moves image</param>
+        /// <param name="expectedColumns">Expected number of columns (default: 6)</param>
+        /// <param name="searchRegion">Rectangle to search within (null for entire image)</param>
+        /// <returns>List of column boundary indices (pixel positions relative to image)</returns>
+        public List<int> SplitImageIntoColumns(Image<Rgba32> image, int expectedColumns, Rectangle? searchRegion)
+        {
+            // Determine the region to search within
+            Rectangle region = searchRegion ?? new Rectangle(0, 0, image.Width, image.Height);
+            
+            _logger.LogInformation($"Searching for columns within region: X={region.X}, Y={region.Y}, Width={region.Width}, Height={region.Height}");
+            
+            image.Mutate(x => x.Grayscale());
+            int regionWidth = region.Width;
+            int regionHeight = region.Height;
+            double[] columnSums = new double[regionWidth];
+            
+            // Binarize and sum binary values per column within the search region
+            for (int relativeX = 0; relativeX < regionWidth; relativeX++)
+            {
+                int absoluteX = region.X + relativeX;
+                if (absoluteX >= image.Width) break;
+                
+                double sum = 0;
+                for (int relativeY = 0; relativeY < regionHeight; relativeY++)
+                {
+                    int absoluteY = region.Y + relativeY;
+                    if (absoluteY >= image.Height) break;
+                    
+                    var pixel = image[absoluteX, absoluteY];
                     int gray = pixel.R;
                     int binary = gray > 128 ? 1 : 0; // Threshold at 128
                     sum += binary;
                 }
-                columnSums[x] = sum;
+                columnSums[relativeX] = sum;
             }
-            int smoothWindow = Math.Max(3, width / 100);
-            double[] smoothed = new double[width];
-            for (int x = 0; x < width; x++)
+            
+            int smoothWindow = Math.Max(3, regionWidth / 100);
+            double[] smoothed = new double[regionWidth];
+            for (int x = 0; x < regionWidth; x++)
             {
                 int start = Math.Max(0, x - smoothWindow);
-                int end = Math.Min(width - 1, x + smoothWindow);
+                int end = Math.Min(regionWidth - 1, x + smoothWindow);
                 double avg = 0;
                 for (int i = start; i <= end; i++) avg += columnSums[i];
                 smoothed[x] = avg / (end - start + 1);
             }
-            // Detect boundaries as before
+            
+            // Detect boundaries within the region
             List<int> detectedBoundaries = new List<int> { 0 };
             double threshold = 3.0;
-            for (int x = 1; x < width - 1; x++)
+            for (int x = 1; x < regionWidth - 1; x++)
             {
                 double diff = Math.Abs(smoothed[x] - smoothed[x - 1]) + Math.Abs(smoothed[x] - smoothed[x + 1]);
                 bool bothNeighborsAreNegative = (smoothed[x] - smoothed[x - 1] < 0 ) && (smoothed[x] - smoothed[x + 1] < 0);
@@ -597,18 +1214,18 @@ namespace ChessDecoderApi.Services
                     detectedBoundaries.Add(x);
                 }
             }
-            detectedBoundaries.Add(width);
+            detectedBoundaries.Add(regionWidth);
             detectedBoundaries = detectedBoundaries.Distinct().OrderBy(b => b).ToList();
 
-            // Step 1: Create dummy slices (width/expectedColumns)
+            // Step 1: Create dummy slices (regionWidth/expectedColumns)
             List<int> dummyEdges = new List<int>();
             for (int i = 0; i <= expectedColumns; i++)
             {
-                dummyEdges.Add(i * width / expectedColumns);
+                dummyEdges.Add(i * regionWidth / expectedColumns);
             }
 
-            // Step 2: For each dummy edge (except 0 and width), adjust to closest detected boundary if within range
-            int maxAdjust = width / (expectedColumns * 2); // e.g., width/12 for 6 columns
+            // Step 2: For each dummy edge (except 0 and regionWidth), adjust to closest detected boundary if within range
+            int maxAdjust = regionWidth / (expectedColumns * 2);
             List<int> finalEdges = new List<int> { 0 };
             for (int i = 1; i < dummyEdges.Count - 1; i++)
             {
@@ -629,7 +1246,7 @@ namespace ChessDecoderApi.Services
                     finalEdges.Add(dummyEdge);
                 }
             }
-            finalEdges.Add(width);
+            finalEdges.Add(regionWidth);
 
             // Ensure edges are sorted and unique, and at least 1 pixel apart
             finalEdges = finalEdges.Distinct().OrderBy(e => e).ToList();
@@ -640,6 +1257,14 @@ namespace ChessDecoderApi.Services
                     finalEdges.RemoveAt(i);
                 }
             }
+
+            // Convert relative positions back to absolute positions
+            for (int i = 0; i < finalEdges.Count; i++)
+            {
+                finalEdges[i] += region.X;
+            }
+
+            _logger.LogInformation($"Found {finalEdges.Count - 1} column boundaries within the search region");
 
             return finalEdges;
         }
@@ -847,26 +1472,71 @@ namespace ChessDecoderApi.Services
         }
 
         /// <summary>
-        /// Creates an image with table boundaries drawn on it for debugging visualization.
+        /// Creates an image with table and column boundaries drawn on it for debugging visualization.
+        /// Uses automatic chess column detection for improved accuracy.
         /// </summary>
         /// <param name="imagePath">Path to the chess moves image</param>
-        /// <param name="expectedColumns">Expected number of columns (default: 6)</param>
+        /// <param name="expectedColumns">Expected number of columns (default: 6, used as fallback)</param>
         /// <param name="expectedRows">Expected number of rows (default: 8)</param>
-        /// <returns>Byte array of the image with table boundaries drawn</returns>
+        /// <returns>Byte array of the image with table and column boundaries drawn</returns>
         public async Task<byte[]> CreateImageWithBoundariesAsync(string imagePath, int expectedColumns = 6, int expectedRows = 8)
         {
             using var image = Image.Load<Rgba32>(imagePath);
+            
+            // Step 1: Find table boundaries first
             var tableBoundaries = FindTableBoundaries(image);
+            _logger.LogInformation($"Found table boundaries: X={tableBoundaries.X}, Y={tableBoundaries.Y}, Width={tableBoundaries.Width}, Height={tableBoundaries.Height}");
+            
+            // Step 2: Automatically detect chess columns within the table boundaries
+            var columnBoundaries = DetectChessColumnsAutomatically(image, tableBoundaries);
             
             // Clone the image to draw on
             using var imageWithBoundaries = image.Clone();
             
-            // Draw only table boundaries (blue, thicker) for debugging
+            // Draw table boundaries (blue, thicker) for debugging
             DrawTableBoundariesOnImage(imageWithBoundaries, tableBoundaries);
+            
+            // Draw column boundaries (red, thinner) for debugging
+            DrawBoundariesOnImage(imageWithBoundaries, columnBoundaries);
+            
+            _logger.LogInformation($"Drew table boundaries and {columnBoundaries.Count - 1} automatically detected chess column boundaries on image");
             
             // Convert to byte array
             using var ms = new MemoryStream();
             await imageWithBoundaries.SaveAsJpegAsync(ms);
+            return ms.ToArray();
+        }
+
+        /// <summary>
+        /// Crops an image to the specified rectangle boundaries.
+        /// </summary>
+        /// <param name="imagePath">Path to the image to crop</param>
+        /// <param name="x">X coordinate of the crop area</param>
+        /// <param name="y">Y coordinate of the crop area</param>
+        /// <param name="width">Width of the crop area</param>
+        /// <param name="height">Height of the crop area</param>
+        /// <returns>Byte array of the cropped image</returns>
+        public async Task<byte[]> CropImageAsync(string imagePath, int x, int y, int width, int height)
+        {
+            using var image = Image.Load<Rgba32>(imagePath);
+            
+            // Validate crop boundaries
+            x = Math.Max(0, Math.Min(x, image.Width - 1));
+            y = Math.Max(0, Math.Min(y, image.Height - 1));
+            width = Math.Max(1, Math.Min(width, image.Width - x));
+            height = Math.Max(1, Math.Min(height, image.Height - y));
+            
+            _logger.LogInformation($"Cropping image from ({x}, {y}) with size {width}x{height}");
+            
+            // Create crop rectangle
+            var cropRectangle = new Rectangle(x, y, width, height);
+            
+            // Crop the image
+            using var croppedImage = image.Clone(ctx => ctx.Crop(cropRectangle));
+            
+            // Convert to byte array
+            using var ms = new MemoryStream();
+            await croppedImage.SaveAsJpegAsync(ms);
             return ms.ToArray();
         }
 
@@ -2148,5 +2818,32 @@ namespace ChessDecoderApi.Services
                 _logger.LogWarning($"Only found {corners.Count} corners, not drawing corner visualization");
             }
         }
+    }
+
+    /// <summary>
+    /// Information about a detected column.
+    /// </summary>
+    public class ColumnInfo
+    {
+        public int Index { get; set; }
+        public int StartX { get; set; }
+        public int EndX { get; set; }
+        public int Width { get; set; }
+        public double RelativeWidth { get; set; }
+    }
+
+    /// <summary>
+    /// Information about a sequence of columns being analyzed for chess moves.
+    /// </summary>
+    public class ColumnSequence
+    {
+        public List<ColumnInfo> Columns { get; set; } = new();
+        public int StartX { get; set; }
+        public int EndX { get; set; }
+        public double AverageWidth { get; set; }
+        public double WidthUniformity { get; set; }
+        public double Centeredness { get; set; }
+        public double SizeScore { get; set; }
+        public double Score { get; set; }
     }
 } 

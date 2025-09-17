@@ -711,7 +711,7 @@ namespace ChessDecoderApi.Controllers
             [FromForm] int expectedColumns = 6,
             [FromForm] int expectedRows = 0)
         {
-            _logger.LogInformation("Processing debug split columns request with expected columns: {ExpectedColumns}, expected rows: {ExpectedRows} (0 = auto-detect)", expectedColumns, expectedRows);
+            _logger.LogInformation("Processing debug split columns request with automatic chess column detection, expected rows: {ExpectedRows} (0 = auto-detect)", expectedRows);
 
             if (image == null || image.Length == 0)
             {
@@ -767,13 +767,17 @@ namespace ChessDecoderApi.Controllers
                         await image.CopyToAsync(stream);
                     }
 
-                    // Load image and find column and row boundaries
+                    // Load image and find boundaries in the correct order
                     using var loadedImage = Image.Load<Rgba32>(tempFilePath);
-                    var columnBoundaries = _imageProcessingService.SplitImageIntoColumns(loadedImage, expectedColumns);
-                    var rowBoundaries = _imageProcessingService.SplitImageIntoRows(loadedImage, expectedRows);
                     
-                    // Find table boundaries
+                    // Step 1: Find table boundaries first
                     var tableBoundaries = _imageProcessingService.FindTableBoundaries(loadedImage);
+                    
+                    // Step 2: Automatically detect chess columns within the table area
+                    var columnBoundaries = _imageProcessingService.DetectChessColumnsAutomatically(loadedImage, tableBoundaries);
+                    
+                    // Step 3: Find row boundaries (still using full image for now)
+                    var rowBoundaries = _imageProcessingService.SplitImageIntoRows(loadedImage, expectedRows);
 
                     // Calculate column widths for frontend visualization
                     var columnWidths = new List<int>();
@@ -998,6 +1002,98 @@ namespace ChessDecoderApi.Controllers
                 { 
                     Status = StatusCodes.Status500InternalServerError, 
                     Message = "Failed to process table boundaries: " + ex.Message 
+                });
+            }
+        }
+
+        [HttpPost("debug/crop-image")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> DebugCropImage(
+            IFormFile? image,
+            [FromForm] int x,
+            [FromForm] int y,
+            [FromForm] int width,
+            [FromForm] int height)
+        {
+            _logger.LogInformation("Processing debug crop image request with coordinates: ({X}, {Y}) and size: {Width}x{Height}", x, y, width, height);
+
+            if (image == null || image.Length == 0)
+            {
+                _logger.LogWarning("No image file provided");
+                return BadRequest(new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status400BadRequest, 
+                    Message = "No image file provided" 
+                });
+            }
+
+            // Validate file is an image
+            if (!image.ContentType.StartsWith("image/"))
+            {
+                _logger.LogWarning("Uploaded file is not an image");
+                return BadRequest(new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status400BadRequest, 
+                    Message = "Uploaded file must be an image" 
+                });
+            }
+
+            // Validate crop parameters
+            if (width <= 0 || height <= 0)
+            {
+                _logger.LogWarning("Invalid crop dimensions: {Width}x{Height}", width, height);
+                return BadRequest(new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status400BadRequest, 
+                    Message = "Width and height must be positive integers" 
+                });
+            }
+
+            if (x < 0 || y < 0)
+            {
+                _logger.LogWarning("Invalid crop coordinates: ({X}, {Y})", x, y);
+                return BadRequest(new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status400BadRequest, 
+                    Message = "X and Y coordinates cannot be negative" 
+                });
+            }
+
+            try
+            {
+                // Save to temp file
+                var tempFilePath = Path.GetTempFileName();
+                try
+                {
+                    using (var stream = new FileStream(tempFilePath, FileMode.Create))
+                    {
+                        await image.CopyToAsync(stream);
+                    }
+
+                    // Crop the image
+                    var croppedImageBytes = await _imageProcessingService.CropImageAsync(tempFilePath, x, y, width, height);
+
+                    // Return the cropped image as JPEG
+                    return File(croppedImageBytes, "image/jpeg", $"cropped_{image.FileName}");
+                }
+                finally
+                {
+                    // Clean up temp file
+                    if (System.IO.File.Exists(tempFilePath))
+                    {
+                        System.IO.File.Delete(tempFilePath);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing debug crop image");
+                return StatusCode(StatusCodes.Status500InternalServerError, new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status500InternalServerError, 
+                    Message = "Failed to crop image: " + ex.Message 
                 });
             }
         }
