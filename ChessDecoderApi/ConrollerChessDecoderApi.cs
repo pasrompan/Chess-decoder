@@ -5,6 +5,9 @@ using ChessDecoderApi.Exceptions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Text;
+using System.Linq;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
 
 namespace ChessDecoderApi.Controllers
 {
@@ -120,9 +123,10 @@ namespace ChessDecoderApi.Controllers
         public async Task<IActionResult> UploadImageV2(
             IFormFile? image, 
             [FromForm] string language = "English",
-            [FromForm] string userId = "")
+            [FromForm] string userId = "",
+            [FromForm] bool autoCrop = false)
         {
-            _logger.LogInformation("Processing image upload request (v2) for user: {UserId}", userId);
+            _logger.LogInformation("Processing image upload request (v2) for user: {UserId} with autoCrop: {AutoCrop}", userId, autoCrop);
 
             if (image == null || image.Length == 0)
             {
@@ -254,9 +258,51 @@ namespace ChessDecoderApi.Controllers
 
                 // Process the image - use Cloud Storage URL if available, otherwise local path
                 var imagePathForProcessing = isStoredInCloud ? cloudStorageUrl! : filePath;
+                string? processedImageBase64 = null;
+
+                // If autoCrop is enabled, first find table boundaries and crop
+                if (autoCrop && !isStoredInCloud) // Only crop local files for now
+                {
+                    _logger.LogInformation("Auto-crop enabled, finding table boundaries and cropping image");
+                    
+                    // Find table boundaries
+                    using var originalImage = SixLabors.ImageSharp.Image.Load<SixLabors.ImageSharp.PixelFormats.Rgba32>(filePath);
+                    var tableBoundaries = _imageProcessingService.FindTableBoundaries(originalImage);
+                    
+                    _logger.LogInformation("Table boundaries found: {X}, {Y}, {Width}, {Height}", 
+                        tableBoundaries.X, tableBoundaries.Y, tableBoundaries.Width, tableBoundaries.Height);
+
+                    // Crop the image to table boundaries
+                    var croppedImageBytes = await _imageProcessingService.CropImageAsync(
+                        filePath, 
+                        tableBoundaries.X, 
+                        tableBoundaries.Y, 
+                        tableBoundaries.Width, 
+                        tableBoundaries.Height);
+
+                    // Save cropped image to a new temp file
+                    var croppedFileName = $"{Guid.NewGuid()}_cropped{Path.GetExtension(image.FileName)}";
+                    var croppedFilePath = Path.Combine(Path.GetTempPath(), croppedFileName);
+                    await System.IO.File.WriteAllBytesAsync(croppedFilePath, croppedImageBytes);
+                    
+                    // Use cropped image for processing
+                    imagePathForProcessing = croppedFilePath;
+                }
+
                 var startTime = DateTime.UtcNow;
                 var result = await _imageProcessingService.ProcessImageAsync(imagePathForProcessing, language);
                 var processingTime = DateTime.UtcNow - startTime;
+
+                // Generate image with column boundaries as red indicators
+                try
+                {
+                    var imageWithBoundaries = await _imageProcessingService.CreateImageWithBoundariesAsync(imagePathForProcessing, 6, 0);
+                    processedImageBase64 = Convert.ToBase64String(imageWithBoundaries);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to generate image with boundaries, continuing without visual feedback");
+                }
 
                 // Reuse the database context from earlier
 
@@ -323,6 +369,20 @@ namespace ChessDecoderApi.Controllers
                         userId, user.Credits);
                 }
 
+                // Clean up temp cropped file if created
+                if (autoCrop && !isStoredInCloud && imagePathForProcessing != filePath && System.IO.File.Exists(imagePathForProcessing))
+                {
+                    try
+                    {
+                        System.IO.File.Delete(imagePathForProcessing);
+                        _logger.LogInformation("Cleaned up temporary cropped file: {FilePath}", imagePathForProcessing);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to clean up temporary cropped file: {FilePath}", imagePathForProcessing);
+                    }
+                }
+
                 // Save all changes to database (including credit deduction)
                 await dbContext.SaveChangesAsync();
 
@@ -336,7 +396,8 @@ namespace ChessDecoderApi.Controllers
                     pgnContent = result.PgnContent,
                     validation = result.Validation,
                     processingTime = processingTime.TotalMilliseconds,
-                    creditsRemaining = await creditService.GetUserCreditsAsync(userId)
+                    creditsRemaining = await creditService.GetUserCreditsAsync(userId),
+                    processedImageUrl = processedImageBase64 != null ? $"data:image/png;base64,{processedImageBase64}" : null
                 });
             }
             catch (UserNotFoundException ex)
@@ -541,76 +602,121 @@ namespace ChessDecoderApi.Controllers
 
         [HttpPost("mockupload")]
         [ProducesResponseType(StatusCodes.Status200OK)]
-        public IActionResult MockUpload()
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> MockUpload(
+            IFormFile? image, 
+            [FromForm] string language = "English",
+            [FromForm] string userId = "",
+            [FromForm] bool autoCrop = false)
         {
-            _logger.LogInformation("Processing mock upload request");
+            _logger.LogInformation("Processing mock upload request with autoCrop: {AutoCrop}", autoCrop);
 
-            var mockResponse = new
+            if (image == null || image.Length == 0)
             {
-                pgnContent = "[Date \"2025.07.29\"]\n[White \"??\"]\n[Black \"??\"]\n[Result \"*\"]\n\n1. e4 c5 \n 2. Nf3 Nc6 \n 3. d4 cxd4 \n 4. Nxd4 Nf6 \n 5. Nc3 e5 \n 6. Nf3 Be7 \n 7. Bc4 O-O \n 8. O-O a6 \n 9. Bd2 b5 \n 10. Bb3 Bb7 \n 11. Re1 d6 \n 12. Be3 Na5 \n 13. Bd5 Nxd5 \n 14. Nxd5 Nc4 \n 15. Nxe7+ Qxe7 \n 16. Bc1 Rac8 \n 17. b3 Nb6 \n 18. Be3 Nd7 \n 19. Qd3 f5 \n 20. Ng5 f4 \n 21. Nf3 fxe3 \n 22. Rxe3 Nc5 \n 23. Qe2 Rc6 \n 24. Rd1 Rfc8 \n 25. Qd2 Ne6 \n 26. c3 Qc7 \n 27. Rd3 Nf4 \n 28. Rxd6 Rxd6 \n 29. Qxd6 Qxd6 \n 30. Rxd6 Ne2+ \n 31. Kf1 Nxc3 \n 32. Rd7 Bxe4 \n 33. Nxe5 Re8 \n 34. Nf3 Bxf3 \n 35. Qxf3 Nxa2 \n 36. Kg2 a5 \n 37. Ra7 b4 \n 38. Rxa5 Nc1 \n 39. Rb5 Nd3 \n 40. Rd5 Nf4+ \n 41. Kg3 Nxd5 \n 42. f4 Rf8 \n 43. f3 Rxf1 \n 44. h3 Rd4 \n 45. f4 Rd3+ \n 46. Kg4 Rxb3 \n 47. f5 Rc3 \n 48. f6 Nxf6+ \n 49. Kg5 b3 \n 50. h4 b2 \n 51. Kf4 b1=Q \n 52. Ke5 Qe4+ \n 53. Kd6 Rc6# \n *\n",
-                validation = new
-                {
-                    gameId = "8c433eef-b0af-4a24-aaa4-99418ba167a9",
-                    moves = new object[]
-                    {
-                        new { moveNumber = 1, whiteMove = new { notation = "e4", normalizedNotation = "e4", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "c5", normalizedNotation = "c5", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 2, whiteMove = new { notation = "Nf3", normalizedNotation = "Nf3", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "Nc6", normalizedNotation = "Nc6", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 3, whiteMove = new { notation = "d4", normalizedNotation = "d4", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "cxd4", normalizedNotation = "cxd4", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 4, whiteMove = new { notation = "Nxd4", normalizedNotation = "Nxd4", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "Nf6", normalizedNotation = "Nf6", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 5, whiteMove = new { notation = "Nc3", normalizedNotation = "Nc3", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "e5", normalizedNotation = "e5", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 6, whiteMove = new { notation = "Nf3", normalizedNotation = "Nf3", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "Be7", normalizedNotation = "Be7", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 7, whiteMove = new { notation = "Bc4", normalizedNotation = "Bc4", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "O-O", normalizedNotation = "O-O", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 8, whiteMove = new { notation = "O-O", normalizedNotation = "O-O", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "a6", normalizedNotation = "a6", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 9, whiteMove = new { notation = "Bd2", normalizedNotation = "Bd2", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "b5", normalizedNotation = "b5", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 10, whiteMove = new { notation = "Bb3", normalizedNotation = "Bb3", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "Bb7", normalizedNotation = "Bb7", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 11, whiteMove = new { notation = "Re1", normalizedNotation = "Re1", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "d6", normalizedNotation = "d6", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 12, whiteMove = new { notation = "Be3", normalizedNotation = "Be3", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "Na5", normalizedNotation = "Na5", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 13, whiteMove = new { notation = "Bd5", normalizedNotation = "Bd5", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "Nxd5", normalizedNotation = "Nxd5", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 14, whiteMove = new { notation = "Nxd5", normalizedNotation = "Nxd5", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "Nc4", normalizedNotation = "Nc4", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 15, whiteMove = new { notation = "Nxe7+", normalizedNotation = "Nxe7+", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "Qxe7", normalizedNotation = "Qxe7", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 16, whiteMove = new { notation = "Bc1", normalizedNotation = "Bc1", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "Rac8", normalizedNotation = "Rac8", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 17, whiteMove = new { notation = "b3", normalizedNotation = "b3", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "Nb6", normalizedNotation = "Nb6", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 18, whiteMove = new { notation = "Be3", normalizedNotation = "Be3", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "Nd7", normalizedNotation = "Nd7", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 19, whiteMove = new { notation = "Qd3", normalizedNotation = "Qd3", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "f5", normalizedNotation = "f5", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 20, whiteMove = new { notation = "Ng5", normalizedNotation = "Ng5", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "f4", normalizedNotation = "f4", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 21, whiteMove = new { notation = "Nf3", normalizedNotation = "Nf3", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "fxe3", normalizedNotation = "fxe3", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 22, whiteMove = new { notation = "Rxe3", normalizedNotation = "Rxe3", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "Nc5", normalizedNotation = "Nc5", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 23, whiteMove = new { notation = "Qe2", normalizedNotation = "Qe2", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "Rc6", normalizedNotation = "Rc6", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 24, whiteMove = new { notation = "Rd1", normalizedNotation = "Rd1", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "Rfc8", normalizedNotation = "Rfc8", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 25, whiteMove = new { notation = "Qd2", normalizedNotation = "Qd2", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "Ne6", normalizedNotation = "Ne6", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 26, whiteMove = new { notation = "c3", normalizedNotation = "c3", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "Qc7", normalizedNotation = "Qc7", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 27, whiteMove = new { notation = "Rd3", normalizedNotation = "Rd3", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "Nf4", normalizedNotation = "Nf4", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 28, whiteMove = new { notation = "Rxd6", normalizedNotation = "Rxd6", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "Rxd6", normalizedNotation = "Rxd6", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 29, whiteMove = new { notation = "Qxd6", normalizedNotation = "Qxd6", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "Qxd6", normalizedNotation = "Qxd6", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 30, whiteMove = new { notation = "Rxd6", normalizedNotation = "Rxd6", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "Ne2+", normalizedNotation = "Ne2+", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 31, whiteMove = new { notation = "Kf1", normalizedNotation = "Kf1", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "Nxc3", normalizedNotation = "Nxc3", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 32, whiteMove = new { notation = "Rd7", normalizedNotation = "Rd7", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "Bxe4", normalizedNotation = "Bxe4", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 33, whiteMove = new { notation = "Nxe5", normalizedNotation = "Nxe5", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "Re8", normalizedNotation = "Re8", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 34, whiteMove = new { notation = "Nf3", normalizedNotation = "Nf3", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "Bxf3", normalizedNotation = "Bxf3", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 35, whiteMove = new { notation = "Qxf3", normalizedNotation = "Qxf3", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "Nxa2", normalizedNotation = "Nxa2", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 36, whiteMove = new { notation = "Kg2", normalizedNotation = "Kg2", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "a5", normalizedNotation = "a5", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 37, whiteMove = new { notation = "Ra7", normalizedNotation = "Ra7", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "b4", normalizedNotation = "b4", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 38, whiteMove = new { notation = "Rxa5", normalizedNotation = "Rxa5", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "Nc1", normalizedNotation = "Nc1", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 39, whiteMove = new { notation = "Rb5", normalizedNotation = "Rb5", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "Nd3", normalizedNotation = "Nd3", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 40, whiteMove = new { notation = "Rd5", normalizedNotation = "Rd5", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "Nf4+", normalizedNotation = "Nf4+", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 41, whiteMove = new { notation = "Kg3", normalizedNotation = "Kg3", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "Nxd5", normalizedNotation = "Nxd5", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 42, whiteMove = new { notation = "f4", normalizedNotation = "f4", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "Rf8", normalizedNotation = "Rf8", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 43, whiteMove = new { notation = "f3", normalizedNotation = "f3", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "Rxf1", normalizedNotation = "Rxf1", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 44, whiteMove = new { notation = "h3", normalizedNotation = "h3", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "Rd4", normalizedNotation = "Rd4", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 45, whiteMove = new { notation = "f4", normalizedNotation = "f4", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "Rd3+", normalizedNotation = "Rd3+", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 46, whiteMove = new { notation = "Kg4", normalizedNotation = "Kg4", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "Rxb3", normalizedNotation = "Rxb3", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 47, whiteMove = new { notation = "f5", normalizedNotation = "f5", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "Rc3", normalizedNotation = "Rc3", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 48, whiteMove = new { notation = "f6", normalizedNotation = "f6", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "Nxf6+", normalizedNotation = "Nxf6+", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 49, whiteMove = new { notation = "Kg5", normalizedNotation = "Kg5", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "b3", normalizedNotation = "b3", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 50, whiteMove = new { notation = "h4", normalizedNotation = "h4", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "b2", normalizedNotation = "b2", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 51, whiteMove = new { notation = "Kf4", normalizedNotation = "Gf4", validationStatus = "invalid", validationText = "" }, blackMove = new { notation = "b1=Q", normalizedNotation = "b1=Q", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 52, whiteMove = new { notation = "Ke5", normalizedNotation = "Ke5", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "Qe4+", normalizedNotation = "Qe4+", validationStatus = "valid", validationText = "" } },
-                        new { moveNumber = 53, whiteMove = new { notation = "Kd6", normalizedNotation = "Kd6", validationStatus = "valid", validationText = "" }, blackMove = new { notation = "Rc6#", normalizedNotation = "Rc6#", validationStatus = "valid", validationText = "" } }
-                    }
-                }
-            };
+                _logger.LogWarning("No image file provided");
+                return BadRequest(new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status400BadRequest, 
+                    Message = "No image file provided" 
+                });
+            }
 
-            return Ok(mockResponse);
+            // Validate file is an image
+            if (!image.ContentType.StartsWith("image/"))
+            {
+                _logger.LogWarning("Uploaded file is not an image");
+                return BadRequest(new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status400BadRequest, 
+                    Message = "Uploaded file must be an image" 
+                });
+            }
+
+            try
+            {
+                // Create temp file path
+                var fileName = $"{Guid.NewGuid()}{Path.GetExtension(image.FileName)}";
+                var tempFilePath = Path.Combine(Path.GetTempPath(), fileName);
+
+                // Save uploaded file to temp location
+                using (var stream = new FileStream(tempFilePath, FileMode.Create))
+                {
+                    await image.CopyToAsync(stream);
+                }
+
+                string imagePathForProcessing = tempFilePath;
+                string? processedImageBase64 = null;
+
+                // If autoCrop is enabled, first find table boundaries and crop
+                if (autoCrop)
+                {
+                    _logger.LogInformation("Auto-crop enabled, finding table boundaries and cropping image");
+                    
+                    // Find table boundaries
+                    using var originalImage = SixLabors.ImageSharp.Image.Load<SixLabors.ImageSharp.PixelFormats.Rgba32>(tempFilePath);
+                    var tableBoundaries = _imageProcessingService.FindTableBoundaries(originalImage);
+                    
+                    _logger.LogInformation("Table boundaries found: {X}, {Y}, {Width}, {Height}", 
+                        tableBoundaries.X, tableBoundaries.Y, tableBoundaries.Width, tableBoundaries.Height);
+
+                    // Crop the image to table boundaries
+                    var croppedImageBytes = await _imageProcessingService.CropImageAsync(
+                        tempFilePath, 
+                        tableBoundaries.X, 
+                        tableBoundaries.Y, 
+                        tableBoundaries.Width, 
+                        tableBoundaries.Height);
+
+                    // Save cropped image to a new temp file
+                    var croppedFileName = $"{Guid.NewGuid()}_cropped{Path.GetExtension(image.FileName)}";
+                    var croppedFilePath = Path.Combine(Path.GetTempPath(), croppedFileName);
+                    await System.IO.File.WriteAllBytesAsync(croppedFilePath, croppedImageBytes);
+                    
+                    // Use cropped image for processing
+                    imagePathForProcessing = croppedFilePath;
+                }
+
+                // Process the image (cropped or original)
+                var result = await _imageProcessingService.ProcessImageAsync(imagePathForProcessing, language);
+
+                // Generate image with column boundaries as red indicators
+                var imageWithBoundaries = await _imageProcessingService.CreateImageWithBoundariesAsync(imagePathForProcessing, 6, 0);
+                processedImageBase64 = Convert.ToBase64String(imageWithBoundaries);
+
+                // Clean up temp files
+                try
+                {
+                    if (System.IO.File.Exists(tempFilePath)) System.IO.File.Delete(tempFilePath);
+                    if (autoCrop && imagePathForProcessing != tempFilePath && System.IO.File.Exists(imagePathForProcessing)) 
+                        System.IO.File.Delete(imagePathForProcessing);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to clean up temp files");
+                }
+
+                var response = new
+                {
+                    pgnContent = result.PgnContent,
+                    validation = result.Validation,
+                    gameId = Guid.NewGuid().ToString(),
+                    processingTime = 0,
+                    creditsRemaining = 100,
+                    processedImageUrl = $"data:image/png;base64,{processedImageBase64}"
+                };
+
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing image upload with autoCrop: {AutoCrop}", autoCrop);
+                return StatusCode(500, new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status500InternalServerError, 
+                    Message = "Internal server error: " + ex.Message 
+                });
+            }
         }
 
         [HttpPost("debug/upload")]
@@ -696,6 +802,562 @@ namespace ChessDecoderApi.Controllers
                     Status = StatusCodes.Status500InternalServerError, 
                     Message = "Failed to process debug image" 
                 });
+            }
+        }
+
+        [HttpPost("debug/split-columns")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> DebugSplitColumns(
+            IFormFile? image, 
+            [FromForm] int expectedColumns = 6,
+            [FromForm] int expectedRows = 0)
+        {
+            _logger.LogInformation("Processing debug split columns request with automatic chess column detection, expected rows: {ExpectedRows} (0 = auto-detect)", expectedRows);
+
+            if (image == null || image.Length == 0)
+            {
+                _logger.LogWarning("No image file provided");
+                return BadRequest(new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status400BadRequest, 
+                    Message = "No image file provided" 
+                });
+            }
+
+            // Validate file is an image
+            if (!image.ContentType.StartsWith("image/"))
+            {
+                _logger.LogWarning("Uploaded file is not an image");
+                return BadRequest(new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status400BadRequest, 
+                    Message = "Uploaded file must be an image" 
+                });
+            }
+
+            // Validate expected columns parameter
+            if (expectedColumns < 1 || expectedColumns > 20)
+            {
+                _logger.LogWarning("Invalid expected columns value: {ExpectedColumns}", expectedColumns);
+                return BadRequest(new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status400BadRequest, 
+                    Message = "Expected columns must be between 1 and 20" 
+                });
+            }
+
+            // Validate expected rows parameter (0 means auto-detection)
+            if (expectedRows < 0 || expectedRows > 20)
+            {
+                _logger.LogWarning("Invalid expected rows value: {ExpectedRows}", expectedRows);
+                return BadRequest(new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status400BadRequest, 
+                    Message = "Expected rows must be between 0 (auto-detect) and 20" 
+                });
+            }
+
+            try
+            {
+                // Save to temp file
+                var tempFilePath = Path.GetTempFileName();
+                try
+                {
+                    using (var stream = new FileStream(tempFilePath, FileMode.Create))
+                    {
+                        await image.CopyToAsync(stream);
+                    }
+
+                    // Load image and find boundaries in the correct order
+                    using var loadedImage = Image.Load<Rgba32>(tempFilePath);
+                    
+                    // Step 1: Find table boundaries first
+                    var tableBoundaries = _imageProcessingService.FindTableBoundaries(loadedImage);
+                    
+                    // Step 2: Automatically detect chess columns within the table area
+                    var columnBoundaries = _imageProcessingService.DetectChessColumnsAutomatically(loadedImage, tableBoundaries);
+                    
+                    // Step 3: Find row boundaries (still using full image for now)
+                    var rowBoundaries = _imageProcessingService.SplitImageIntoRows(loadedImage, expectedRows);
+
+                    // Calculate column widths for frontend visualization
+                    var columnWidths = new List<int>();
+                    for (int i = 0; i < columnBoundaries.Count - 1; i++)
+                    {
+                        columnWidths.Add(columnBoundaries[i + 1] - columnBoundaries[i]);
+                    }
+
+                    // Calculate row heights for frontend visualization
+                    var rowHeights = new List<int>();
+                    for (int i = 0; i < rowBoundaries.Count - 1; i++)
+                    {
+                        rowHeights.Add(rowBoundaries[i + 1] - rowBoundaries[i]);
+                    }
+
+                    // Return the boundaries and related data for frontend visualization
+                    return Ok(new 
+                    { 
+                        imageFileName = image.FileName,
+                        imageWidth = columnBoundaries.Last(), // Total width is the last boundary
+                        imageHeight = loadedImage.Height,
+                        expectedColumns = expectedColumns,
+                        expectedRows = expectedRows,
+                        actualColumns = columnBoundaries.Count - 1,
+                        actualRows = rowBoundaries.Count - 1,
+                        columnBoundaries = columnBoundaries,
+                        rowBoundaries = rowBoundaries,
+                        columnWidths = columnWidths,
+                        rowHeights = rowHeights,
+                        columnData = columnBoundaries.Take(columnBoundaries.Count - 1).Select((start, index) => new
+                        {
+                            columnIndex = index,
+                            startPosition = start,
+                            endPosition = columnBoundaries[index + 1],
+                            width = columnBoundaries[index + 1] - start
+                        }).ToArray(),
+                        rowData = rowBoundaries.Take(rowBoundaries.Count - 1).Select((start, index) => new
+                        {
+                            rowIndex = index,
+                            startPosition = start,
+                            endPosition = rowBoundaries[index + 1],
+                            height = rowBoundaries[index + 1] - start
+                        }).ToArray(),
+                        tableBoundaries = new
+                        {
+                            x = tableBoundaries.X,
+                            y = tableBoundaries.Y,
+                            width = tableBoundaries.Width,
+                            height = tableBoundaries.Height
+                        }
+                    });
+                }
+                finally
+                {
+                    // Clean up temp file
+                    if (System.IO.File.Exists(tempFilePath))
+                    {
+                        System.IO.File.Delete(tempFilePath);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing debug split columns");
+                return StatusCode(StatusCodes.Status500InternalServerError, new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status500InternalServerError, 
+                    Message = "Failed to process image column splitting: " + ex.Message 
+                });
+            }
+        }
+
+        [HttpPost("debug/image-with-boundaries")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> DebugImageWithBoundaries(
+            IFormFile? image, 
+            [FromForm] int expectedColumns = 6,
+            [FromForm] int expectedRows = 0)
+        {
+            _logger.LogInformation("Processing debug image with boundaries request with expected columns: {ExpectedColumns}, expected rows: {ExpectedRows} (0 = auto-detect)", expectedColumns, expectedRows);
+
+            if (image == null || image.Length == 0)
+            {
+                _logger.LogWarning("No image file provided");
+                return BadRequest(new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status400BadRequest, 
+                    Message = "No image file provided" 
+                });
+            }
+
+            // Validate file is an image
+            if (!image.ContentType.StartsWith("image/"))
+            {
+                _logger.LogWarning("Uploaded file is not an image");
+                return BadRequest(new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status400BadRequest, 
+                    Message = "Uploaded file must be an image" 
+                });
+            }
+
+            // Validate expected columns parameter
+            if (expectedColumns < 1 || expectedColumns > 20)
+            {
+                _logger.LogWarning("Invalid expected columns value: {ExpectedColumns}", expectedColumns);
+                return BadRequest(new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status400BadRequest, 
+                    Message = "Expected columns must be between 1 and 20" 
+                });
+            }
+
+            try
+            {
+                // Save to temp file
+                var tempFilePath = Path.GetTempFileName();
+                try
+                {
+                    using (var stream = new FileStream(tempFilePath, FileMode.Create))
+                    {
+                        await image.CopyToAsync(stream);
+                    }
+
+                    // Create image with boundaries drawn
+                    var imageWithBoundaries = await _imageProcessingService.CreateImageWithBoundariesAsync(tempFilePath, expectedColumns, expectedRows);
+
+                    // Return the image with boundaries as JPEG
+                    return File(imageWithBoundaries, "image/jpeg", $"boundaries_{image.FileName}");
+                }
+                finally
+                {
+                    // Clean up temp file
+                    if (System.IO.File.Exists(tempFilePath))
+                    {
+                        System.IO.File.Delete(tempFilePath);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing debug image with boundaries");
+                return StatusCode(StatusCodes.Status500InternalServerError, new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status500InternalServerError, 
+                    Message = "Failed to process image with boundaries: " + ex.Message 
+                });
+            }
+        }
+
+        [HttpPost("debug/table-boundaries")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> DebugTableBoundaries(IFormFile? image)
+        {
+            _logger.LogInformation("Processing debug table boundaries request");
+
+            if (image == null || image.Length == 0)
+            {
+                _logger.LogWarning("No image file provided");
+                return BadRequest(new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status400BadRequest, 
+                    Message = "No image file provided" 
+                });
+            }
+
+            // Validate file is an image
+            if (!image.ContentType.StartsWith("image/"))
+            {
+                _logger.LogWarning("Uploaded file is not an image");
+                return BadRequest(new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status400BadRequest, 
+                    Message = "Uploaded file must be an image" 
+                });
+            }
+
+            try
+            {
+                // Save to temp file
+                var tempFilePath = Path.GetTempFileName();
+                try
+                {
+                    using (var stream = new FileStream(tempFilePath, FileMode.Create))
+                    {
+                        await image.CopyToAsync(stream);
+                    }
+
+                    // Load image and find table boundaries
+                    using var loadedImage = Image.Load<Rgba32>(tempFilePath);
+                    var tableBoundaries = _imageProcessingService.FindTableBoundaries(loadedImage);
+                    
+                    // Create image with only table boundaries
+                    using var imageWithTableBoundaries = loadedImage.Clone();
+                    DrawTableBoundariesOnImage(imageWithTableBoundaries, tableBoundaries);
+                    
+                    // Convert to byte array
+                    using var ms = new MemoryStream();
+                    await imageWithTableBoundaries.SaveAsJpegAsync(ms);
+                    var imageBytes = ms.ToArray();
+
+                    // Return the image with table boundaries as JPEG
+                    return File(imageBytes, "image/jpeg", $"table_boundaries_{image.FileName}");
+                }
+                finally
+                {
+                    // Clean up temp file
+                    if (System.IO.File.Exists(tempFilePath))
+                    {
+                        System.IO.File.Delete(tempFilePath);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing debug table boundaries");
+                return StatusCode(StatusCodes.Status500InternalServerError, new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status500InternalServerError, 
+                    Message = "Failed to process table boundaries: " + ex.Message 
+                });
+            }
+        }
+
+        [HttpPost("debug/crop-image")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> DebugCropImage(
+            IFormFile? image,
+            [FromForm] int x,
+            [FromForm] int y,
+            [FromForm] int width,
+            [FromForm] int height)
+        {
+            _logger.LogInformation("Processing debug crop image request with coordinates: ({X}, {Y}) and size: {Width}x{Height}", x, y, width, height);
+
+            if (image == null || image.Length == 0)
+            {
+                _logger.LogWarning("No image file provided");
+                return BadRequest(new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status400BadRequest, 
+                    Message = "No image file provided" 
+                });
+            }
+
+            // Validate file is an image
+            if (!image.ContentType.StartsWith("image/"))
+            {
+                _logger.LogWarning("Uploaded file is not an image");
+                return BadRequest(new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status400BadRequest, 
+                    Message = "Uploaded file must be an image" 
+                });
+            }
+
+            // Validate crop parameters
+            if (width <= 0 || height <= 0)
+            {
+                _logger.LogWarning("Invalid crop dimensions: {Width}x{Height}", width, height);
+                return BadRequest(new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status400BadRequest, 
+                    Message = "Width and height must be positive integers" 
+                });
+            }
+
+            if (x < 0 || y < 0)
+            {
+                _logger.LogWarning("Invalid crop coordinates: ({X}, {Y})", x, y);
+                return BadRequest(new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status400BadRequest, 
+                    Message = "X and Y coordinates cannot be negative" 
+                });
+            }
+
+            try
+            {
+                // Save to temp file
+                var tempFilePath = Path.GetTempFileName();
+                try
+                {
+                    using (var stream = new FileStream(tempFilePath, FileMode.Create))
+                    {
+                        await image.CopyToAsync(stream);
+                    }
+
+                    // Crop the image
+                    var croppedImageBytes = await _imageProcessingService.CropImageAsync(tempFilePath, x, y, width, height);
+
+                    // Return the cropped image as JPEG
+                    return File(croppedImageBytes, "image/jpeg", $"cropped_{image.FileName}");
+                }
+                finally
+                {
+                    // Clean up temp file
+                    if (System.IO.File.Exists(tempFilePath))
+                    {
+                        System.IO.File.Delete(tempFilePath);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing debug crop image");
+                return StatusCode(StatusCodes.Status500InternalServerError, new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status500InternalServerError, 
+                    Message = "Failed to crop image: " + ex.Message 
+                });
+            }
+        }
+
+        [HttpPost("debug/table-analysis")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> DebugTableAnalysis(IFormFile? image)
+        {
+            _logger.LogInformation("Processing debug table analysis request");
+
+            if (image == null || image.Length == 0)
+            {
+                _logger.LogWarning("No image file provided");
+                return BadRequest(new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status400BadRequest, 
+                    Message = "No image file provided" 
+                });
+            }
+
+            // Validate file is an image
+            if (!image.ContentType.StartsWith("image/"))
+            {
+                _logger.LogWarning("Uploaded file is not an image");
+                return BadRequest(new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status400BadRequest, 
+                    Message = "Uploaded file must be an image" 
+                });
+            }
+
+            try
+            {
+                // Save to temp file
+                var tempFilePath = Path.GetTempFileName();
+                try
+                {
+                    using (var stream = new FileStream(tempFilePath, FileMode.Create))
+                    {
+                        await image.CopyToAsync(stream);
+                    }
+
+                    // Load image and analyze
+                    using var loadedImage = Image.Load<Rgba32>(tempFilePath);
+                    var tableBoundaries = _imageProcessingService.FindTableBoundaries(loadedImage);
+                    
+                    // Calculate some statistics
+                    var imageWidth = loadedImage.Width;
+                    var imageHeight = loadedImage.Height;
+                    var tableArea = tableBoundaries.Width * tableBoundaries.Height;
+                    var imageArea = imageWidth * imageHeight;
+                    var tablePercentage = (double)tableArea / imageArea * 100;
+                    
+                    // Return detailed analysis
+                    return Ok(new
+                    {
+                        success = true,
+                        imageDimensions = new { width = imageWidth, height = imageHeight },
+                        tableBoundaries = new
+                        {
+                            x = tableBoundaries.X,
+                            y = tableBoundaries.Y,
+                            width = tableBoundaries.Width,
+                            height = tableBoundaries.Height
+                        },
+                        analysis = new
+                        {
+                            tableArea = tableArea,
+                            imageArea = imageArea,
+                            tablePercentage = Math.Round(tablePercentage, 2),
+                            tableCenterX = tableBoundaries.X + tableBoundaries.Width / 2,
+                            tableCenterY = tableBoundaries.Y + tableBoundaries.Height / 2,
+                            imageCenterX = imageWidth / 2,
+                            imageCenterY = imageHeight / 2
+                        },
+                        debugInfo = new
+                        {
+                            tableXPercentage = Math.Round((double)tableBoundaries.X / imageWidth * 100, 2),
+                            tableYPercentage = Math.Round((double)tableBoundaries.Y / imageHeight * 100, 2),
+                            tableWidthPercentage = Math.Round((double)tableBoundaries.Width / imageWidth * 100, 2),
+                            tableHeightPercentage = Math.Round((double)tableBoundaries.Height / imageHeight * 100, 2)
+                        }
+                    });
+                }
+                finally
+                {
+                    // Clean up temp file
+                    if (System.IO.File.Exists(tempFilePath))
+                    {
+                        System.IO.File.Delete(tempFilePath);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing debug table analysis");
+                return StatusCode(StatusCodes.Status500InternalServerError, new ErrorResponse 
+                { 
+                    Status = StatusCodes.Status500InternalServerError, 
+                    Message = "Failed to process table analysis: " + ex.Message 
+                });
+            }
+        }
+
+        private void DrawTableBoundariesOnImage(Image<Rgba32> image, Rectangle tableBoundaries)
+        {
+            var blue = new Rgba32(0, 0, 255, 255); // Blue color
+            int thickness = 6; // Thicker than column boundaries
+            
+            // Draw top boundary
+            for (int x = tableBoundaries.X; x < tableBoundaries.X + tableBoundaries.Width; x++)
+            {
+                for (int offset = 0; offset < thickness; offset++)
+                {
+                    int y = tableBoundaries.Y + offset;
+                    if (x >= 0 && x < image.Width && y >= 0 && y < image.Height)
+                    {
+                        image[x, y] = blue;
+                    }
+                }
+            }
+            
+            // Draw bottom boundary
+            for (int x = tableBoundaries.X; x < tableBoundaries.X + tableBoundaries.Width; x++)
+            {
+                for (int offset = 0; offset < thickness; offset++)
+                {
+                    int y = tableBoundaries.Y + tableBoundaries.Height - offset;
+                    if (x >= 0 && x < image.Width && y >= 0 && y < image.Height)
+                    {
+                        image[x, y] = blue;
+                    }
+                }
+            }
+            
+            // Draw left boundary
+            for (int y = tableBoundaries.Y; y < tableBoundaries.Y + tableBoundaries.Height; y++)
+            {
+                for (int offset = 0; offset < thickness; offset++)
+                {
+                    int x = tableBoundaries.X + offset;
+                    if (x >= 0 && x < image.Width && y >= 0 && y < image.Height)
+                    {
+                        image[x, y] = blue;
+                    }
+                }
+            }
+            
+            // Draw right boundary
+            for (int y = tableBoundaries.Y; y < tableBoundaries.Y + tableBoundaries.Height; y++)
+            {
+                for (int offset = 0; offset < thickness; offset++)
+                {
+                    int x = tableBoundaries.X + tableBoundaries.Width - offset;
+                    if (x >= 0 && x < image.Width && y >= 0 && y < image.Height)
+                    {
+                        image[x, y] = blue;
+                    }
+                }
             }
         }
     }
