@@ -1493,13 +1493,16 @@ namespace ChessDecoderApi.Services
             // Clone the image to draw on
             using var imageWithBoundaries = image.Clone();
             
-            // Draw table boundaries (blue, thicker) for debugging
+            // Step 3: Gray out areas outside the table boundaries and between table edges and columns
+            GrayOutAreasOutsideTable(imageWithBoundaries, tableBoundaries, columnBoundaries);
+            
+            // Step 4: Draw table boundaries (blue, thicker) for debugging
             DrawTableBoundariesOnImage(imageWithBoundaries, tableBoundaries);
             
-            // Draw column boundaries (red, thinner) for debugging
-            DrawBoundariesOnImage(imageWithBoundaries, columnBoundaries);
+            // Step 5: Draw ALL column boundaries including column 0 and last column (red, thinner)
+            DrawAllColumnBoundaries(imageWithBoundaries, columnBoundaries, tableBoundaries);
             
-            _logger.LogInformation($"Drew table boundaries and {columnBoundaries.Count - 1} automatically detected chess column boundaries on image");
+            _logger.LogInformation($"Drew table boundaries and {columnBoundaries.Count} chess column boundaries (including column 0) with grayed out areas outside table");
             
             // Convert to byte array
             using var ms = new MemoryStream();
@@ -2648,6 +2651,165 @@ namespace ChessDecoderApi.Services
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// Draws ALL column boundaries including column 0 and the last column for better visualization.
+        /// </summary>
+        /// <param name="image">The image to draw boundaries on</param>
+        /// <param name="boundaries">List of column boundary positions</param>
+        /// <param name="tableBoundaries">Table boundaries to constrain drawing</param>
+        private void DrawAllColumnBoundaries(Image<Rgba32> image, List<int> boundaries, Rectangle tableBoundaries)
+        {
+            var red = new Rgba32(255, 0, 0, 255); // Red color
+            int thickness = 3; // 3-pixel wide for better visibility
+            
+            // Draw vertical lines for ALL boundaries including first (column 0) and last
+            for (int i = 0; i < boundaries.Count; i++)
+            {
+                int x = boundaries[i];
+                
+                // Only draw within the table boundaries vertically
+                int startY = tableBoundaries.Y;
+                int endY = tableBoundaries.Y + tableBoundaries.Height;
+                
+                // Draw thick vertical line
+                for (int y = startY; y < endY; y++)
+                {
+                    for (int offset = -(thickness/2); offset <= thickness/2; offset++)
+                    {
+                        int lineX = x + offset;
+                        if (lineX >= 0 && lineX < image.Width && y >= 0 && y < image.Height)
+                        {
+                            image[lineX, y] = red;
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Grays out areas outside the detected table boundaries to show which parts are excluded from processing.
+        /// </summary>
+        /// <param name="image">The image to modify</param>
+        /// <param name="tableBoundaries">The detected table boundaries</param>
+        private void GrayOutAreasOutsideTable(Image<Rgba32> image, Rectangle tableBoundaries)
+        {
+            // Call the overloaded method with empty column boundaries for backwards compatibility
+            GrayOutAreasOutsideTable(image, tableBoundaries, new List<int>());
+        }
+
+        /// <summary>
+        /// Grays out areas outside the detected table boundaries and outside the column processing area to show which parts are excluded from processing.
+        /// </summary>
+        /// <param name="image">The image to modify</param>
+        /// <param name="tableBoundaries">The detected table boundaries</param>
+        /// <param name="columnBoundaries">The detected column boundaries</param>
+        private void GrayOutAreasOutsideTable(Image<Rgba32> image, Rectangle tableBoundaries, List<int> columnBoundaries)
+        {
+            var grayOverlay = new Rgba32(128, 128, 128, 128); // Semi-transparent gray
+            
+            // Gray out area to the left of the table
+            for (int x = 0; x < tableBoundaries.X; x++)
+            {
+                for (int y = 0; y < image.Height; y++)
+                {
+                    var originalPixel = image[x, y];
+                    // Blend with gray overlay to create a grayed-out effect
+                    var blendedPixel = BlendPixels(originalPixel, grayOverlay);
+                    image[x, y] = blendedPixel;
+                }
+            }
+            
+            // Gray out area between table left boundary and column 0 (if there's a gap)
+            if (columnBoundaries.Count > 0)
+            {
+                int column0X = columnBoundaries[0];
+                if (column0X > tableBoundaries.X)
+                {
+                    for (int x = tableBoundaries.X; x < column0X; x++)
+                    {
+                        for (int y = tableBoundaries.Y; y < tableBoundaries.Y + tableBoundaries.Height; y++)
+                        {
+                            var originalPixel = image[x, y];
+                            var blendedPixel = BlendPixels(originalPixel, grayOverlay);
+                            image[x, y] = blendedPixel;
+                        }
+                    }
+                }
+            }
+            
+            // Gray out area between last column and table right boundary (if there's a gap)
+            if (columnBoundaries.Count > 0)
+            {
+                int lastColumnX = columnBoundaries[columnBoundaries.Count - 1];
+                int tableRight = tableBoundaries.X + tableBoundaries.Width;
+                if (lastColumnX < tableRight)
+                {
+                    for (int x = lastColumnX; x < tableRight; x++)
+                    {
+                        for (int y = tableBoundaries.Y; y < tableBoundaries.Y + tableBoundaries.Height; y++)
+                        {
+                            var originalPixel = image[x, y];
+                            var blendedPixel = BlendPixels(originalPixel, grayOverlay);
+                            image[x, y] = blendedPixel;
+                        }
+                    }
+                }
+            }
+            
+            // Gray out area to the right of the table
+            int tableRightBoundary = tableBoundaries.X + tableBoundaries.Width;
+            for (int x = tableRightBoundary; x < image.Width; x++)
+            {
+                for (int y = 0; y < image.Height; y++)
+                {
+                    var originalPixel = image[x, y];
+                    var blendedPixel = BlendPixels(originalPixel, grayOverlay);
+                    image[x, y] = blendedPixel;
+                }
+            }
+            
+            // Gray out area above the table
+            for (int x = 0; x < image.Width; x++)
+            {
+                for (int y = 0; y < tableBoundaries.Y; y++)
+                {
+                    var originalPixel = image[x, y];
+                    var blendedPixel = BlendPixels(originalPixel, grayOverlay);
+                    image[x, y] = blendedPixel;
+                }
+            }
+            
+            // Gray out area below the table
+            int tableBottom = tableBoundaries.Y + tableBoundaries.Height;
+            for (int x = 0; x < image.Width; x++)
+            {
+                for (int y = tableBottom; y < image.Height; y++)
+                {
+                    var originalPixel = image[x, y];
+                    var blendedPixel = BlendPixels(originalPixel, grayOverlay);
+                    image[x, y] = blendedPixel;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Blends two pixels together using alpha blending.
+        /// </summary>
+        /// <param name="background">Background pixel</param>
+        /// <param name="overlay">Overlay pixel with alpha</param>
+        /// <returns>Blended pixel</returns>
+        private Rgba32 BlendPixels(Rgba32 background, Rgba32 overlay)
+        {
+            float alpha = overlay.A / 255.0f;
+            float invAlpha = 1.0f - alpha;
+            
+            byte r = (byte)(background.R * invAlpha + overlay.R * alpha);
+            byte g = (byte)(background.G * invAlpha + overlay.G * alpha);
+            byte b = (byte)(background.B * invAlpha + overlay.B * alpha);
+            
+            return new Rgba32(r, g, b, 255);
         }
 
         /// <summary>
