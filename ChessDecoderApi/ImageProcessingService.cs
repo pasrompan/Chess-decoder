@@ -1281,195 +1281,8 @@ namespace ChessDecoderApi.Services
             return SplitImageIntoColumns(image, expectedColumns);
         }
 
-        /// <summary>
-        /// Splits the input image into horizontal rows based on projection profile and returns the row boundaries.
-        /// </summary>
-        /// <param name="image">The chess moves image</param>
-        /// <param name="expectedRows">Expected number of rows (default: 0 for auto-detection)</param>
-        /// <returns>List of row boundary indices (pixel positions)</returns>
-        public List<int> SplitImageIntoRows(Image<Rgba32> image, int expectedRows = 20)
-        {
-            image.Mutate(x => x.Grayscale());
-            int width = image.Width;
-            int height = image.Height;
-            
-            _logger.LogInformation($"Starting row detection for image {width}x{height}");
-            
-            // Calculate horizontal projection profile (sum of dark pixels per row)
-            double[] horizontalProfile = new double[height];
-            for (int y = 0; y < height; y++)
-            {
-                double sum = 0;
-                for (int x = 0; x < width; x++)
-                {
-                    var pixel = image[x, y];
-                    int gray = pixel.R;
-                    // Invert threshold - look for dark content (text)
-                    int binary = gray < 200 ? 1 : 0;
-                    sum += binary;
-                }
-                horizontalProfile[y] = sum;
-            }
-            
-            // Smooth the profile to reduce noise
-            int smoothWindow = Math.Max(5, height / 50);
-            double[] smoothed = SmoothProfile(horizontalProfile);
-            
-            // Find valleys (gaps between text rows) using derivative analysis
-            List<int> valleys = new List<int>();
-            
-            // Calculate first derivative to find peaks and valleys
-            double[] derivative = new double[height - 1];
-            for (int y = 0; y < height - 1; y++)
-            {
-                derivative[y] = smoothed[y + 1] - smoothed[y];
-            }
-            
-            // Find valleys where derivative changes from negative to positive
-            for (int y = 1; y < derivative.Length - 1; y++)
-            {
-                if (derivative[y - 1] < 0 && derivative[y] > 0 && derivative[y + 1] > 0)
-                {
-                    // This is a valley - potential row boundary
-                    valleys.Add(y);
-                }
-            }
-            
-            _logger.LogInformation($"Found {valleys.Count} potential valleys");
-            
-            // Filter valleys based on minimum row height
-            int minRowHeight = Math.Max(15, height / 30); // At least 15px or 3.3% of image height
-            List<int> filteredValleys = new List<int>();
-            
-            for (int i = 0; i < valleys.Count; i++)
-            {
-                int currentValley = valleys[i];
-                
-                // Check if this valley is far enough from the previous one
-                if (filteredValleys.Count == 0 || currentValley - filteredValleys.Last() >= minRowHeight)
-                {
-                    // Also check if there's enough content above this valley
-                    int contentAbove = 0;
-                    int startY = filteredValleys.Count == 0 ? 0 : filteredValleys.Last();
-                    for (int y = startY; y < currentValley; y++)
-                    {
-                        if (smoothed[y] > smoothed.Average() * 0.3) // Some content threshold
-                        {
-                            contentAbove++;
-                        }
-                    }
-                    
-                    if (contentAbove >= minRowHeight / 3) // At least some content above
-                    {
-                        filteredValleys.Add(currentValley);
-                    }
-                }
-            }
-            
-            _logger.LogInformation($"Filtered to {filteredValleys.Count} row boundaries (min height: {minRowHeight}px)");
-            
-            // If we didn't find enough valleys, try a different approach
-            if (filteredValleys.Count < 3)
-            {
-                _logger.LogInformation("Not enough valleys found, trying alternative approach...");
-                
-                // Alternative: Find rows by looking for consistent text patterns
-                List<int> alternativeRows = FindRowsByTextPatterns(smoothed, height, minRowHeight);
-                if (alternativeRows.Count > filteredValleys.Count)
-                {
-                    _logger.LogInformation($"Alternative approach found {alternativeRows.Count} rows");
-                    return alternativeRows;
-                }
-            }
-            
-            // Build final boundaries
-            List<int> boundaries = new List<int> { 0 };
-            boundaries.AddRange(filteredValleys);
-            boundaries.Add(height);
-            
-            // Remove duplicates and sort
-            boundaries = boundaries.Distinct().OrderBy(b => b).ToList();
-            
-            // Ensure minimum spacing between boundaries
-            for (int i = boundaries.Count - 1; i > 0; i--)
-            {
-                if (boundaries[i] - boundaries[i - 1] < minRowHeight / 2)
-                {
-                    boundaries.RemoveAt(i);
-                }
-            }
-            
-            _logger.LogInformation($"Final row boundaries: {boundaries.Count - 1} rows");
-            return boundaries;
-        }
         
-        /// <summary>
-        /// Alternative method to find rows by analyzing text patterns
-        /// </summary>
-        private List<int> FindRowsByTextPatterns(double[] profile, int height, int minRowHeight)
-        {
-            List<int> boundaries = new List<int> { 0 };
-            
-            // Calculate statistics
-            double maxValue = profile.Max();
-            double avgValue = profile.Average();
-            double threshold = avgValue * 0.4; // Lower threshold for text detection
-            
-            _logger.LogInformation($"Text pattern detection - Max: {maxValue:F2}, Avg: {avgValue:F2}, Threshold: {threshold:F2}");
-            
-            bool inTextRow = false;
-            int textRowStart = 0;
-            
-            for (int y = 0; y < height; y++)
-            {
-                if (profile[y] > threshold)
-                {
-                    if (!inTextRow)
-                    {
-                        // Starting a new text row
-                        inTextRow = true;
-                        textRowStart = y;
-                    }
-                }
-                else
-                {
-                    if (inTextRow)
-                    {
-                        // Ending a text row
-                        inTextRow = false;
-                        int textRowEnd = y;
-                        int textRowHeight = textRowEnd - textRowStart;
-                        
-                        if (textRowHeight >= minRowHeight / 2) // Minimum text height
-                        {
-                            // Add boundary at the end of this text row
-                            boundaries.Add(textRowEnd);
-                        }
-                    }
-                }
-            }
-            
-            // If we ended in a text row, add the final boundary
-            if (inTextRow)
-            {
-                boundaries.Add(height);
-            }
-            
-            boundaries.Add(height);
-            return boundaries.Distinct().OrderBy(b => b).ToList();
-        }
 
-        /// <summary>
-        /// Splits the input image into horizontal rows based on projection profile and returns the row boundaries.
-        /// </summary>
-        /// <param name="imagePath">Path to the chess moves image</param>
-        /// <param name="expectedRows">Expected number of rows (default: 0 for auto-detection)</param>
-        /// <returns>List of row boundary indices (pixel positions)</returns>
-        public List<int> SplitImageIntoRows(string imagePath, int expectedRows = 0)
-        {
-            using var image = Image.Load<Rgba32>(imagePath);
-            return SplitImageIntoRows(image, expectedRows);
-        }
 
         /// <summary>
         /// Creates an image with table and column boundaries drawn on it for debugging visualization.
@@ -1477,9 +1290,8 @@ namespace ChessDecoderApi.Services
         /// </summary>
         /// <param name="imagePath">Path to the chess moves image</param>
         /// <param name="expectedColumns">Expected number of columns (default: 6, used as fallback)</param>
-        /// <param name="expectedRows">Expected number of rows (default: 8)</param>
         /// <returns>Byte array of the image with table and column boundaries drawn</returns>
-        public async Task<byte[]> CreateImageWithBoundariesAsync(string imagePath, int expectedColumns = 6, int expectedRows = 8)
+        public async Task<byte[]> CreateImageWithBoundariesAsync(string imagePath, int expectedColumns = 6)
         {
             using var image = Image.Load<Rgba32>(imagePath);
             
@@ -1624,8 +1436,6 @@ namespace ChessDecoderApi.Services
                 return Rectangle.Empty;
             }
             
-            // Group text blocks into rows and columns
-            var groupedBlocks = GroupTextBlocksIntoTable(textBlocks);
             
             // Calculate bounding rectangle of all text blocks
             var bounds = CalculateBoundingRectangle(textBlocks);
@@ -1834,6 +1644,7 @@ namespace ChessDecoderApi.Services
             using var grayscaleImage = image.Clone();
             grayscaleImage.Mutate(x => x.Grayscale());
             
+            
             // Calculate horizontal projection profile (sum of pixel intensities per row)
             double[] horizontalProfile = new double[height];
             for (int y = 0; y < height; y++)
@@ -1893,18 +1704,14 @@ namespace ChessDecoderApi.Services
         {
             var corners = new List<Point>();
             
-            _logger.LogInformation("Starting corner detection using edge analysis");
-            
-            // Find horizontal and vertical lines
-            var horizontalLines = FindHorizontalLines(edgeImage, width, height);
+            // Find vertical lines
             var verticalLines = FindVerticalLines(edgeImage, width, height);
             
-            _logger.LogInformation($"Found {horizontalLines.Count} horizontal lines and {verticalLines.Count} vertical lines");
+            _logger.LogInformation($"Found {verticalLines.Count} vertical lines");
             
-            // Find intersections between horizontal and vertical lines
-            var intersections = FindLineIntersections(horizontalLines, verticalLines);
-            
-            _logger.LogInformation($"Found {intersections.Count} line intersections");
+            // For now, just return empty corners since we removed horizontal line detection
+            // This is a simplified version that only works with vertical lines
+            var intersections = new List<Point>();
             
             // Filter intersections to find the most likely grid corners
             corners = FilterGridCorners(intersections, width, height);
@@ -1914,56 +1721,6 @@ namespace ChessDecoderApi.Services
             return corners;
         }
         
-        /// <summary>
-        /// Finds horizontal lines in the edge-detected image.
-        /// </summary>
-        private List<Line> FindHorizontalLines(Image<Rgba32> edgeImage, int width, int height)
-        {
-            var lines = new List<Line>();
-            int minLineLength = width / 4; // Minimum line length as fraction of image width
-            int lineThickness = 3; // Allow for some thickness in line detection
-            
-            // Scan horizontally for lines
-            for (int y = 0; y < height; y++)
-            {
-                int lineStart = -1;
-                int consecutivePixels = 0;
-                
-                for (int x = 0; x < width; x++)
-                {
-                    var pixel = edgeImage[x, y];
-                    bool isEdge = pixel.R > 128; // Edge threshold
-                    
-                    if (isEdge)
-                    {
-                        if (lineStart == -1)
-                        {
-                            lineStart = x;
-                        }
-                        consecutivePixels++;
-                    }
-                    else
-                    {
-                        if (consecutivePixels >= minLineLength)
-                        {
-                            // Found a horizontal line
-                            lines.Add(new Line { Start = new Point(lineStart, y), End = new Point(x - 1, y) });
-                        }
-                        lineStart = -1;
-                        consecutivePixels = 0;
-                    }
-                }
-                
-                // Check if line extends to end of image
-                if (consecutivePixels >= minLineLength)
-                {
-                    lines.Add(new Line { Start = new Point(lineStart, y), End = new Point(width - 1, y) });
-                }
-            }
-            
-            // Merge nearby horizontal lines (within lineThickness pixels)
-            return MergeNearbyLines(lines, lineThickness, true);
-        }
         
         /// <summary>
         /// Finds vertical lines in the edge-detected image.
@@ -2013,13 +1770,13 @@ namespace ChessDecoderApi.Services
             }
             
             // Merge nearby vertical lines (within lineThickness pixels)
-            return MergeNearbyLines(lines, lineThickness, false);
+            return MergeNearbyLines(lines, lineThickness);
         }
         
         /// <summary>
-        /// Merges nearby lines to reduce noise and duplicate detections.
+        /// Merges nearby vertical lines to reduce noise and duplicate detections.
         /// </summary>
-        private List<Line> MergeNearbyLines(List<Line> lines, int threshold, bool isHorizontal)
+        private List<Line> MergeNearbyLines(List<Line> lines, int threshold)
         {
             if (lines.Count == 0) return lines;
             
@@ -2041,32 +1798,14 @@ namespace ChessDecoderApi.Services
                     
                     var otherLine = lines[j];
                     
-                    // Check if lines are close enough to merge
-                    bool shouldMerge = false;
-                    if (isHorizontal)
-                    {
-                        // For horizontal lines, check if Y coordinates are close
-                        shouldMerge = Math.Abs(currentLine.Start.Y - otherLine.Start.Y) <= threshold;
-                    }
-                    else
-                    {
-                        // For vertical lines, check if X coordinates are close
-                        shouldMerge = Math.Abs(currentLine.Start.X - otherLine.Start.X) <= threshold;
-                    }
+                    // Check if vertical lines are close enough to merge (X coordinates)
+                    bool shouldMerge = Math.Abs(currentLine.Start.X - otherLine.Start.X) <= threshold;
                     
                     if (shouldMerge)
                     {
-                        // Merge the lines by extending the current line
-                        if (isHorizontal)
-                        {
-                            mergedLine.Start = new Point(Math.Min(mergedLine.Start.X, otherLine.Start.X), mergedLine.Start.Y);
-                            mergedLine.End = new Point(Math.Max(mergedLine.End.X, otherLine.End.X), mergedLine.End.Y);
-                        }
-                        else
-                        {
-                            mergedLine.Start = new Point(mergedLine.Start.X, Math.Min(mergedLine.Start.Y, otherLine.Start.Y));
-                            mergedLine.End = new Point(mergedLine.End.X, Math.Max(mergedLine.End.Y, otherLine.End.Y));
-                        }
+                        // Merge the lines by extending the current line vertically
+                        mergedLine.Start = new Point(mergedLine.Start.X, Math.Min(mergedLine.Start.Y, otherLine.Start.Y));
+                        mergedLine.End = new Point(mergedLine.End.X, Math.Max(mergedLine.End.Y, otherLine.End.Y));
                         used[j] = true;
                     }
                 }
@@ -2077,43 +1816,7 @@ namespace ChessDecoderApi.Services
             return mergedLines;
         }
         
-        /// <summary>
-        /// Finds intersections between horizontal and vertical lines.
-        /// </summary>
-        private List<Point> FindLineIntersections(List<Line> horizontalLines, List<Line> verticalLines)
-        {
-            var intersections = new List<Point>();
-            
-            foreach (var hLine in horizontalLines)
-            {
-                foreach (var vLine in verticalLines)
-                {
-                    var intersection = FindLineIntersection(hLine, vLine);
-                    if (intersection.HasValue)
-                    {
-                        intersections.Add(intersection.Value);
-                    }
-                }
-            }
-            
-            return intersections;
-        }
         
-        /// <summary>
-        /// Finds the intersection point between a horizontal and vertical line.
-        /// </summary>
-        private Point? FindLineIntersection(Line hLine, Line vLine)
-        {
-            // Check if the vertical line's X is within the horizontal line's X range
-            if (vLine.Start.X < hLine.Start.X || vLine.Start.X > hLine.End.X)
-                return null;
-            
-            // Check if the horizontal line's Y is within the vertical line's Y range
-            if (hLine.Start.Y < vLine.Start.Y || hLine.Start.Y > vLine.End.Y)
-                return null;
-            
-            return new Point(vLine.Start.X, hLine.Start.Y);
-        }
         
         /// <summary>
         /// Filters intersections to find the most likely grid corners.
@@ -2295,20 +1998,6 @@ namespace ChessDecoderApi.Services
             return pixel.R < 128; // Simple threshold
         }
         
-        /// <summary>
-        /// Groups text blocks into table structure.
-        /// </summary>
-        private List<List<Rectangle>> GroupTextBlocksIntoTable(List<Rectangle> textBlocks)
-        {
-            // Simple grouping by Y coordinate (rows)
-            var rows = textBlocks
-                .GroupBy(block => block.Y / 20) // Group by approximate row
-                .OrderBy(g => g.Key)
-                .Select(g => g.OrderBy(b => b.X).ToList())
-                .ToList();
-            
-            return rows;
-        }
         
         /// <summary>
         /// Calculates bounding rectangle of a list of rectangles.
@@ -2812,36 +2501,6 @@ namespace ChessDecoderApi.Services
             return new Rgba32(r, g, b, 255);
         }
 
-        /// <summary>
-        /// Draws row boundaries on the image for visualization.
-        /// </summary>
-        /// <param name="image">The image to draw boundaries on</param>
-        /// <param name="boundaries">List of row boundary positions</param>
-        private void DrawRowBoundariesOnImage(Image<Rgba32> image, List<int> boundaries)
-        {
-            int width = image.Width;
-            var blue = new Rgba32(0, 0, 255, 255); // Blue color
-            
-            // Draw horizontal lines for each boundary (except the first and last which are edges)
-            for (int i = 1; i < boundaries.Count - 1; i++)
-            {
-                int y = boundaries[i];
-                
-                // Draw thick horizontal line (5-pixel wide for better visibility)
-                for (int x = 0; x < width; x++)
-                {
-                    // Draw 5-pixel wide line
-                    for (int offset = -2; offset <= 2; offset++)
-                    {
-                        int lineY = y + offset;
-                        if (lineY >= 0 && lineY < image.Height)
-                        {
-                            image[x, lineY] = blue;
-                        }
-                    }
-                }
-            }
-        }
         
         /// <summary>
         /// Gets the detected corners of the chess notation grid for debugging purposes.

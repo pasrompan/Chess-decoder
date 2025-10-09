@@ -296,7 +296,7 @@ namespace ChessDecoderApi.Controllers
                 // Generate image with column boundaries as red indicators
                 try
                 {
-                    var imageWithBoundaries = await _imageProcessingService.CreateImageWithBoundariesAsync(imagePathForProcessing, 6, 0);
+                    var imageWithBoundaries = await _imageProcessingService.CreateImageWithBoundariesAsync(imagePathForProcessing, 6);
                     processedImageBase64 = Convert.ToBase64String(imageWithBoundaries);
                 }
                 catch (Exception ex)
@@ -681,7 +681,7 @@ namespace ChessDecoderApi.Controllers
                 var result = await _imageProcessingService.ProcessImageAsync(imagePathForProcessing, language);
 
                 // Generate image with column boundaries as red indicators
-                var imageWithBoundaries = await _imageProcessingService.CreateImageWithBoundariesAsync(imagePathForProcessing, 6, 0);
+                var imageWithBoundaries = await _imageProcessingService.CreateImageWithBoundariesAsync(imagePathForProcessing, 6);
                 processedImageBase64 = Convert.ToBase64String(imageWithBoundaries);
 
                 // Clean up temp files
@@ -879,8 +879,7 @@ namespace ChessDecoderApi.Controllers
                     // Step 2: Automatically detect chess columns within the table area
                     var columnBoundaries = _imageProcessingService.DetectChessColumnsAutomatically(loadedImage, tableBoundaries);
                     
-                    // Step 3: Find row boundaries (still using full image for now)
-                    var rowBoundaries = _imageProcessingService.SplitImageIntoRows(loadedImage, expectedRows);
+                    // Step 3: Row processing removed - no longer needed
 
                     // Calculate column widths for frontend visualization
                     var columnWidths = new List<int>();
@@ -889,12 +888,6 @@ namespace ChessDecoderApi.Controllers
                         columnWidths.Add(columnBoundaries[i + 1] - columnBoundaries[i]);
                     }
 
-                    // Calculate row heights for frontend visualization
-                    var rowHeights = new List<int>();
-                    for (int i = 0; i < rowBoundaries.Count - 1; i++)
-                    {
-                        rowHeights.Add(rowBoundaries[i + 1] - rowBoundaries[i]);
-                    }
 
                     // Return the boundaries and related data for frontend visualization
                     return Ok(new 
@@ -903,26 +896,13 @@ namespace ChessDecoderApi.Controllers
                         imageWidth = columnBoundaries.Last(), // Total width is the last boundary
                         imageHeight = loadedImage.Height,
                         expectedColumns = expectedColumns,
-                        expectedRows = expectedRows,
-                        actualColumns = columnBoundaries.Count - 1,
-                        actualRows = rowBoundaries.Count - 1,
                         columnBoundaries = columnBoundaries,
-                        rowBoundaries = rowBoundaries,
-                        columnWidths = columnWidths,
-                        rowHeights = rowHeights,
                         columnData = columnBoundaries.Take(columnBoundaries.Count - 1).Select((start, index) => new
                         {
                             columnIndex = index,
                             startPosition = start,
                             endPosition = columnBoundaries[index + 1],
                             width = columnBoundaries[index + 1] - start
-                        }).ToArray(),
-                        rowData = rowBoundaries.Take(rowBoundaries.Count - 1).Select((start, index) => new
-                        {
-                            rowIndex = index,
-                            startPosition = start,
-                            endPosition = rowBoundaries[index + 1],
-                            height = rowBoundaries[index + 1] - start
                         }).ToArray(),
                         tableBoundaries = new
                         {
@@ -1008,7 +988,7 @@ namespace ChessDecoderApi.Controllers
                     }
 
                     // Create image with boundaries drawn
-                    var imageWithBoundaries = await _imageProcessingService.CreateImageWithBoundariesAsync(tempFilePath, expectedColumns, expectedRows);
+                    var imageWithBoundaries = await _imageProcessingService.CreateImageWithBoundariesAsync(tempFilePath, expectedColumns);
 
                     // Return the image with boundaries as JPEG
                     return File(imageWithBoundaries, "image/jpeg", $"boundaries_{image.FileName}");
