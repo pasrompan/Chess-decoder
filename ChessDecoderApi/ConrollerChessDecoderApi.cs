@@ -290,18 +290,31 @@ namespace ChessDecoderApi.Controllers
                 }
 
                 var startTime = DateTime.UtcNow;
-                var result = await _imageProcessingService.ProcessImageAsync(imagePathForProcessing, language);
+                // Pass autoCrop parameter to control column detection heuristics
+                var result = await _imageProcessingService.ProcessImageAsync(imagePathForProcessing, language, useColumnDetection: autoCrop);
                 var processingTime = DateTime.UtcNow - startTime;
 
-                // Generate image with column boundaries as red indicators
+                // Generate image with column boundaries as red indicators ONLY when autoCrop is enabled
+                // When disabled, return the actual processed image
                 try
                 {
-                    var imageWithBoundaries = await _imageProcessingService.CreateImageWithBoundariesAsync(imagePathForProcessing, 6);
-                    processedImageBase64 = Convert.ToBase64String(imageWithBoundaries);
+                    if (autoCrop)
+                    {
+                        var imageWithBoundaries = await _imageProcessingService.CreateImageWithBoundariesAsync(imagePathForProcessing, 6);
+                        processedImageBase64 = Convert.ToBase64String(imageWithBoundaries);
+                        _logger.LogInformation("Generated image with boundary indicators (auto-crop enabled)");
+                    }
+                    else
+                    {
+                        // Return the actual processed image without boundary indicators
+                        var imageBytes = await System.IO.File.ReadAllBytesAsync(imagePathForProcessing);
+                        processedImageBase64 = Convert.ToBase64String(imageBytes);
+                        _logger.LogInformation("Returning processed image without boundaries (auto-crop disabled)");
+                    }
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Failed to generate image with boundaries, continuing without visual feedback");
+                    _logger.LogWarning(ex, "Failed to generate processed image, continuing without visual feedback");
                 }
 
                 // Reuse the database context from earlier
@@ -677,12 +690,21 @@ namespace ChessDecoderApi.Controllers
                     imagePathForProcessing = croppedFilePath;
                 }
 
-                // Process the image (cropped or original)
-                var result = await _imageProcessingService.ProcessImageAsync(imagePathForProcessing, language);
+                // Process the image (cropped or original), using autoCrop to control column detection
+                var result = await _imageProcessingService.ProcessImageAsync(imagePathForProcessing, language, useColumnDetection: autoCrop);
 
-                // Generate image with column boundaries as red indicators
-                var imageWithBoundaries = await _imageProcessingService.CreateImageWithBoundariesAsync(imagePathForProcessing, 6);
-                processedImageBase64 = Convert.ToBase64String(imageWithBoundaries);
+                // Generate image with column boundaries ONLY when autoCrop is enabled
+                if (autoCrop)
+                {
+                    var imageWithBoundaries = await _imageProcessingService.CreateImageWithBoundariesAsync(imagePathForProcessing, 6);
+                    processedImageBase64 = Convert.ToBase64String(imageWithBoundaries);
+                }
+                else
+                {
+                    // Return the actual processed image without boundary indicators
+                    var imageBytes = await System.IO.File.ReadAllBytesAsync(imagePathForProcessing);
+                    processedImageBase64 = Convert.ToBase64String(imageBytes);
+                }
 
                 // Clean up temp files
                 try

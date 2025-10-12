@@ -37,7 +37,7 @@ namespace ChessDecoderApi.Tests.Services
 
             // Mock the tuple return: whiteMoves, blackMoves
             mockImageService
-                .Setup(x => x.ExtractMovesFromImageToStringAsync(It.IsAny<string>(), It.IsAny<string>()))
+                .Setup(x => x.ExtractMovesFromImageToStringAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>()))
                 .ReturnsAsync((new List<string> { "e4", "Nf3", "Bb5" }, new List<string> { "e5", "Nc6" }));
 
             mockImageService
@@ -120,7 +120,7 @@ namespace ChessDecoderApi.Tests.Services
             }
 
             mockImageService
-                .Setup(x => x.ExtractMovesFromImageToStringAsync(It.IsAny<string>(), It.IsAny<string>()))
+                .Setup(x => x.ExtractMovesFromImageToStringAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>()))
                 .ReturnsAsync((whiteMoves, blackMoves));
 
             mockImageService
@@ -164,7 +164,7 @@ namespace ChessDecoderApi.Tests.Services
                 Assert.True(result.LongestCommonSubsequence >= 20 && result.LongestCommonSubsequence <= 30, 
                     $"LCS {result.LongestCommonSubsequence} should be between 20 and 30");
 
-                mockImageService.Verify(x => x.ExtractMovesFromImageToStringAsync(tempImagePath, "English"), Times.Once);
+                mockImageService.Verify(x => x.ExtractMovesFromImageToStringAsync(tempImagePath, "English", It.IsAny<bool>()), Times.Once);
                 mockImageService.Verify(x => x.GeneratePGNContentAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<IEnumerable<string>>()), Times.Once);
 
                 _output.WriteLine($"=== Realistic Game Evaluation Results ===");
