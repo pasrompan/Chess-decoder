@@ -1,0 +1,44 @@
+# PR-Agent Configuration for GitHub Actions
+# This file takes precedence over the root .pr_agent.toml
+
+[config]
+model = "gpt-4o"
+fallback_models = ["gpt-4-turbo", "gpt-3.5-turbo"]
+
+[github_action_config]
+# IMPORTANT: Enable reviews on ALL PR events including synchronize
+auto_review = true
+auto_describe = true
+auto_improve = false
+
+[pr_reviewer]
+automatic_review = true
+require_all_thresholds_for_incremental_review = false
+minimal_review_effort = false
+require_security_review = true
+require_estimate_effort_to_review = true
+require_score_review = true
+require_tests_review = true
+num_code_suggestions = 4
+inline_code_comments = true
+remove_previous_review_comment = false
+
+[pr_code_suggestions]
+automatic_review = true
+num_code_suggestions = 4
+max_number_of_calls = 3
+commitable_code_suggestions = true
+suggestions_score_threshold = 7
+
+[pr_description]
+enable_pr_type = true
+enable_semantic_files_types = true
+final_update_message = true
+
+[pr_questions]
+enable_help_text = true
+
+[github]
+publish_review = true
+publish_inline_comments = true
+
