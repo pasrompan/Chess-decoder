@@ -1,0 +1,50 @@
+# PR-Agent Configuration for Chess Decoder API
+# See https://github.com/Codium-ai/pr-agent for all options
+
+[config]
+model = "gpt-4o"  # Use GPT-4o for better code understanding
+fallback_models = ["gpt-4-turbo", "gpt-3.5-turbo"]
+
+[pr_reviewer]
+# Automatically review PRs when they are opened
+automatic_review = true
+require_all_thresholds_for_incremental_review = false
+minimal_review_effort = false
+require_security_review = true
+require_estimate_effort_to_review = true
+require_score_review = true
+require_tests_review = true
+# Number of code suggestions to provide
+num_code_suggestions = 4
+
+# Inline feedback for code suggestions
+inline_code_comments = true
+
+# Remove previous review comments when updating PR
+remove_previous_review_comment = false
+
+[pr_code_suggestions]
+# Automatically suggest code improvements
+automatic_review = true
+num_code_suggestions = 4
+max_number_of_calls = 3
+commitable_code_suggestions = true
+
+# Focus areas for suggestions
+suggestions_score_threshold = 7
+
+[pr_description]
+# Auto-generate PR descriptions
+enable_pr_type = true
+enable_semantic_files_types = true
+final_update_message = true
+
+[pr_questions]
+# Enable asking clarifying questions
+enable_help_text = true
+
+[github]
+# GitHub-specific settings
+publish_review = true
+publish_inline_comments = true
+
