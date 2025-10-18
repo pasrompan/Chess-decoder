@@ -82,6 +82,10 @@ builder.Services.AddScoped<IChessMoveValidator, ChessMoveValidator>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ICreditService, CreditService>();
 builder.Services.AddScoped<ICloudStorageService, CloudStorageService>();
+
+// Register Firestore service (FREE database - no cost for typical usage!)
+builder.Services.AddSingleton<IFirestoreService, FirestoreService>();
+
 builder.Services.AddHttpClient();
 
 // Load environment variables - includes both .env and system environment variables
@@ -142,119 +146,67 @@ if (!app.Environment.IsDevelopment())
 // Initialize database on startup
 using (var scope = app.Services.CreateScope())
 {
-    var context = scope.ServiceProvider.GetRequiredService<ChessDecoderDbContext>();
-    var cloudStorage = scope.ServiceProvider.GetRequiredService<ICloudStorageService>();
+    Console.WriteLine("========================================");
+    Console.WriteLine("[Database] Initializing database...");
     
-    try
+    // Check if Firestore is available (preferred - FREE option!)
+    var firestoreService = scope.ServiceProvider.GetRequiredService<IFirestoreService>();
+    var isFirestoreAvailable = await firestoreService.IsAvailableAsync();
+    
+    if (isFirestoreAvailable)
     {
-        Console.WriteLine("[Database] Starting database initialization...");
+        Console.WriteLine("[Database] ✅ Using Firestore (NoSQL)");
+        Console.WriteLine("[Database] 💰 Cost: FREE for typical usage!");
+        Console.WriteLine("[Database]    - 1 GB storage");
+        Console.WriteLine("[Database]    - 50,000 reads/day");
+        Console.WriteLine("[Database]    - 20,000 writes/day");
+        Console.WriteLine("[Database] Firestore is ready - no migrations needed");
+        Console.WriteLine("========================================");
+    }
+    else
+    {
+        Console.WriteLine("[Database] ⚠️  Firestore not available");
+        Console.WriteLine("[Database] Using SQLite as fallback (for development only)");
+        Console.WriteLine("[Database] To enable Firestore:");
+        Console.WriteLine("[Database]   1. gcloud services enable firestore.googleapis.com");
+        Console.WriteLine("[Database]   2. gcloud firestore databases create --location=us-central --type=firestore-native");
+        Console.WriteLine("[Database]   3. Set GOOGLE_CLOUD_PROJECT environment variable");
+        Console.WriteLine("========================================");
         
-        // Test database connection first
-        Console.WriteLine("[Database] Testing database connection...");
-        var canConnect = await context.Database.CanConnectAsync();
-        Console.WriteLine($"[Database] Database connection test result: {canConnect}");
-        
-        // Try to sync database from cloud first (in production)
-        if (!app.Environment.IsDevelopment())
-        {
-            Console.WriteLine("[Database] Attempting to sync database from Cloud Storage...");
-            try
-            {
-                var synced = await cloudStorage.SyncDatabaseFromCloudAsync();
-                if (synced)
-                {
-                    Console.WriteLine("[Database] Database synced from Cloud Storage successfully");
-                }
-                else
-                {
-                    Console.WriteLine("[Database] No cloud database found, will create a new local database");
-                }
-            }
-            catch (Exception syncEx)
-            {
-                Console.WriteLine($"[Database] Cloud sync failed (non-critical): {syncEx.Message}");
-            }
-        }
-        
-        // Check if database exists and apply migrations
-        Console.WriteLine("[Database] Checking database and applying migrations...");
+        // Fallback to SQLite for local development
+        var context = scope.ServiceProvider.GetRequiredService<ChessDecoderDbContext>();
         
         try
         {
-            // Check if database exists
-            var databaseExists = await context.Database.CanConnectAsync();
-            Console.WriteLine($"[Database] Database exists: {databaseExists}");
+            Console.WriteLine("[Database] Initializing SQLite...");
             
-            if (!databaseExists)
+            var canConnect = await context.Database.CanConnectAsync();
+            Console.WriteLine($"[Database] SQLite connection test: {canConnect}");
+            
+            if (!canConnect)
             {
-                Console.WriteLine("[Database] Database does not exist, creating...");
+                Console.WriteLine("[Database] Creating SQLite database...");
                 await context.Database.EnsureCreatedAsync();
-                Console.WriteLine("[Database] Database created successfully");
+                Console.WriteLine("[Database] SQLite database created");
             }
             else
             {
-                Console.WriteLine("[Database] Database exists, checking for pending migrations...");
-                
-                // Apply any pending migrations
                 var pendingMigrations = context.Database.GetPendingMigrations().ToList();
                 if (pendingMigrations.Any())
                 {
-                    Console.WriteLine($"[Database] Applying {pendingMigrations.Count} pending migrations...");
+                    Console.WriteLine($"[Database] Applying {pendingMigrations.Count} migrations...");
                     await context.Database.MigrateAsync();
-                    Console.WriteLine("[Database] Migrations applied successfully");
-                }
-                else
-                {
-                    Console.WriteLine("[Database] No pending migrations");
+                    Console.WriteLine("[Database] Migrations applied");
                 }
             }
+            
+            Console.WriteLine("[Database] SQLite initialized successfully");
         }
-        catch (Exception dbEx)
+        catch (Exception ex)
         {
-            Console.WriteLine($"[Database] Error with database operations: {dbEx.Message}");
-            // Try to create database if it doesn't exist
-            try
-            {
-                Console.WriteLine("[Database] Attempting to create database...");
-                await context.Database.EnsureCreatedAsync();
-                Console.WriteLine("[Database] Database created successfully");
-            }
-            catch (Exception createEx)
-            {
-                Console.WriteLine($"[Database] Failed to create database: {createEx.Message}");
-                throw;
-            }
+            Console.WriteLine($"[Database] Error initializing SQLite: {ex.Message}");
+            throw;
         }
-        
-        // Sync database to cloud after initialization (in production)
-        if (!app.Environment.IsDevelopment())
-        {
-            Console.WriteLine("[Database] Syncing database to Cloud Storage...");
-            try
-            {
-                var cloudSynced = await cloudStorage.SyncDatabaseToCloudAsync();
-                if (cloudSynced)
-                {
-                    Console.WriteLine("[Database] Database synced to Cloud Storage successfully");
-                }
-                else
-                {
-                    Console.WriteLine("[Database] Failed to sync database to Cloud Storage - continuing with local database");
-                }
-            }
-            catch (Exception syncEx)
-            {
-                Console.WriteLine($"[Database] Cloud sync failed (non-critical): {syncEx.Message}");
-            }
-        }
-        
-        Console.WriteLine("[Database] Database initialization completed successfully");
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"[Database] Critical error initializing database: {ex.Message}");
-        Console.WriteLine($"[Database] Stack trace: {ex.StackTrace}");
-        throw;
     }
 }
 

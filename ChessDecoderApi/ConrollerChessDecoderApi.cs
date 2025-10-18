@@ -18,15 +18,27 @@ namespace ChessDecoderApi.Controllers
         private readonly IImageProcessingService _imageProcessingService;
         private readonly ILogger<ChessDecoderController> _logger;
         private readonly ILoggerFactory _loggerFactory;
+        private readonly IFirestoreService _firestore;
+        private readonly IAuthService _authService;
+        private readonly ICreditService _creditService;
+        private readonly ChessDecoderDbContext _context;
 
         public ChessDecoderController(
             IImageProcessingService imageProcessingService,
             ILogger<ChessDecoderController> logger,
-            ILoggerFactory loggerFactory)
+            ILoggerFactory loggerFactory,
+            IFirestoreService firestore,
+            IAuthService authService,
+            ICreditService creditService,
+            ChessDecoderDbContext context)
         {
             _imageProcessingService = imageProcessingService;
             _logger = logger;
             _loggerFactory = loggerFactory;
+            _firestore = firestore;
+            _authService = authService;
+            _creditService = creditService;
+            _context = context;
         }
 
         [HttpGet("health")]
@@ -162,9 +174,8 @@ namespace ChessDecoderApi.Controllers
             try
             {
                 // Check if user exists first
-                var dbContext = HttpContext.RequestServices.GetRequiredService<ChessDecoderDbContext>();
-                var userExists = await dbContext.Users.AnyAsync(u => u.Id == userId);
-                if (!userExists)
+                var user = await _authService.GetUserProfileAsync(userId);
+                if (user == null)
                 {
                     _logger.LogWarning("User {UserId} not found when processing image upload", userId);
                     return NotFound(new ErrorResponse 
@@ -175,8 +186,7 @@ namespace ChessDecoderApi.Controllers
                 }
 
                 // Check if user has enough credits
-                var creditService = HttpContext.RequestServices.GetRequiredService<ICreditService>();
-                if (!await creditService.HasEnoughCreditsAsync(userId, 1))
+                if (!await _creditService.HasEnoughCreditsAsync(userId, 1))
                 {
                     _logger.LogWarning("User {UserId} has insufficient credits for image processing", userId);
                     return BadRequest(new ErrorResponse 
@@ -317,8 +327,6 @@ namespace ChessDecoderApi.Controllers
                     _logger.LogWarning(ex, "Failed to generate processed image, continuing without visual feedback");
                 }
 
-                // Reuse the database context from earlier
-
                 // Create ChessGame record
                 var chessGame = new ChessGame
                 {
@@ -334,8 +342,6 @@ namespace ChessDecoderApi.Controllers
                         (m.BlackMove?.ValidationStatus == "valid" || m.BlackMove?.ValidationStatus == "warning")) ?? false
                 };
 
-                dbContext.ChessGames.Add(chessGame);
-
                 // Create GameImage record
                 var gameImage = new GameImage
                 {
@@ -350,8 +356,6 @@ namespace ChessDecoderApi.Controllers
                     IsStoredInCloud = isStoredInCloud,
                     UploadedAt = DateTime.UtcNow
                 };
-
-                dbContext.GameImages.Add(gameImage);
 
                 // Create GameStatistics record
                 var totalMoves = result.Validation?.Moves?.Count ?? 0;
@@ -371,16 +375,9 @@ namespace ChessDecoderApi.Controllers
                     Result = "In Progress" // Could be enhanced to detect game end
                 };
 
-                dbContext.GameStatistics.Add(gameStats);
-
-                // Deduct credits before saving to ensure it's part of the same transaction
-                var user = await dbContext.Users.FindAsync(userId);
-                if (user != null)
-                {
-                    user.Credits -= 1;
-                    _logger.LogInformation("Deducting 1 credit from user {UserId}. New balance will be: {NewBalance}", 
-                        userId, user.Credits);
-                }
+                // Deduct credits first
+                _logger.LogInformation("Deducting 1 credit from user {UserId}", userId);
+                await _creditService.DeductCreditsAsync(userId, 1);
 
                 // Clean up temp cropped file if created
                 if (autoCrop && !isStoredInCloud && imagePathForProcessing != filePath && System.IO.File.Exists(imagePathForProcessing))
@@ -396,8 +393,31 @@ namespace ChessDecoderApi.Controllers
                     }
                 }
 
-                // Save all changes to database (including credit deduction)
-                await dbContext.SaveChangesAsync();
+                // Save to Firestore if available, otherwise fall back to SQLite
+                var isFirestoreAvailable = await _firestore.IsAvailableAsync();
+                if (isFirestoreAvailable)
+                {
+                    _logger.LogInformation("[Firestore] Saving chess game, image, and statistics to Firestore");
+                    
+                    // Save to Firestore
+                    await _firestore.CreateChessGameAsync(chessGame);
+                    await _firestore.CreateGameImageAsync(gameImage);
+                    await _firestore.CreateOrUpdateGameStatisticsAsync(gameStats);
+                    
+                    _logger.LogInformation("[Firestore] Successfully saved game {GameId} to Firestore", chessGame.Id);
+                }
+                else
+                {
+                    _logger.LogInformation("[SQLite] Firestore not available, falling back to SQLite");
+                    
+                    // Fall back to SQLite
+                    _context.ChessGames.Add(chessGame);
+                    _context.GameImages.Add(gameImage);
+                    _context.GameStatistics.Add(gameStats);
+                    await _context.SaveChangesAsync();
+                    
+                    _logger.LogInformation("[SQLite] Successfully saved game {GameId} to SQLite", chessGame.Id);
+                }
 
                 _logger.LogInformation("Successfully processed image for user {UserId}. Game ID: {GameId}", 
                     userId, chessGame.Id);
@@ -409,7 +429,7 @@ namespace ChessDecoderApi.Controllers
                     pgnContent = result.PgnContent,
                     validation = result.Validation,
                     processingTime = processingTime.TotalMilliseconds,
-                    creditsRemaining = await creditService.GetUserCreditsAsync(userId),
+                    creditsRemaining = await _creditService.GetUserCreditsAsync(userId),
                     processedImageUrl = processedImageBase64 != null ? $"data:image/png;base64,{processedImageBase64}" : null
                 });
             }

@@ -40,3 +40,7 @@ Chess-decoder.code-workspace
 ChessDecoderApi/bin/Debug/net9.0/ChessDecoderApi
 ChessDecoderApi/bin/Debug/net9.0/ChessDecoderApi.staticwebassets.endpoints.json
 ChessDecoderApi/uploads/
+ChessDecoderApi/.env.backup
+ChessDecoderApi/bin/
+.DS_Store
+ChessDecoderApi/.DS_Store
