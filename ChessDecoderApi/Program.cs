@@ -1,5 +1,7 @@
 using ChessDecoderApi.Services;
 using ChessDecoderApi.Data;
+using ChessDecoderApi.Repositories;
+using Google.Cloud.Firestore;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
@@ -83,8 +85,38 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ICreditService, CreditService>();
 builder.Services.AddScoped<ICloudStorageService, CloudStorageService>();
 
+// Register focused image processing services (facade pattern over ImageProcessingService)
+builder.Services.AddScoped<ChessDecoderApi.Services.ImageProcessing.IImageAnalysisService, ChessDecoderApi.Services.ImageProcessing.ImageAnalysisService>();
+builder.Services.AddScoped<ChessDecoderApi.Services.ImageProcessing.IImageManipulationService, ChessDecoderApi.Services.ImageProcessing.ImageManipulationService>();
+builder.Services.AddScoped<ChessDecoderApi.Services.ImageProcessing.IImageExtractionService, ChessDecoderApi.Services.ImageProcessing.ImageExtractionService>();
+
+// Register game processing and management services
+builder.Services.AddScoped<ChessDecoderApi.Services.GameProcessing.IGameProcessingService, ChessDecoderApi.Services.GameProcessing.GameProcessingService>();
+builder.Services.AddScoped<ChessDecoderApi.Services.GameProcessing.IGameManagementService, ChessDecoderApi.Services.GameProcessing.GameManagementService>();
+
 // Register Firestore service (FREE database - no cost for typical usage!)
 builder.Services.AddSingleton<IFirestoreService, FirestoreService>();
+
+// Register FirestoreDb for repository pattern
+builder.Services.AddSingleton(sp =>
+{
+    try
+    {
+        var config = sp.GetRequiredService<IConfiguration>();
+        var projectId = Environment.GetEnvironmentVariable("GOOGLE_CLOUD_PROJECT")
+            ?? config["GoogleCloud:ProjectId"]
+            ?? "adept-amp-458515-j9";
+        return FirestoreDb.Create(projectId);
+    }
+    catch
+    {
+        // Return null if Firestore is not available - factory will handle fallback
+        return null!;
+    }
+});
+
+// Register Repository Factory
+builder.Services.AddScoped<RepositoryFactory>();
 
 builder.Services.AddHttpClient();
 
