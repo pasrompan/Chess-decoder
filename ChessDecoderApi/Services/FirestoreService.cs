@@ -27,7 +27,7 @@ public class FirestoreService : IFirestoreService
         {
             var projectId = Environment.GetEnvironmentVariable("GOOGLE_CLOUD_PROJECT") 
                 ?? configuration["GoogleCloud:ProjectId"]
-                ?? "chess-decoder-446310";
+                ?? "adept-amp-458515-j9";
 
             _logger.LogInformation("[Firestore] Initializing with project: {ProjectId}", projectId);
             
