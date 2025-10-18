@@ -7,18 +7,29 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ChessDecoderApi.Controllers;
 
+/// <summary>
+/// Test/Diagnostic controller for database operations.
+/// NOTE: Most endpoints intentionally use SQLite for backward compatibility and debugging.
+/// The health check shows which database (Firestore or SQLite) is currently active.
+/// </summary>
 [ApiController]
 [Route("api/[controller]")]
 public class TestController : ControllerBase
 {
     private readonly ChessDecoderDbContext _context;
     private readonly ICreditService _creditService;
+    private readonly IFirestoreService _firestore;
     private readonly ILogger<TestController> _logger;
 
-    public TestController(ChessDecoderDbContext context, ICreditService creditService, ILogger<TestController> logger)
+    public TestController(
+        ChessDecoderDbContext context, 
+        ICreditService creditService, 
+        IFirestoreService firestore,
+        ILogger<TestController> logger)
     {
         _context = context;
         _creditService = creditService;
+        _firestore = firestore;
         _logger = logger;
     }
 
@@ -27,13 +38,18 @@ public class TestController : ControllerBase
     {
         try
         {
-            // Test database connection
-            await _context.Database.CanConnectAsync();
+            // Test Firestore connection
+            var isFirestoreAvailable = await _firestore.IsAvailableAsync();
+            
+            // Test SQLite connection
+            var canConnectSqlite = await _context.Database.CanConnectAsync();
             
             return Ok(new
             {
                 status = "healthy",
-                database = "connected",
+                firestore = isFirestoreAvailable ? "available" : "not available",
+                sqlite = canConnectSqlite ? "connected" : "disconnected",
+                primaryDatabase = isFirestoreAvailable ? "Firestore" : "SQLite",
                 timestamp = DateTime.UtcNow
             });
         }
@@ -43,7 +59,6 @@ public class TestController : ControllerBase
             return StatusCode(500, new
             {
                 status = "unhealthy",
-                database = "disconnected",
                 error = ex.Message,
                 timestamp = DateTime.UtcNow
             });

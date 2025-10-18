@@ -7,11 +7,13 @@ namespace ChessDecoderApi.Services;
 
 public class CreditService : ICreditService
 {
+    private readonly IFirestoreService _firestore;
     private readonly ChessDecoderDbContext _context;
     private readonly ILogger<CreditService> _logger;
 
-    public CreditService(ChessDecoderDbContext context, ILogger<CreditService> logger)
+    public CreditService(IFirestoreService firestore, ChessDecoderDbContext context, ILogger<CreditService> logger)
     {
+        _firestore = firestore;
         _context = context;
         _logger = logger;
     }
@@ -20,12 +22,21 @@ public class CreditService : ICreditService
     {
         try
         {
-            var user = await _context.Users
+            // Try Firestore first, fall back to EF
+            if (await _firestore.IsAvailableAsync())
+            {
+                _logger.LogDebug("[Credits] Using Firestore to check credits for user: {UserId}", userId);
+                var user = await _firestore.GetUserByIdAsync(userId);
+                return user?.Credits >= requiredCredits;
+            }
+            
+            _logger.LogDebug("[Credits] Using SQLite/EF to check credits for user: {UserId}", userId);
+            var efUser = await _context.Users
                 .Where(u => u.Id == userId)
                 .Select(u => new { u.Credits })
                 .FirstOrDefaultAsync();
 
-            return user?.Credits >= requiredCredits;
+            return efUser?.Credits >= requiredCredits;
         }
         catch (Exception ex)
         {
@@ -38,25 +49,53 @@ public class CreditService : ICreditService
     {
         try
         {
-            var user = await _context.Users.FindAsync(userId);
-            if (user == null)
+            // Try Firestore first, fall back to EF
+            if (await _firestore.IsAvailableAsync())
             {
-                _logger.LogWarning("User {UserId} not found for credit deduction", userId);
+                _logger.LogDebug("[Credits] Using Firestore to deduct credits for user: {UserId}", userId);
+                var user = await _firestore.GetUserByIdAsync(userId);
+                if (user == null)
+                {
+                    _logger.LogWarning("User {UserId} not found in Firestore for credit deduction", userId);
+                    return false;
+                }
+
+                if (user.Credits < creditsToDeduct)
+                {
+                    _logger.LogWarning("User {UserId} has insufficient credits. Current: {Current}, Required: {Required}", 
+                        userId, user.Credits, creditsToDeduct);
+                    return false;
+                }
+
+                user.Credits -= creditsToDeduct;
+                await _firestore.UpdateUserAsync(user);
+
+                _logger.LogInformation("Deducted {Credits} credits from user {UserId} in Firestore. New balance: {NewBalance}", 
+                    creditsToDeduct, userId, user.Credits);
+
+                return true;
+            }
+            
+            _logger.LogDebug("[Credits] Using SQLite/EF to deduct credits for user: {UserId}", userId);
+            var efUser = await _context.Users.FindAsync(userId);
+            if (efUser == null)
+            {
+                _logger.LogWarning("User {UserId} not found in SQLite for credit deduction", userId);
                 return false;
             }
 
-            if (user.Credits < creditsToDeduct)
+            if (efUser.Credits < creditsToDeduct)
             {
                 _logger.LogWarning("User {UserId} has insufficient credits. Current: {Current}, Required: {Required}", 
-                    userId, user.Credits, creditsToDeduct);
+                    userId, efUser.Credits, creditsToDeduct);
                 return false;
             }
 
-            user.Credits -= creditsToDeduct;
+            efUser.Credits -= creditsToDeduct;
             await _context.SaveChangesAsync();
 
-            _logger.LogInformation("Deducted {Credits} credits from user {UserId}. New balance: {NewBalance}", 
-                creditsToDeduct, userId, user.Credits);
+            _logger.LogInformation("Deducted {Credits} credits from user {UserId} in SQLite. New balance: {NewBalance}", 
+                creditsToDeduct, userId, efUser.Credits);
 
             return true;
         }
@@ -71,17 +110,32 @@ public class CreditService : ICreditService
     {
         try
         {
-            var user = await _context.Users
+            // Try Firestore first, fall back to EF
+            if (await _firestore.IsAvailableAsync())
+            {
+                _logger.LogDebug("[Credits] Using Firestore to get credits for user: {UserId}", userId);
+                var user = await _firestore.GetUserByIdAsync(userId);
+                
+                if (user == null)
+                {
+                    throw new UserNotFoundException(userId);
+                }
+
+                return user.Credits;
+            }
+            
+            _logger.LogDebug("[Credits] Using SQLite/EF to get credits for user: {UserId}", userId);
+            var efUser = await _context.Users
                 .Where(u => u.Id == userId)
                 .Select(u => u.Credits)
                 .FirstOrDefaultAsync();
 
-            if (user == 0 && !await _context.Users.AnyAsync(u => u.Id == userId))
+            if (efUser == 0 && !await _context.Users.AnyAsync(u => u.Id == userId))
             {
                 throw new UserNotFoundException(userId);
             }
 
-            return user;
+            return efUser;
         }
         catch (UserNotFoundException)
         {
@@ -98,17 +152,37 @@ public class CreditService : ICreditService
     {
         try
         {
-            var user = await _context.Users.FindAsync(userId);
-            if (user == null)
+            // Try Firestore first, fall back to EF
+            if (await _firestore.IsAvailableAsync())
+            {
+                _logger.LogDebug("[Credits] Using Firestore to add credits for user: {UserId}", userId);
+                var user = await _firestore.GetUserByIdAsync(userId);
+                if (user == null)
+                {
+                    throw new UserNotFoundException(userId);
+                }
+
+                user.Credits += creditsToAdd;
+                await _firestore.UpdateUserAsync(user);
+
+                _logger.LogInformation("Added {Credits} credits to user {UserId} in Firestore. New balance: {NewBalance}", 
+                    creditsToAdd, userId, user.Credits);
+
+                return true;
+            }
+            
+            _logger.LogDebug("[Credits] Using SQLite/EF to add credits for user: {UserId}", userId);
+            var efUser = await _context.Users.FindAsync(userId);
+            if (efUser == null)
             {
                 throw new UserNotFoundException(userId);
             }
 
-            user.Credits += creditsToAdd;
+            efUser.Credits += creditsToAdd;
             await _context.SaveChangesAsync();
 
-            _logger.LogInformation("Added {Credits} credits to user {UserId}. New balance: {NewBalance}", 
-                creditsToAdd, userId, user.Credits);
+            _logger.LogInformation("Added {Credits} credits to user {UserId} in SQLite. New balance: {NewBalance}", 
+                creditsToAdd, userId, efUser.Credits);
 
             return true;
         }

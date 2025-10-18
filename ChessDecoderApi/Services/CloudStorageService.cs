@@ -10,50 +10,39 @@ public class CloudStorageService : ICloudStorageService
     private readonly StorageClient _storageClient;
     private readonly IConfiguration _configuration;
     private readonly ILogger<CloudStorageService> _logger;
-    private readonly string _databaseBucketName;
     private readonly string _imagesBucketName;
-    private readonly string _databaseFileName;
 
     public CloudStorageService(IConfiguration configuration, ILogger<CloudStorageService> logger)
     {
         _configuration = configuration;
         _logger = logger;
         
-        // Get bucket names from environment variables first, then configuration
-        var envDbBucket = Environment.GetEnvironmentVariable("GOOGLE_CLOUD_DATABASE_BUCKET");
+        // Get image bucket name from environment variables first, then configuration
         var envImagesBucket = Environment.GetEnvironmentVariable("GOOGLE_CLOUD_IMAGES_BUCKET");
-        var configDbBucket = _configuration["CloudStorage:DatabaseBucketName"];
         var configImagesBucket = _configuration["CloudStorage:ImagesBucketName"];
         
-        _logger.LogInformation("Environment variables - GOOGLE_CLOUD_DATABASE_BUCKET: '{EnvDbBucket}', GOOGLE_CLOUD_IMAGES_BUCKET: '{EnvImagesBucket}'", 
-            envDbBucket ?? "null", envImagesBucket ?? "null");
-        _logger.LogInformation("Configuration values - DatabaseBucketName: '{ConfigDbBucket}', ImagesBucketName: '{ConfigImagesBucket}'", 
-            configDbBucket ?? "null", configImagesBucket ?? "null");
+        _logger.LogInformation("Environment variable - GOOGLE_CLOUD_IMAGES_BUCKET: '{EnvImagesBucket}'", 
+            envImagesBucket ?? "null");
+        _logger.LogInformation("Configuration value - ImagesBucketName: '{ConfigImagesBucket}'", 
+            configImagesBucket ?? "null");
         
-        _databaseBucketName = envDbBucket ?? configDbBucket ?? "chessdecoder-db";
         _imagesBucketName = envImagesBucket ?? configImagesBucket ?? "chessdecoder-images";
             
-        // Validate bucket names
-        if (string.IsNullOrWhiteSpace(_databaseBucketName))
-        {
-            _databaseBucketName = "chessdecoder-db";
-        }
+        // Validate bucket name
         if (string.IsNullOrWhiteSpace(_imagesBucketName))
         {
             _imagesBucketName = "chessdecoder-images";
         }
         
-        _logger.LogInformation("Final bucket names - Database: '{DatabaseBucket}', Images: '{ImagesBucket}'", 
-            _databaseBucketName, _imagesBucketName);
-        _databaseFileName = "chessdecoder.db";
+        _logger.LogInformation("Final image bucket name: '{ImagesBucket}'", _imagesBucketName);
         
         // Try to initialize Google Cloud Storage client
         // In Cloud Run, credentials are automatically available via the default service account
         try
         {
             _storageClient = StorageClient.Create();
-            _logger.LogInformation("Google Cloud Storage client initialized successfully with buckets: {DatabaseBucket}, {ImagesBucket}", 
-                _databaseBucketName, _imagesBucketName);
+            _logger.LogInformation("Google Cloud Storage client initialized successfully with images bucket: {ImagesBucket}", 
+                _imagesBucketName);
         }
         catch (Exception ex)
         {
@@ -66,74 +55,9 @@ public class CloudStorageService : ICloudStorageService
         }
     }
 
-    public async Task<bool> SyncDatabaseToCloudAsync()
-    {
-        if (_storageClient == null) return false;
-
-        try
-        {
-            var dbPath = Path.Combine(Directory.GetCurrentDirectory(), "data", _databaseFileName);
-            if (!File.Exists(dbPath)) return false;
-
-            using var stream = File.OpenRead(dbPath);
-            await _storageClient.UploadObjectAsync(_databaseBucketName, _databaseFileName, "application/x-sqlite3", stream);
-            
-            _logger.LogInformation("Database synced to Cloud Storage: {Bucket}/{FileName}", _databaseBucketName, _databaseFileName);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to sync database to Cloud Storage");
-            return false;
-        }
-    }
-
-    public async Task<bool> SyncDatabaseFromCloudAsync()
-    {
-        if (_storageClient == null) return false;
-
-        try
-        {
-            var dbPath = Path.Combine(Directory.GetCurrentDirectory(), "data", _databaseFileName);
-            var dbDir = Path.GetDirectoryName(dbPath);
-            
-            if (!Directory.Exists(dbDir))
-            {
-                Directory.CreateDirectory(dbDir!);
-            }
-
-            // Check if the object exists in the bucket first
-            try
-            {
-                await _storageClient.GetObjectAsync(_databaseBucketName, _databaseFileName);
-            }
-            catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
-            {
-                _logger.LogInformation("No database found in Cloud Storage bucket {Bucket}. Will create a new local database.", _databaseBucketName);
-                return false; // This is not an error - just no cloud database exists yet
-            }
-
-            using var stream = new MemoryStream();
-            await _storageClient.DownloadObjectAsync(_databaseBucketName, _databaseFileName, stream);
-            
-            stream.Position = 0;
-            using var fileStream = File.Create(dbPath);
-            await stream.CopyToAsync(fileStream);
-            
-            _logger.LogInformation("Database synced from Cloud Storage: {Bucket}/{FileName}", _databaseBucketName, _databaseFileName);
-            return true;
-        }
-        catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            _logger.LogInformation("No database found in Cloud Storage bucket {Bucket}. Will create a new local database.", _databaseBucketName);
-            return false; // This is not an error - just no cloud database exists yet
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to sync database from Cloud Storage. Using local database if available.");
-            return false;
-        }
-    }
+    // Database sync methods removed - now using Firestore for permanent cloud database
+    // Firestore provides a single, shared database accessible by all Cloud Run instances
+    // No need to sync database files anymore!
 
     public async Task<string> UploadGameImageAsync(Stream imageStream, string fileName, string contentType)
     {
