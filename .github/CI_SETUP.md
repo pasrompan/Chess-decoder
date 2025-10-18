@@ -16,6 +16,11 @@ This repository uses GitHub Actions for continuous integration. The CI pipeline 
 - ✅ Checks code formatting (non-blocking)
 - ✅ Uploads test artifacts for debugging
 
+**Permissions:**
+- `contents: read` - Read repository code
+- `checks: write` - Create check runs for test reports
+- `pull-requests: write` - Post coverage comments on PRs
+
 **Jobs:**
 1. **build-and-test** - Main build and test execution
 2. **code-style-check** - Format and style validation (non-blocking)
