@@ -50,7 +50,7 @@ public class RepositoryFactory
         return _isFirestoreAvailable.Value;
     }
 
-    public async Task<IUserRepository> CreateUserRepositoryAsync()
+    public virtual async Task<IUserRepository> CreateUserRepositoryAsync()
     {
         if (await IsFirestoreAvailableAsync())
         {
@@ -67,7 +67,7 @@ public class RepositoryFactory
         return new SqliteUserRepository(context, sqliteLogger);
     }
 
-    public async Task<IChessGameRepository> CreateChessGameRepositoryAsync()
+    public virtual async Task<IChessGameRepository> CreateChessGameRepositoryAsync()
     {
         if (await IsFirestoreAvailableAsync())
         {
@@ -84,7 +84,7 @@ public class RepositoryFactory
         return new SqliteChessGameRepository(context, sqliteLogger);
     }
 
-    public async Task<IGameImageRepository> CreateGameImageRepositoryAsync()
+    public virtual async Task<IGameImageRepository> CreateGameImageRepositoryAsync()
     {
         if (await IsFirestoreAvailableAsync())
         {
@@ -101,7 +101,7 @@ public class RepositoryFactory
         return new SqliteGameImageRepository(context, sqliteLogger);
     }
 
-    public async Task<IGameStatisticsRepository> CreateGameStatisticsRepositoryAsync()
+    public virtual async Task<IGameStatisticsRepository> CreateGameStatisticsRepositoryAsync()
     {
         if (await IsFirestoreAvailableAsync())
         {

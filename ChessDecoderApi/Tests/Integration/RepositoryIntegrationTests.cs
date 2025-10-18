@@ -78,8 +78,14 @@ public class RepositoryIntegrationTests : IDisposable
     {
         // Arrange
         var context = _dbFactory.CreateContext();
-        var logger = Mock.Of<ILogger<SqliteChessGameRepository>>();
-        var repository = new SqliteChessGameRepository(context, logger);
+        var gameLogger = Mock.Of<ILogger<SqliteChessGameRepository>>();
+        var userLogger = Mock.Of<ILogger<SqliteUserRepository>>();
+        var repository = new SqliteChessGameRepository(context, gameLogger);
+        var userRepository = new SqliteUserRepository(context, userLogger);
+
+        // Create users first
+        await userRepository.CreateAsync(TestDataBuilder.CreateUser(id: "user-1", email: "user-1@example.com"));
+        await userRepository.CreateAsync(TestDataBuilder.CreateUser(id: "user-2", email: "user-2@example.com"));
 
         var user1Games = TestDataBuilder.CreateChessGames(3, "user-1");
         var user2Games = TestDataBuilder.CreateChessGames(2, "user-2");

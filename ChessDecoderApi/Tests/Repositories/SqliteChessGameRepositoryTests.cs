@@ -10,24 +10,36 @@ namespace ChessDecoderApi.Tests.Repositories;
 public class SqliteChessGameRepositoryTests : IDisposable
 {
     private readonly TestDbContextFactory _dbFactory;
-    private readonly SqliteChessGameRepository _repository;
-    private readonly Mock<ILogger<SqliteChessGameRepository>> _loggerMock;
 
     public SqliteChessGameRepositoryTests()
     {
         _dbFactory = new TestDbContextFactory();
-        _loggerMock = new Mock<ILogger<SqliteChessGameRepository>>();
-        _repository = new SqliteChessGameRepository(_dbFactory.CreateContext(), _loggerMock.Object);
+    }
+
+    private async Task<(SqliteChessGameRepository gameRepo, SqliteUserRepository userRepo)> CreateRepositoriesAsync()
+    {
+        var context = _dbFactory.CreateContext();
+        var gameRepo = new SqliteChessGameRepository(context, Mock.Of<ILogger<SqliteChessGameRepository>>());
+        var userRepo = new SqliteUserRepository(context, Mock.Of<ILogger<SqliteUserRepository>>());
+        return (gameRepo, userRepo);
+    }
+
+    private async Task CreateTestUserAsync(SqliteUserRepository userRepo, string userId = "test-user-123")
+    {
+        var user = TestDataBuilder.CreateUser(id: userId, email: $"{userId}@example.com");
+        await userRepo.CreateAsync(user);
     }
 
     [Fact]
     public async Task CreateAsync_ValidGame_CreatesAndReturnsGame()
     {
         // Arrange
+        var (gameRepo, userRepo) = await CreateRepositoriesAsync();
+        await CreateTestUserAsync(userRepo, "test-user");
         var game = TestDataBuilder.CreateChessGame(userId: "test-user");
 
         // Act
-        var result = await _repository.CreateAsync(game);
+        var result = await gameRepo.CreateAsync(game);
 
         // Assert
         Assert.NotNull(result);
@@ -40,10 +52,12 @@ public class SqliteChessGameRepositoryTests : IDisposable
     public async Task CreateAsync_EmptyGuid_GeneratesNewGuid()
     {
         // Arrange
+        var (gameRepo, userRepo) = await CreateRepositoriesAsync();
+        await CreateTestUserAsync(userRepo);
         var game = TestDataBuilder.CreateChessGame(id: Guid.Empty);
 
         // Act
-        var result = await _repository.CreateAsync(game);
+        var result = await gameRepo.CreateAsync(game);
 
         // Assert
         Assert.NotEqual(Guid.Empty, result.Id);
@@ -53,11 +67,13 @@ public class SqliteChessGameRepositoryTests : IDisposable
     public async Task GetByIdAsync_ExistingGame_ReturnsGame()
     {
         // Arrange
+        var (gameRepo, userRepo) = await CreateRepositoriesAsync();
+        await CreateTestUserAsync(userRepo);
         var game = TestDataBuilder.CreateChessGame();
-        await _repository.CreateAsync(game);
+        await gameRepo.CreateAsync(game);
 
         // Act
-        var result = await _repository.GetByIdAsync(game.Id);
+        var result = await gameRepo.GetByIdAsync(game.Id);
 
         // Assert
         Assert.NotNull(result);
@@ -68,8 +84,11 @@ public class SqliteChessGameRepositoryTests : IDisposable
     [Fact]
     public async Task GetByIdAsync_NonExistingGame_ReturnsNull()
     {
+        // Arrange
+        var (gameRepo, _) = await CreateRepositoriesAsync();
+        
         // Act
-        var result = await _repository.GetByIdAsync(Guid.NewGuid());
+        var result = await gameRepo.GetByIdAsync(Guid.NewGuid());
 
         // Assert
         Assert.Null(result);
@@ -80,18 +99,22 @@ public class SqliteChessGameRepositoryTests : IDisposable
     {
         // Arrange
         var userId = "test-user";
+        var (gameRepo, userRepo) = await CreateRepositoriesAsync();
+        await CreateTestUserAsync(userRepo, userId);
+        await CreateTestUserAsync(userRepo, "other-user");
+        
         var games = TestDataBuilder.CreateChessGames(3, userId);
         foreach (var game in games)
         {
-            await _repository.CreateAsync(game);
+            await gameRepo.CreateAsync(game);
         }
 
         // Create game for different user
         var otherGame = TestDataBuilder.CreateChessGame(userId: "other-user");
-        await _repository.CreateAsync(otherGame);
+        await gameRepo.CreateAsync(otherGame);
 
         // Act
-        var result = await _repository.GetByUserIdAsync(userId);
+        var result = await gameRepo.GetByUserIdAsync(userId);
 
         // Assert
         Assert.Equal(3, result.Count);
@@ -103,8 +126,11 @@ public class SqliteChessGameRepositoryTests : IDisposable
     [Fact]
     public async Task GetByUserIdAsync_NoGames_ReturnsEmptyList()
     {
+        // Arrange
+        var (gameRepo, _) = await CreateRepositoriesAsync();
+        
         // Act
-        var result = await _repository.GetByUserIdAsync("non-existing-user");
+        var result = await gameRepo.GetByUserIdAsync("non-existing-user");
 
         // Assert
         Assert.Empty(result);
@@ -115,16 +141,19 @@ public class SqliteChessGameRepositoryTests : IDisposable
     {
         // Arrange
         var userId = "test-user";
+        var (gameRepo, userRepo) = await CreateRepositoriesAsync();
+        await CreateTestUserAsync(userRepo, userId);
+        
         var games = TestDataBuilder.CreateChessGames(15, userId);
         foreach (var game in games)
         {
-            await _repository.CreateAsync(game);
+            await gameRepo.CreateAsync(game);
             await Task.Delay(1); // Ensure different ProcessedAt times
         }
 
         // Act
-        var (page1, totalCount) = await _repository.GetByUserIdPaginatedAsync(userId, pageNumber: 1, pageSize: 10);
-        var (page2, _) = await _repository.GetByUserIdPaginatedAsync(userId, pageNumber: 2, pageSize: 10);
+        var (page1, totalCount) = await gameRepo.GetByUserIdPaginatedAsync(userId, pageNumber: 1, pageSize: 10);
+        var (page2, _) = await gameRepo.GetByUserIdPaginatedAsync(userId, pageNumber: 2, pageSize: 10);
 
         // Assert
         Assert.Equal(15, totalCount);
@@ -137,21 +166,23 @@ public class SqliteChessGameRepositoryTests : IDisposable
     public async Task UpdateAsync_ExistingGame_UpdatesSuccessfully()
     {
         // Arrange
+        var (gameRepo, userRepo) = await CreateRepositoriesAsync();
+        await CreateTestUserAsync(userRepo);
         var game = TestDataBuilder.CreateChessGame(pgn: "1. e4 e5");
-        await _repository.CreateAsync(game);
+        await gameRepo.CreateAsync(game);
         
         game.PgnContent = "1. e4 e5 2. Nf3 Nc6 3. Bb5";
         game.Title = "Spanish Opening";
 
         // Act
-        var result = await _repository.UpdateAsync(game);
+        var result = await gameRepo.UpdateAsync(game);
 
         // Assert
         Assert.Equal("1. e4 e5 2. Nf3 Nc6 3. Bb5", result.PgnContent);
         Assert.Equal("Spanish Opening", result.Title);
 
         // Verify in database
-        var retrieved = await _repository.GetByIdAsync(game.Id);
+        var retrieved = await gameRepo.GetByIdAsync(game.Id);
         Assert.Equal("1. e4 e5 2. Nf3 Nc6 3. Bb5", retrieved!.PgnContent);
     }
 
@@ -159,23 +190,28 @@ public class SqliteChessGameRepositoryTests : IDisposable
     public async Task DeleteAsync_ExistingGame_DeletesAndReturnsTrue()
     {
         // Arrange
+        var (gameRepo, userRepo) = await CreateRepositoriesAsync();
+        await CreateTestUserAsync(userRepo);
         var game = TestDataBuilder.CreateChessGame();
-        await _repository.CreateAsync(game);
+        await gameRepo.CreateAsync(game);
 
         // Act
-        var result = await _repository.DeleteAsync(game.Id);
+        var result = await gameRepo.DeleteAsync(game.Id);
 
         // Assert
         Assert.True(result);
-        var retrieved = await _repository.GetByIdAsync(game.Id);
+        var retrieved = await gameRepo.GetByIdAsync(game.Id);
         Assert.Null(retrieved);
     }
 
     [Fact]
     public async Task DeleteAsync_NonExistingGame_ReturnsFalse()
     {
+        // Arrange
+        var (gameRepo, _) = await CreateRepositoriesAsync();
+        
         // Act
-        var result = await _repository.DeleteAsync(Guid.NewGuid());
+        var result = await gameRepo.DeleteAsync(Guid.NewGuid());
 
         // Assert
         Assert.False(result);
@@ -185,11 +221,13 @@ public class SqliteChessGameRepositoryTests : IDisposable
     public async Task ExistsAsync_ExistingGame_ReturnsTrue()
     {
         // Arrange
+        var (gameRepo, userRepo) = await CreateRepositoriesAsync();
+        await CreateTestUserAsync(userRepo);
         var game = TestDataBuilder.CreateChessGame();
-        await _repository.CreateAsync(game);
+        await gameRepo.CreateAsync(game);
 
         // Act
-        var result = await _repository.ExistsAsync(game.Id);
+        var result = await gameRepo.ExistsAsync(game.Id);
 
         // Assert
         Assert.True(result);
@@ -198,8 +236,11 @@ public class SqliteChessGameRepositoryTests : IDisposable
     [Fact]
     public async Task ExistsAsync_NonExistingGame_ReturnsFalse()
     {
+        // Arrange
+        var (gameRepo, _) = await CreateRepositoriesAsync();
+        
         // Act
-        var result = await _repository.ExistsAsync(Guid.NewGuid());
+        var result = await gameRepo.ExistsAsync(Guid.NewGuid());
 
         // Assert
         Assert.False(result);
@@ -210,14 +251,17 @@ public class SqliteChessGameRepositoryTests : IDisposable
     {
         // Arrange
         var userId = "test-user";
+        var (gameRepo, userRepo) = await CreateRepositoriesAsync();
+        await CreateTestUserAsync(userRepo, userId);
+        
         var games = TestDataBuilder.CreateChessGames(7, userId);
         foreach (var game in games)
         {
-            await _repository.CreateAsync(game);
+            await gameRepo.CreateAsync(game);
         }
 
         // Act
-        var result = await _repository.GetCountByUserIdAsync(userId);
+        var result = await gameRepo.GetCountByUserIdAsync(userId);
 
         // Assert
         Assert.Equal(7, result);
@@ -226,8 +270,11 @@ public class SqliteChessGameRepositoryTests : IDisposable
     [Fact]
     public async Task GetCountByUserIdAsync_NoGames_ReturnsZero()
     {
+        // Arrange
+        var (gameRepo, _) = await CreateRepositoriesAsync();
+        
         // Act
-        var result = await _repository.GetCountByUserIdAsync("non-existing-user");
+        var result = await gameRepo.GetCountByUserIdAsync("non-existing-user");
 
         // Assert
         Assert.Equal(0, result);
