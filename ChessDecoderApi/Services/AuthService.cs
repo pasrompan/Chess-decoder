@@ -1,10 +1,9 @@
 using ChessDecoderApi.Models;
-using ChessDecoderApi.Data;
+using ChessDecoderApi.Repositories;
 using Google.Apis.Auth;
 using Microsoft.Extensions.Configuration;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using Microsoft.EntityFrameworkCore;
 
 namespace ChessDecoderApi.Services;
 
@@ -13,16 +12,14 @@ public class AuthService : IAuthService
     private readonly IConfiguration _configuration;
     private readonly ILogger<AuthService> _logger;
     private readonly HttpClient _httpClient;
-    private readonly IFirestoreService _firestore;
-    private readonly ChessDecoderDbContext _context;
+    private readonly RepositoryFactory _repositoryFactory;
 
-    public AuthService(IConfiguration configuration, ILogger<AuthService> logger, HttpClient httpClient, IFirestoreService firestore, ChessDecoderDbContext context)
+    public AuthService(IConfiguration configuration, ILogger<AuthService> logger, HttpClient httpClient, RepositoryFactory repositoryFactory)
     {
         _configuration = configuration;
         _logger = logger;
         _httpClient = httpClient;
-        _firestore = firestore;
-        _context = context;
+        _repositoryFactory = repositoryFactory;
     }
 
     public async Task<AuthResponse> VerifyGoogleTokenAsync(string accessToken)
@@ -90,51 +87,26 @@ public class AuthService : IAuthService
 
     public async Task<User?> GetUserProfileAsync(string userId)
     {
-        // Try Firestore first, fall back to EF
-        if (await _firestore.IsAvailableAsync())
-        {
-            _logger.LogDebug("[Auth] Using Firestore to get user profile: {UserId}", userId);
-            return await _firestore.GetUserByIdAsync(userId);
-        }
-        
-        _logger.LogDebug("[Auth] Using SQLite/EF to get user profile: {UserId}", userId);
-        return await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
+        var userRepo = await _repositoryFactory.CreateUserRepositoryAsync();
+        return await userRepo.GetByIdAsync(userId);
     }
 
     public async Task<User> UpdateUserProfileAsync(string userId, UserProfileRequest request)
     {
-        // Try Firestore first, fall back to EF
-        if (await _firestore.IsAvailableAsync())
-        {
-            _logger.LogDebug("[Auth] Using Firestore to update user profile: {UserId}", userId);
-            var user = await _firestore.GetUserByIdAsync(userId);
-            if (user == null)
-            {
-                throw new InvalidOperationException("User not found");
-            }
-
-            if (!string.IsNullOrEmpty(request.Name))
-            {
-                user.Name = request.Name;
-            }
-
-            return await _firestore.UpdateUserAsync(user);
-        }
+        var userRepo = await _repositoryFactory.CreateUserRepositoryAsync();
+        var user = await userRepo.GetByIdAsync(userId);
         
-        _logger.LogDebug("[Auth] Using SQLite/EF to update user profile: {UserId}", userId);
-        var efUser = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
-        if (efUser == null)
+        if (user == null)
         {
             throw new InvalidOperationException("User not found");
         }
 
         if (!string.IsNullOrEmpty(request.Name))
         {
-            efUser.Name = request.Name;
+            user.Name = request.Name;
         }
 
-        await _context.SaveChangesAsync();
-        return efUser;
+        return await userRepo.UpdateAsync(user);
     }
 
     public Task<bool> SignOutUserAsync(string userId)
@@ -150,54 +122,21 @@ public class AuthService : IAuthService
 
     private async Task<User> GetOrCreateUserAsync(string userId, string email, string name, string? picture)
     {
-        // Try Firestore first, fall back to EF
-        if (await _firestore.IsAvailableAsync())
-        {
-            _logger.LogDebug("[Auth] Using Firestore for GetOrCreateUser");
-            
-            // Check if user exists in Firestore
-            var existingUser = await _firestore.GetUserByIdAsync(userId);
-            
-            if (existingUser != null)
-            {
-                // Update last login time
-                existingUser.LastLoginAt = DateTime.UtcNow;
-                await _firestore.UpdateUserAsync(existingUser);
-                return existingUser;
-            }
-
-            // Create new user in Firestore
-            var newUser = new User
-            {
-                Id = userId,
-                Email = email,
-                Name = name,
-                Picture = picture,
-                Provider = "google",
-                CreatedAt = DateTime.UtcNow,
-                LastLoginAt = DateTime.UtcNow,
-                Credits = 10 // Default credits for new users
-            };
-
-            await _firestore.CreateUserAsync(newUser);
-            _logger.LogInformation("Created new user in Firestore: {Email}", email);
-            return newUser;
-        }
+        var userRepo = await _repositoryFactory.CreateUserRepositoryAsync();
         
-        // Fallback to EF/SQLite
-        _logger.LogDebug("[Auth] Using SQLite/EF for GetOrCreateUser");
-        var efExistingUser = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
+        // Check if user exists
+        var existingUser = await userRepo.GetByIdAsync(userId);
         
-        if (efExistingUser != null)
+        if (existingUser != null)
         {
             // Update last login time
-            efExistingUser.LastLoginAt = DateTime.UtcNow;
-            await _context.SaveChangesAsync();
-            return efExistingUser;
+            existingUser.LastLoginAt = DateTime.UtcNow;
+            await userRepo.UpdateAsync(existingUser);
+            return existingUser;
         }
 
-        // Create new user in EF/SQLite
-        var efNewUser = new User
+        // Create new user
+        var newUser = new User
         {
             Id = userId,
             Email = email,
@@ -209,10 +148,8 @@ public class AuthService : IAuthService
             Credits = 10 // Default credits for new users
         };
 
-        _context.Users.Add(efNewUser);
-        await _context.SaveChangesAsync();
-        
-        _logger.LogInformation("Created new user in SQLite/EF: {Email}", email);
-        return efNewUser;
+        await userRepo.CreateAsync(newUser);
+        _logger.LogInformation("Created new user: {Email}", email);
+        return newUser;
     }
 }

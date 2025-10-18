@@ -6,7 +6,12 @@ namespace ChessDecoderApi.Services;
 /// <summary>
 /// Firestore database implementation - FREE for typical usage!
 /// Free tier: 1GB storage, 50K reads/day, 20K writes/day
+/// 
+/// DEPRECATED: This service is kept for backward compatibility only.
+/// New code should use the Repository pattern (RepositoryFactory and IUserRepository, etc.)
+/// which provides better abstraction and testability.
 /// </summary>
+[Obsolete("Use RepositoryFactory and repository interfaces instead for better abstraction and testability.")]
 public class FirestoreService : IFirestoreService
 {
     private readonly FirestoreDb? _firestoreDb;
