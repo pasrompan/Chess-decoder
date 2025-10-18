@@ -19,12 +19,15 @@ You need to add your OpenAI API key as a GitHub secret:
 
 Once the secret is added, the workflow will automatically:
 
-- **Review PRs**: When a PR is opened, reopened, or updated
+- **Review PRs**: When a PR is opened, reopened, or updated (synchronize events)
+- **Auto-describe**: Generate PR descriptions when opened
 - **Provide Feedback**: Inline comments on specific code changes
 - **Security Analysis**: Flag potential security issues
 - **Code Suggestions**: Suggest improvements
 - **Effort Estimation**: Estimate review effort
 - **Test Coverage**: Check if tests are adequate
+
+**Note**: The first time you create a PR or push new commits, wait 30-60 seconds for the review to complete.
 
 ### 3. Using PR-Agent Commands
 
@@ -55,10 +58,17 @@ PR-Agent uses your OpenAI API key, so reviews will incur costs based on OpenAI's
 ### 6. Troubleshooting
 
 If reviews aren't appearing:
-1. Check that `OPENAI_API_KEY` secret is set correctly
-2. Verify the workflow is enabled: **Actions** tab → **PR Agent**
-3. Check workflow runs for errors
+1. Check that `OPENAI_API_KEY` secret is set correctly in repository Settings
+2. Verify the workflow is enabled: **Actions** tab → **PR Agent - AI Code Review**
+3. Check workflow runs for errors in the Actions tab
 4. Ensure PRs are not in draft mode (reviews skip draft PRs)
+5. Wait at least 30-60 seconds after opening/updating PR
+6. Try manually triggering a review with `/review` command in PR comments
+
+**Common Issues:**
+- **"Skipping action: synchronize"**: Fixed in latest config - commit the updated `.pr_agent.toml`
+- **No API key error**: Add `OPENAI_API_KEY` secret in repository settings
+- **Review not posting**: Check that the bot has write permissions to pull requests
 
 ### 7. Disable Automatic Reviews
 

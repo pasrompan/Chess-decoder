@@ -5,6 +5,12 @@
 model = "gpt-4o"  # Use GPT-4o for better code understanding
 fallback_models = ["gpt-4-turbo", "gpt-3.5-turbo"]
 
+[github_action_config]
+# Enable reviews on PR updates (synchronize events)
+auto_review = true
+auto_describe = true
+auto_improve = false
+
 [pr_reviewer]
 # Automatically review PRs when they are opened
 automatic_review = true
