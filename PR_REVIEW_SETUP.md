@@ -17,17 +17,18 @@ You need to add your OpenAI API key as a GitHub secret:
 
 ### 2. How It Works
 
-Once the secret is added, the workflow will automatically:
+Once the secret is added, the workflow will:
 
-- **Review PRs**: When a PR is opened, reopened, or updated (synchronize events)
-- **Auto-describe**: Generate PR descriptions when opened
+- **Auto-review new PRs**: When a PR is first opened or reopened
+- **Manual reviews**: Comment `/review` on any PR to trigger a review
 - **Provide Feedback**: Inline comments on specific code changes
 - **Security Analysis**: Flag potential security issues
-- **Code Suggestions**: Suggest improvements
+- **Code Suggestions**: Suggest improvements with `/improve` command
+- **PR Descriptions**: Auto-generate descriptions with `/describe` command
 - **Effort Estimation**: Estimate review effort
 - **Test Coverage**: Check if tests are adequate
 
-**Note**: The first time you create a PR or push new commits, wait 30-60 seconds for the review to complete.
+**Note**: After opening a PR or commenting `/review`, wait 30-60 seconds for the review to complete.
 
 ### 3. Using PR-Agent Commands
 
