@@ -6,15 +6,15 @@ namespace ChessDecoderApi.Services
 {
     public interface IImageProcessingService
     {
-        Task<ChessGameResponse> ProcessImageAsync(string imagePath, string language = "English", bool useColumnDetection = true);
-        Task<(List<string> whiteMoves, List<string> blackMoves)> ExtractMovesFromImageToStringAsync(string imagePath, string language = "English", bool useColumnDetection = true);
+        Task<ChessGameResponse> ProcessImageAsync(string imagePath, string language = "English", bool useColumnDetection = true, int expectedColumns = 4);
+        Task<(List<string> whiteMoves, List<string> blackMoves)> ExtractMovesFromImageToStringAsync(string imagePath, string language = "English", bool useColumnDetection = true, int expectedColumns = 4);
         Task<string> ExtractTextFromImageAsync(byte[] imageBytes, string language);
         string GeneratePGNContentAsync(IEnumerable<string> whiteMoves, IEnumerable<string> blackMoves);
         Task<string> DebugUploadAsync(string imagePath, string promptText);
         List<int> SplitImageIntoColumns(Image<Rgba32> image, int expectedColumns = 6);
         List<int> SplitImageIntoColumns(Image<Rgba32> image, int expectedColumns, Rectangle? searchRegion);
         List<int> SplitImageIntoColumns(string imagePath, int expectedColumns = 6);
-        List<int> DetectChessColumnsAutomatically(Image<Rgba32> image, Rectangle? searchRegion = null, bool useHeuristics = true);
+        List<int> DetectChessColumnsAutomatically(Image<Rgba32> image, Rectangle? searchRegion = null, bool useHeuristics = true, int expectedColumns = 4);
         Task<byte[]> CreateImageWithBoundariesAsync(string imagePath, int expectedColumns = 6);
         Task<byte[]> CropImageAsync(string imagePath, int x, int y, int width, int height);
         Rectangle FindTableBoundaries(Image<Rgba32> image);

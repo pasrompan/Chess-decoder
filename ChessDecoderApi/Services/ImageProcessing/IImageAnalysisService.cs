@@ -19,7 +19,8 @@ public interface IImageAnalysisService
     /// <param name="image">The image to analyze</param>
     /// <param name="searchRegion">Optional region to restrict search</param>
     /// <param name="useHeuristics">Whether to use heuristics or fallback to equal division</param>
-    List<int> DetectChessColumnsAutomatically(Image<Rgba32> image, Rectangle? searchRegion = null, bool useHeuristics = true);
+    /// <param name="expectedColumns">Expected number of columns (default: 4)</param>
+    List<int> DetectChessColumnsAutomatically(Image<Rgba32> image, Rectangle? searchRegion = null, bool useHeuristics = true, int expectedColumns = 4);
 
     /// <summary>
     /// Split an image into columns using projection profile analysis

@@ -71,7 +71,7 @@ namespace ChessDecoderApi.Services
         /// <param name="language">Language for chess notation (default: English)</param>
         /// <param name="useColumnDetection">Whether to use heuristics for column detection or fall back to equal division</param>
         /// <returns>Tuple of two lists: whiteMoves and blackMoves</returns>
-        public virtual async Task<(List<string> whiteMoves, List<string> blackMoves)> ExtractMovesFromImageToStringAsync(string imagePath, string language = "English", bool useColumnDetection = true)
+        public virtual async Task<(List<string> whiteMoves, List<string> blackMoves)> ExtractMovesFromImageToStringAsync(string imagePath, string language = "English", bool useColumnDetection = true, int expectedColumns = 4)
         {
             Image<Rgba32> image;
             
@@ -114,13 +114,13 @@ namespace ChessDecoderApi.Services
             List<int> boundaries;
             if (useColumnDetection)
             {
-                _logger.LogInformation("Using heuristics for automatic column detection");
-                boundaries = DetectChessColumnsAutomatically(image, searchRegion, useHeuristics: true);
+                _logger.LogInformation("Using heuristics for automatic column detection with expectedColumns: {ExpectedColumns}", expectedColumns);
+                boundaries = DetectChessColumnsAutomatically(image, searchRegion, useHeuristics: true, expectedColumns);
             }
             else
             {
-                _logger.LogInformation("Column detection disabled, using equal division fallback on full image");
-                boundaries = DetectChessColumnsAutomatically(image, searchRegion, useHeuristics: false);
+                _logger.LogInformation("Column detection disabled, using equal division fallback on full image with expectedColumns: {ExpectedColumns}", expectedColumns);
+                boundaries = DetectChessColumnsAutomatically(image, searchRegion, useHeuristics: false, expectedColumns);
             }
             var whiteMoves = new List<string>();
             var blackMoves = new List<string>();
@@ -188,10 +188,10 @@ namespace ChessDecoderApi.Services
         /// <param name="language">Language for chess notation (default: English)</param>
         /// <param name="useColumnDetection">Whether to use heuristics for column detection or fall back to equal division</param>
         /// <returns>PGN formatted string containing the chess moves</returns>
-        public async Task<ChessGameResponse> ProcessImageAsync(string imagePath, string language = "English", bool useColumnDetection = true)
+        public async Task<ChessGameResponse> ProcessImageAsync(string imagePath, string language = "English", bool useColumnDetection = true, int expectedColumns = 4)
         {
             // Extract moves from the image
-            var (whiteMoves, blackMoves) = await ExtractMovesFromImageToStringAsync(imagePath, language, useColumnDetection);
+            var (whiteMoves, blackMoves) = await ExtractMovesFromImageToStringAsync(imagePath, language, useColumnDetection, expectedColumns);
 
             // Validate white and black moves separately
             var whiteValidation = _chessMoveValidator.ValidateMoves(whiteMoves.ToArray());
@@ -596,22 +596,22 @@ namespace ChessDecoderApi.Services
         /// <param name="searchRegion">Rectangle to search within (null for entire image)</param>
         /// <param name="useHeuristics">Whether to use heuristics for detection or fall back to equal division immediately</param>
         /// <returns>List of column boundary indices for the 6 chess move columns</returns>
-        public List<int> DetectChessColumnsAutomatically(Image<Rgba32> image, Rectangle? searchRegion = null, bool useHeuristics = true)
+        public List<int> DetectChessColumnsAutomatically(Image<Rgba32> image, Rectangle? searchRegion = null, bool useHeuristics = true, int expectedColumns = 4)
         {
             Rectangle region = searchRegion ?? new Rectangle(0, 0, image.Width, image.Height);
             
             // If heuristics are disabled, immediately use equal division
             if (!useHeuristics)
             {
-                _logger.LogInformation($"Column detection heuristics disabled, using equal division for region: {region.Width}x{region.Height}");
-                return CreateEqualDivisionColumns(region, 6);
+                _logger.LogInformation($"Column detection heuristics disabled, using equal division for region: {region.Width}x{region.Height} with expectedColumns: {expectedColumns}");
+                return CreateEqualDivisionColumns(region, expectedColumns);
             }
             
-            _logger.LogInformation($"Starting automatic chess column detection within region: {region.Width}x{region.Height}");
+            _logger.LogInformation($"Starting automatic chess column detection within region: {region.Width}x{region.Height} with expectedColumns: {expectedColumns}");
             
-            // Calculate minimum column width based on table size (each column should be ~1/6 of table, with some tolerance)
-            double minExpectedWidth = region.Width / 6.0 * 0.5; // At least 50% of expected width
-            double maxExpectedWidth = region.Width / 6.0 * 2.0; // At most 200% of expected width
+            // Calculate minimum column width based on table size (each column should be ~1/expectedColumns of table, with some tolerance)
+            double minExpectedWidth = region.Width / (double)expectedColumns * 0.5; // At least 50% of expected width
+            double maxExpectedWidth = region.Width / (double)expectedColumns * 2.0; // At most 200% of expected width
             
             _logger.LogInformation($"Expected column width range: {minExpectedWidth:F1}px - {maxExpectedWidth:F1}px");
 
@@ -621,8 +621,8 @@ namespace ChessDecoderApi.Services
 
             if (allBoundaries.Count < 4) // Need at least 4 boundaries for 3 columns (minimum)
             {
-                _logger.LogWarning("Not enough column boundaries detected, falling back to equal division");
-                return CreateEqualDivisionColumns(region, 6);
+                _logger.LogWarning("Not enough column boundaries detected, falling back to equal division with expectedColumns: {ExpectedColumns}", expectedColumns);
+                return CreateEqualDivisionColumns(region, expectedColumns);
             }
 
             // Step 2: Analyze column widths and filter out obviously inappropriate ones
@@ -631,20 +631,20 @@ namespace ChessDecoderApi.Services
             
             _logger.LogInformation($"Filtered to {reasonableColumns.Count} columns with reasonable widths");
             
-            // Step 3: Find the best sequence of 6 consecutive columns that cover most of the table
-            var chessColumns = FindChessColumnSequence(reasonableColumns, region);
+            // Step 3: Find the best sequence of expectedColumns consecutive columns that cover most of the table
+            var chessColumns = FindChessColumnSequence(reasonableColumns, region, expectedColumns);
             
             if (chessColumns != null)
             {
-                double totalWidth = chessColumns[6] - chessColumns[0];
-                double avgWidth = totalWidth / 6.0;
+                double totalWidth = chessColumns[expectedColumns] - chessColumns[0];
+                double avgWidth = totalWidth / (double)expectedColumns;
                 double coverage = totalWidth / region.Width;
                 _logger.LogInformation($"Found chess columns covering {coverage:P1} of table width, avg column width: {avgWidth:F1}px");
                 return chessColumns;
             }
             
-            _logger.LogWarning("Could not automatically detect chess columns, falling back to equal division");
-            return CreateEqualDivisionColumns(region, 6);
+            _logger.LogWarning("Could not automatically detect chess columns, falling back to equal division with expectedColumns: {ExpectedColumns}", expectedColumns);
+            return CreateEqualDivisionColumns(region, expectedColumns);
         }
 
         /// <summary>
@@ -845,7 +845,7 @@ namespace ChessDecoderApi.Services
         /// Finds the best sequence of 6 consecutive columns that likely contain chess moves.
         /// Detects and skips comment columns (significantly wider than chess columns).
         /// </summary>
-        private List<int>? FindChessColumnSequence(List<ColumnInfo> columns, Rectangle region)
+        private List<int>? FindChessColumnSequence(List<ColumnInfo> columns, Rectangle region, int expectedColumns = 4)
         {
             if (columns.Count < 3) 
             {
@@ -854,7 +854,7 @@ namespace ChessDecoderApi.Services
             }
             
             // Step 1: Identify and exclude outlier columns (comments, numbers, etc.)
-            var filteredColumns = FilterOutlierColumns(columns, region);
+            var filteredColumns = FilterOutlierColumns(columns, region, expectedColumns);
             _logger.LogInformation($"After outlier filtering: {filteredColumns.Count} columns remaining");
             
             if (filteredColumns.Count < 3)
@@ -862,16 +862,16 @@ namespace ChessDecoderApi.Services
                 _logger.LogInformation("Too few columns after outlier filtering, using original set");
                 filteredColumns = columns; // Fallback to original set
             }
-            else if (filteredColumns.Count < 6)
+            else if (filteredColumns.Count < expectedColumns)
             {
                 _logger.LogInformation($"Only {filteredColumns.Count} columns after filtering, but proceeding to see what we can detect");
-                // Continue with filtered set even if < 6 columns
+                // Continue with filtered set even if < expectedColumns columns
             }
             
             var candidates = new List<ColumnSequence>();
             
-            // Determine how many columns to look for (prefer 6, but work with what we have)
-            int targetColumns = Math.Min(6, filteredColumns.Count);
+            // Determine how many columns to look for (prefer expectedColumns, but work with what we have)
+            int targetColumns = Math.Min(expectedColumns, filteredColumns.Count);
             _logger.LogInformation($"Looking for sequences of {targetColumns} columns");
             
             // Find all possible sequences of target number of consecutive columns
@@ -895,7 +895,7 @@ namespace ChessDecoderApi.Services
             if (!candidates.Any() && filteredColumns != columns)
             {
                 _logger.LogInformation("No sequences found with filtered columns, trying original set");
-                int originalTargetColumns = Math.Min(6, columns.Count);
+                int originalTargetColumns = Math.Min(expectedColumns, columns.Count);
                 for (int start = 0; start <= columns.Count - originalTargetColumns; start++)
                 {
                     var sequence = columns.Skip(start).Take(originalTargetColumns).ToList();
@@ -926,29 +926,29 @@ namespace ChessDecoderApi.Services
             var result = new List<int> { bestCandidate.StartX };
             result.AddRange(bestCandidate.Columns.Select(c => c.EndX));
             
-            // If we have fewer than 6 columns but good quality, try to extrapolate to 6
-            if (bestCandidate.Columns.Count < 6 && bestCandidate.Score > 0.7)
+            // If we have fewer than expectedColumns columns but good quality, try to extrapolate to expectedColumns
+            if (bestCandidate.Columns.Count < expectedColumns && bestCandidate.Score > 0.7)
             {
-                result = ExtrapolateTo6Columns(result, bestCandidate, region);
+                result = ExtrapolateToNColumns(result, bestCandidate, region, expectedColumns);
             }
-            else if (bestCandidate.Columns.Count < 6)
+            else if (bestCandidate.Columns.Count < expectedColumns)
             {
                 _logger.LogWarning($"Found only {bestCandidate.Columns.Count} columns with low score {bestCandidate.Score:F2}, falling back to equal division");
-                return CreateEqualDivisionColumns(region, 6);
+                return CreateEqualDivisionColumns(region, expectedColumns);
             }
             
             return result;
         }
 
         /// <summary>
-        /// Extrapolates a good column sequence to exactly 6 columns.
+        /// Extrapolates a good column sequence to exactly expectedColumns columns.
         /// </summary>
-        private List<int> ExtrapolateTo6Columns(List<int> boundaries, ColumnSequence sequence, Rectangle region)
+        private List<int> ExtrapolateToNColumns(List<int> boundaries, ColumnSequence sequence, Rectangle region, int expectedColumns)
         {
             int currentColumns = sequence.Columns.Count;
-            int neededColumns = 6 - currentColumns;
+            int neededColumns = expectedColumns - currentColumns;
             
-            _logger.LogInformation($"Extrapolating {currentColumns} columns to 6 columns (need {neededColumns} more)");
+            _logger.LogInformation($"Extrapolating {currentColumns} columns to {expectedColumns} columns (need {neededColumns} more)");
             
             if (neededColumns <= 0) return boundaries;
             
@@ -966,14 +966,14 @@ namespace ChessDecoderApi.Services
                 lastBoundary = newBoundary;
             }
             
-            _logger.LogInformation($"Extrapolated to 6 columns: added {neededColumns} columns with avg width {avgWidth:F1}px");
+            _logger.LogInformation($"Extrapolated to {expectedColumns} columns: added {neededColumns} columns with avg width {avgWidth:F1}px");
             return result;
         }
 
         /// <summary>
         /// Filters out columns that are likely comments or numbers (significantly different widths).
         /// </summary>
-        private List<ColumnInfo> FilterOutlierColumns(List<ColumnInfo> columns, Rectangle region)
+        private List<ColumnInfo> FilterOutlierColumns(List<ColumnInfo> columns, Rectangle region, int expectedColumns = 4)
         {
             if (columns.Count < 3) return columns;
             
@@ -981,7 +981,7 @@ namespace ChessDecoderApi.Services
             var widths = columns.Select(c => c.Width).ToList();
             double medianWidth = widths.OrderBy(w => w).Skip(widths.Count / 2).First();
             double avgWidth = widths.Average();
-            double expectedChessWidth = region.Width / 6.0; // Expected chess column width
+            double expectedChessWidth = region.Width / (double)expectedColumns; // Expected chess column width
             
             _logger.LogInformation($"Column width analysis - Median: {medianWidth:F1}px, Average: {avgWidth:F1}px, Expected chess: {expectedChessWidth:F1}px");
             

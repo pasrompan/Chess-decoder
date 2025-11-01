@@ -25,9 +25,9 @@ public class ImageAnalysisService : IImageAnalysisService
         return _imageProcessingService.FindTableBoundaries(image);
     }
 
-    public List<int> DetectChessColumnsAutomatically(Image<Rgba32> image, Rectangle? searchRegion = null, bool useHeuristics = true)
+    public List<int> DetectChessColumnsAutomatically(Image<Rgba32> image, Rectangle? searchRegion = null, bool useHeuristics = true, int expectedColumns = 4)
     {
-        return _imageProcessingService.DetectChessColumnsAutomatically(image, searchRegion, useHeuristics);
+        return _imageProcessingService.DetectChessColumnsAutomatically(image, searchRegion, useHeuristics, expectedColumns);
     }
 
     public List<int> SplitImageIntoColumns(Image<Rgba32> image, int expectedColumns = 6)

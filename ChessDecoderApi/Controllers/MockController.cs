@@ -31,9 +31,10 @@ public class MockController : ControllerBase
     public async Task<IActionResult> MockUpload(
         IFormFile? image, 
         [FromForm] string language = "English",
-        [FromForm] bool autoCrop = false)
+        [FromForm] bool autoCrop = false,
+        [FromForm] int expectedColumns = 4)
     {
-        _logger.LogInformation("Processing mock upload request with autoCrop: {AutoCrop}", autoCrop);
+        _logger.LogInformation("Processing mock upload request with autoCrop: {AutoCrop}, expectedColumns: {ExpectedColumns}", autoCrop, expectedColumns);
 
         if (image == null || image.Length == 0)
         {
@@ -47,12 +48,12 @@ public class MockController : ControllerBase
 
         try
         {
-            var response = await _gameProcessingService.ProcessMockUploadAsync(image, language, autoCrop);
+            var response = await _gameProcessingService.ProcessMockUploadAsync(image, language, autoCrop, expectedColumns);
             return Ok(response);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error processing mock upload with autoCrop: {AutoCrop}", autoCrop);
+            _logger.LogError(ex, "Error processing mock upload with autoCrop: {AutoCrop}, expectedColumns: {ExpectedColumns}", autoCrop, expectedColumns);
             return StatusCode(500, new { message = "Internal server error: " + ex.Message });
         }
     }

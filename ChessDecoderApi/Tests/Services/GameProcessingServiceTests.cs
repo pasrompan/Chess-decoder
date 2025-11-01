@@ -106,7 +106,8 @@ public class GameProcessingServiceTests
             Image = fileMock.Object,
             UserId = "test-user",
             Language = "English",
-            AutoCrop = false
+            AutoCrop = false,
+            ExpectedColumns = 4
         };
     }
 }

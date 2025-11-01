@@ -142,7 +142,7 @@ public class GameProcessingService : IGameProcessingService
         }
 
         var startTime = DateTime.UtcNow;
-        var result = await _imageExtractionService.ProcessImageAsync(imagePathForProcessing, request.Language, request.AutoCrop);
+        var result = await _imageExtractionService.ProcessImageAsync(imagePathForProcessing, request.Language, request.AutoCrop, request.ExpectedColumns);
         var processingTime = DateTime.UtcNow - startTime;
 
         // Generate processed image with boundaries
@@ -150,7 +150,7 @@ public class GameProcessingService : IGameProcessingService
         {
             if (request.AutoCrop)
             {
-                var imageWithBoundaries = await _imageManipulationService.CreateImageWithBoundariesAsync(imagePathForProcessing, 6);
+                var imageWithBoundaries = await _imageManipulationService.CreateImageWithBoundariesAsync(imagePathForProcessing, request.ExpectedColumns);
                 processedImageBase64 = Convert.ToBase64String(imageWithBoundaries);
             }
             else
@@ -247,9 +247,9 @@ public class GameProcessingService : IGameProcessingService
         };
     }
 
-    public async Task<GameProcessingResponse> ProcessMockUploadAsync(IFormFile image, string language = "English", bool autoCrop = false)
+    public async Task<GameProcessingResponse> ProcessMockUploadAsync(IFormFile image, string language = "English", bool autoCrop = false, int expectedColumns = 4)
     {
-        _logger.LogInformation("Processing mock upload with autoCrop: {AutoCrop}", autoCrop);
+        _logger.LogInformation("Processing mock upload with autoCrop: {AutoCrop}, expectedColumns: {ExpectedColumns}", autoCrop, expectedColumns);
 
         var fileName = $"{Guid.NewGuid()}{Path.GetExtension(image.FileName)}";
         var tempFilePath = Path.Combine(Path.GetTempPath(), fileName);
@@ -281,12 +281,12 @@ public class GameProcessingService : IGameProcessingService
             imagePathForProcessing = croppedFilePath;
         }
 
-        var result = await _imageExtractionService.ProcessImageAsync(imagePathForProcessing, language, autoCrop);
+        var result = await _imageExtractionService.ProcessImageAsync(imagePathForProcessing, language, autoCrop, expectedColumns);
 
         // Generate image
         if (autoCrop)
         {
-            var imageWithBoundaries = await _imageManipulationService.CreateImageWithBoundariesAsync(imagePathForProcessing, 6);
+            var imageWithBoundaries = await _imageManipulationService.CreateImageWithBoundariesAsync(imagePathForProcessing, expectedColumns);
             processedImageBase64 = Convert.ToBase64String(imageWithBoundaries);
         }
         else
