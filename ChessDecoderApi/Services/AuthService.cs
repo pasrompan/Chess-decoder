@@ -145,7 +145,7 @@ public class AuthService : IAuthService
             Provider = "google",
             CreatedAt = DateTime.UtcNow,
             LastLoginAt = DateTime.UtcNow,
-            Credits = 10 // Default credits for new users
+            Credits = 200 // Default credits for new users
         };
 
         await userRepo.CreateAsync(newUser);
