@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
+using Chess;
 
 namespace ChessDecoderApi.Services
 {
@@ -192,6 +193,102 @@ namespace ChessDecoderApi.Services
             validatedMove.ValidationText = string.Empty;
             result.Moves.Add(validatedMove);
             return result;
+        }
+
+        public void ValidateMovesInGameContext(ChessMoveValidationResult whiteValidation, ChessMoveValidationResult blackValidation)
+        {
+            try
+            {
+                var board = new ChessBoard();
+                int maxMoves = Math.Max(whiteValidation.Moves.Count, blackValidation.Moves.Count);
+
+                for (int i = 0; i < maxMoves; i++)
+                {
+                    // Validate white move
+                    if (i < whiteValidation.Moves.Count)
+                    {
+                        var whiteMove = whiteValidation.Moves[i];
+                        if (!string.IsNullOrWhiteSpace(whiteMove.NormalizedNotation))
+                        {
+                            var moveNotation = RemoveCheckAndCheckmate(whiteMove.NormalizedNotation);
+                            try
+                            {
+                                // Move validates and executes the move, throws exception if invalid
+                                board.Move(moveNotation);
+                            }
+                            catch (Exception ex)
+                            {
+                                // Move is invalid in game context
+                                whiteMove.ValidationStatus = "error";
+                                whiteMove.ValidationText = string.IsNullOrEmpty(whiteMove.ValidationText) 
+                                    ? $"Invalid move in game context: '{moveNotation}' is not a legal move ({ex.Message})" 
+                                    : whiteMove.ValidationText + $"; Invalid move in game context: {ex.Message}";
+                                whiteValidation.IsValid = false;
+                            }
+                        }
+                    }
+
+                    // Validate black move
+                    if (i < blackValidation.Moves.Count)
+                    {
+                        var blackMove = blackValidation.Moves[i];
+                        if (!string.IsNullOrWhiteSpace(blackMove.NormalizedNotation))
+                        {
+                            var moveNotation = RemoveCheckAndCheckmate(blackMove.NormalizedNotation);
+                            try
+                            {
+                                // Move validates and executes the move, throws exception if invalid
+                                board.Move(moveNotation);
+                            }
+                            catch (Exception ex)
+                            {
+                                // Move is invalid in game context
+                                blackMove.ValidationStatus = "error";
+                                blackMove.ValidationText = string.IsNullOrEmpty(blackMove.ValidationText) 
+                                    ? $"Invalid move in game context: '{moveNotation}' is not a legal move ({ex.Message})" 
+                                    : blackMove.ValidationText + $"; Invalid move in game context: {ex.Message}";
+                                blackValidation.IsValid = false;
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error validating moves in game context");
+                // Mark all moves as having warning if we can't validate
+                foreach (var move in whiteValidation.Moves)
+                {
+                    if (move.ValidationStatus == "valid")
+                    {
+                        move.ValidationStatus = "warning";
+                        move.ValidationText = string.IsNullOrEmpty(move.ValidationText) 
+                            ? "Unable to validate move in game context" 
+                            : move.ValidationText + "; Unable to validate move in game context";
+                    }
+                }
+                foreach (var move in blackValidation.Moves)
+                {
+                    if (move.ValidationStatus == "valid")
+                    {
+                        move.ValidationStatus = "warning";
+                        move.ValidationText = string.IsNullOrEmpty(move.ValidationText) 
+                            ? "Unable to validate move in game context" 
+                            : move.ValidationText + "; Unable to validate move in game context";
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Removes check (+) and checkmate (#) symbols from move notation for validation
+        /// </summary>
+        private string RemoveCheckAndCheckmate(string move)
+        {
+            if (string.IsNullOrEmpty(move))
+                return move;
+            
+            return move.TrimEnd('+', '#');
         }
 
         private void ValidateGameLevelRules(List<ValidatedMove> moves, ChessMoveValidationResult result)

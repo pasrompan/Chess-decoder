@@ -197,6 +197,9 @@ namespace ChessDecoderApi.Services
             var whiteValidation = _chessMoveValidator.ValidateMoves(whiteMoves.ToArray());
             var blackValidation = _chessMoveValidator.ValidateMoves(blackMoves.ToArray());
 
+            // Validate moves in game context (alternating white and black)
+            _chessMoveValidator.ValidateMovesInGameContext(whiteValidation, blackValidation);
+
             // Log validation results for white moves
             foreach (var move in whiteValidation.Moves)
             {
