@@ -232,12 +232,17 @@ namespace ChessDecoderApi.Services
                 }
             }
 
-            // Construct ChessMovePair list
+            // Construct ChessMovePair list and extract validated moves for PGN
             var validation = new ChessGameValidation
             {
                 GameId = Guid.NewGuid().ToString(),
                 Moves = new List<ChessMovePair>()
             };
+            
+            // Build lists of validated moves (using NormalizedNotation which contains corrections)
+            var validatedWhiteMoves = new List<string>();
+            var validatedBlackMoves = new List<string>();
+            
             int maxMoves = Math.Max(whiteValidation.Moves.Count, blackValidation.Moves.Count);
             for (int i = 0; i < maxMoves; i++)
             {
@@ -258,10 +263,20 @@ namespace ChessDecoderApi.Services
                     } : null
                 };
                 validation.Moves.Add(movePair);
+                
+                // Collect validated moves for PGN (use NormalizedNotation which has corrections)
+                if (i < whiteValidation.Moves.Count && !string.IsNullOrWhiteSpace(whiteValidation.Moves[i].NormalizedNotation))
+                {
+                    validatedWhiteMoves.Add(whiteValidation.Moves[i].NormalizedNotation!);
+                }
+                if (i < blackValidation.Moves.Count && !string.IsNullOrWhiteSpace(blackValidation.Moves[i].NormalizedNotation))
+                {
+                    validatedBlackMoves.Add(blackValidation.Moves[i].NormalizedNotation!);
+                }
             }
 
-            // Generate the PGN content
-            var pgnContent = GeneratePGNContentAsync(whiteMoves, blackMoves);
+            // Generate the PGN content using validated moves (with corrections applied)
+            var pgnContent = GeneratePGNContentAsync(validatedWhiteMoves, validatedBlackMoves);
 
             return new ChessGameResponse
             {

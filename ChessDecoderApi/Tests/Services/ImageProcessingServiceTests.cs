@@ -85,7 +85,7 @@ namespace ChessDecoderApi.Tests.Services
                     _chessMoveValidator) { CallBase = true };
 
                 // Patch: Mock ExtractMovesFromImageToStringAsync for full isolation
-                mockService.Setup(x => x.ExtractMovesFromImageToStringAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>()))
+                mockService.Setup(x => x.ExtractMovesFromImageToStringAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<int>()))
                     .ReturnsAsync((new List<string> { "e4", "Nf3" }, new List<string> { "e5", "Nc6" }));
 
                 var result = await mockService.Object.ProcessImageAsync(tempFile);
@@ -125,7 +125,7 @@ namespace ChessDecoderApi.Tests.Services
                     _chessMoveValidator) { CallBase = true };
 
                 // Patch: Mock ExtractMovesFromImageToStringAsync for full isolation
-                mockService.Setup(x => x.ExtractMovesFromImageToStringAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>()))
+                mockService.Setup(x => x.ExtractMovesFromImageToStringAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<int>()))
                     .ReturnsAsync((new List<string> { "ε4", "Ιf3" }, new List<string> { "ε5", "Ιc6" }));
 
                 var result = await mockService.Object.ProcessImageAsync(tempFile, "Greek");
@@ -165,7 +165,7 @@ namespace ChessDecoderApi.Tests.Services
                     _chessMoveValidator) { CallBase = true };
 
                 // Patch: Mock ExtractMovesFromImageToStringAsync for full isolation
-                mockService.Setup(x => x.ExtractMovesFromImageToStringAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>()))
+                mockService.Setup(x => x.ExtractMovesFromImageToStringAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<int>()))
                     .ReturnsAsync((new List<string> { "invalid", "Nf3" }, new List<string> { "e5", "Nc6" }));
 
                 var result = await mockService.Object.ProcessImageAsync(tempFile);
@@ -199,7 +199,7 @@ namespace ChessDecoderApi.Tests.Services
 
             // Simulate moves with consecutive checks to trigger warning
             mockService
-                .Setup(x => x.ExtractMovesFromImageToStringAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>()))
+                .Setup(x => x.ExtractMovesFromImageToStringAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<int>()))
                 .ReturnsAsync((new List<string> { "e4", "Qh5+" }, new List<string> { "e5", "Ke7+" }));
 
             // Act
