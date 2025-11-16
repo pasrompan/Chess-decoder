@@ -1,0 +1,15 @@
+/Users/prompanos/Repos/Personal/Chess-decoder/ChessDecoderApi/EvaluationRunner/obj/Debug/net9.0/EvaluationRunner.GeneratedMSBuildEditorConfig.editorconfig
+/Users/prompanos/Repos/Personal/Chess-decoder/ChessDecoderApi/EvaluationRunner/obj/Debug/net9.0/EvaluationRunner.AssemblyInfoInputs.cache
+/Users/prompanos/Repos/Personal/Chess-decoder/ChessDecoderApi/EvaluationRunner/obj/Debug/net9.0/EvaluationRunner.AssemblyInfo.cs
+/Users/prompanos/Repos/Personal/Chess-decoder/ChessDecoderApi/EvaluationRunner/obj/Debug/net9.0/EvaluationRunner.csproj.CoreCompileInputs.cache
+/Users/prompanos/Repos/Personal/Chess-decoder/ChessDecoderApi/EvaluationRunner/obj/Debug/net9.0/EvaluationRunner.sourcelink.json
+/Users/prompanos/Repos/Personal/Chess-decoder/ChessDecoderApi/EvaluationRunner/bin/Debug/net9.0/EvaluationRunner
+/Users/prompanos/Repos/Personal/Chess-decoder/ChessDecoderApi/EvaluationRunner/bin/Debug/net9.0/EvaluationRunner.deps.json
+/Users/prompanos/Repos/Personal/Chess-decoder/ChessDecoderApi/EvaluationRunner/bin/Debug/net9.0/EvaluationRunner.runtimeconfig.json
+/Users/prompanos/Repos/Personal/Chess-decoder/ChessDecoderApi/EvaluationRunner/bin/Debug/net9.0/EvaluationRunner.dll
+/Users/prompanos/Repos/Personal/Chess-decoder/ChessDecoderApi/EvaluationRunner/bin/Debug/net9.0/EvaluationRunner.pdb
+/Users/prompanos/Repos/Personal/Chess-decoder/ChessDecoderApi/EvaluationRunner/obj/Debug/net9.0/EvaluationRunner.dll
+/Users/prompanos/Repos/Personal/Chess-decoder/ChessDecoderApi/EvaluationRunner/obj/Debug/net9.0/refint/EvaluationRunner.dll
+/Users/prompanos/Repos/Personal/Chess-decoder/ChessDecoderApi/EvaluationRunner/obj/Debug/net9.0/EvaluationRunner.pdb
+/Users/prompanos/Repos/Personal/Chess-decoder/ChessDecoderApi/EvaluationRunner/obj/Debug/net9.0/EvaluationRunner.genruntimeconfig.cache
+/Users/prompanos/Repos/Personal/Chess-decoder/ChessDecoderApi/EvaluationRunner/obj/Debug/net9.0/ref/EvaluationRunner.dll

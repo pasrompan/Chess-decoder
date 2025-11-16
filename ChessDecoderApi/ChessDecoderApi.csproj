@@ -32,6 +32,10 @@
     <Content Remove="Tests/**" />
     <EmbeddedResource Remove="Tests/**" />
     <None Remove="Tests/**" />
+    <Compile Remove="EvaluationRunner/**" />
+    <Content Remove="EvaluationRunner/**" />
+    <EmbeddedResource Remove="EvaluationRunner/**" />
+    <None Remove="EvaluationRunner/**" />
   </ItemGroup>
 
 </Project>

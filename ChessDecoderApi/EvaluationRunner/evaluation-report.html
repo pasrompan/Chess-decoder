@@ -1,0 +1,2005 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chess Decoder Evaluation Report</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }
+        .container { max-width: 1400px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1 { color: #333; border-bottom: 3px solid #4CAF50; padding-bottom: 10px; }
+        h2 { color: #555; margin-top: 30px; }
+        .summary { background: #f9f9f9; padding: 20px; border-radius: 5px; margin: 20px 0; }
+        .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-top: 15px; }
+        .summary-item { background: white; padding: 15px; border-radius: 5px; border-left: 4px solid #4CAF50; }
+        .summary-item h3 { margin: 0 0 10px 0; color: #333; font-size: 14px; }
+        .summary-item .value { font-size: 24px; font-weight: bold; color: #4CAF50; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #4CAF50; color: white; font-weight: bold; }
+        tr:hover { background-color: #f5f5f5; }
+        .success { color: #4CAF50; font-weight: bold; }
+        .failure { color: #f44336; font-weight: bold; }
+        .score { font-size: 18px; font-weight: bold; }
+        .score-high { color: #4CAF50; }
+        .score-medium { color: #FF9800; }
+        .score-low { color: #f44336; }
+        .details { margin-top: 20px; }
+        .details-section { margin: 20px 0; padding: 15px; background: #f9f9f9; border-radius: 5px; }
+        .details-section h3 { margin-top: 0; color: #555; }
+        .moves-comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .moves-list { background: white; padding: 10px; border-radius: 5px; max-height: 300px; overflow-y: auto; }
+        .move-item { padding: 5px; margin: 2px 0; }
+        .move-match { background: #c8e6c9; }
+        .move-diff { background: #ffcdd2; }
+        .language-section { margin: 30px 0; }
+        .language-header { background: #2196F3; color: white; padding: 15px; border-radius: 5px 5px 0 0; }
+        .timestamp { color: #777; font-size: 12px; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Chess Decoder Evaluation Report</h1>
+        <div class="timestamp">Generated: 2025-11-16 19:37:55</div>
+        <div class="summary">
+            <h2>Global Summary</h2>
+            <div class="summary-grid">
+                <div class="summary-item"><h3>Total Tests</h3><div class="value">8</div></div>
+                <div class="summary-item"><h3>Successful</h3><div class="value">8</div></div>
+                <div class="summary-item"><h3>Success Rate</h3><div class="value">100.0%</div></div>
+                <div class="summary-item"><h3>Avg Normalized Score</h3><div class="value">0.515</div></div>
+                <div class="summary-item"><h3>Avg Exact Match</h3><div class="value">0.491</div></div>
+                <div class="summary-item"><h3>Avg Positional Accuracy</h3><div class="value">0.512</div></div>
+                <div class="summary-item"><h3>Avg Processing Time</h3><div class="value">0.00s</div></div>
+            </div>
+        </div>
+        <div class="language-section">
+            <div class="language-header"><h2>English Language Results</h2></div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Game</th>
+                        <th>Status</th>
+                        <th>Normalized Score</th>
+                        <th>Exact Match</th>
+                        <th>Positional Accuracy</th>
+                        <th>Levenshtein Distance</th>
+                        <th>LCS</th>
+                        <th>Ground Truth Moves</th>
+                        <th>Extracted Moves</th>
+                        <th>Processing Time</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Game2</strong></td>
+                        <td class="success">✓ Success</td>
+                        <td class="score score-high">0.943</td>
+                        <td>0.943</td>
+                        <td>0.943</td>
+                        <td>6</td>
+                        <td>100</td>
+                        <td>106</td>
+                        <td>106</td>
+                        <td>0.00s</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Game4</strong></td>
+                        <td class="success">✓ Success</td>
+                        <td class="score score-medium">0.568</td>
+                        <td>0.534</td>
+                        <td>0.534</td>
+                        <td>38</td>
+                        <td>68</td>
+                        <td>103</td>
+                        <td>100</td>
+                        <td>0.00s</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Game5</strong></td>
+                        <td class="success">✓ Success</td>
+                        <td class="score score-low">0.044</td>
+                        <td>0.019</td>
+                        <td>0.019</td>
+                        <td>95</td>
+                        <td>14</td>
+                        <td>103</td>
+                        <td>93</td>
+                        <td>0.00s</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Game6</strong></td>
+                        <td class="success">✓ Success</td>
+                        <td class="score score-low">0.280</td>
+                        <td>0.256</td>
+                        <td>0.294</td>
+                        <td>58</td>
+                        <td>26</td>
+                        <td>68</td>
+                        <td>78</td>
+                        <td>0.00s</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Game7</strong></td>
+                        <td class="success">✓ Success</td>
+                        <td class="score score-medium">0.781</td>
+                        <td>0.771</td>
+                        <td>0.794</td>
+                        <td>16</td>
+                        <td>54</td>
+                        <td>68</td>
+                        <td>70</td>
+                        <td>0.00s</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Game8</strong></td>
+                        <td class="success">✓ Success</td>
+                        <td class="score score-low">0.367</td>
+                        <td>0.310</td>
+                        <td>0.310</td>
+                        <td>31</td>
+                        <td>30</td>
+                        <td>58</td>
+                        <td>53</td>
+                        <td>0.00s</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Game9</strong></td>
+                        <td class="success">✓ Success</td>
+                        <td class="score score-low">0.470</td>
+                        <td>0.426</td>
+                        <td>0.531</td>
+                        <td>35</td>
+                        <td>27</td>
+                        <td>49</td>
+                        <td>61</td>
+                        <td>0.00s</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="language-section">
+            <div class="language-header"><h2>Greek Language Results</h2></div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Game</th>
+                        <th>Status</th>
+                        <th>Normalized Score</th>
+                        <th>Exact Match</th>
+                        <th>Positional Accuracy</th>
+                        <th>Levenshtein Distance</th>
+                        <th>LCS</th>
+                        <th>Ground Truth Moves</th>
+                        <th>Extracted Moves</th>
+                        <th>Processing Time</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Game1</strong></td>
+                        <td class="success">✓ Success</td>
+                        <td class="score score-medium">0.667</td>
+                        <td>0.667</td>
+                        <td>0.667</td>
+                        <td>29</td>
+                        <td>58</td>
+                        <td>87</td>
+                        <td>87</td>
+                        <td>0.00s</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="details">
+            <h2>Detailed Results</h2>
+            <div class="details-section">
+                <h3>English - Game2</h3>
+                <div class="moves-comparison">
+                    <div>
+                        <h4>Ground Truth Moves</h4>
+                        <div class="moves-list">
+                            <div class="move-item move-match">e4</div>
+                            <div class="move-item move-match">c5</div>
+                            <div class="move-item move-match">Nf3</div>
+                            <div class="move-item move-match">Nc6</div>
+                            <div class="move-item move-match">d4</div>
+                            <div class="move-item move-match">cxd4</div>
+                            <div class="move-item move-match">Nxd4</div>
+                            <div class="move-item move-match">Nf6</div>
+                            <div class="move-item move-match">Nc3</div>
+                            <div class="move-item move-match">e5</div>
+                            <div class="move-item move-match">Nf3</div>
+                            <div class="move-item move-match">Be7</div>
+                            <div class="move-item move-match">Bc4</div>
+                            <div class="move-item move-match">O-O</div>
+                            <div class="move-item move-match">O-O</div>
+                            <div class="move-item move-match">a6</div>
+                            <div class="move-item move-match">Bd2</div>
+                            <div class="move-item move-match">b5</div>
+                            <div class="move-item move-match">Bb3</div>
+                            <div class="move-item move-match">Bb7</div>
+                            <div class="move-item move-match">Re1</div>
+                            <div class="move-item move-match">d6</div>
+                            <div class="move-item move-match">Be3</div>
+                            <div class="move-item move-match">Na5</div>
+                            <div class="move-item move-match">Bd5</div>
+                            <div class="move-item move-match">Nxd5</div>
+                            <div class="move-item move-match">Nxd5</div>
+                            <div class="move-item move-match">Nc4</div>
+                            <div class="move-item move-diff">Nxe7</div>
+                            <div class="move-item move-match">Qxe7</div>
+                            <div class="move-item move-match">Bc1</div>
+                            <div class="move-item move-match">Rac8</div>
+                            <div class="move-item move-match">b3</div>
+                            <div class="move-item move-match">Nb6</div>
+                            <div class="move-item move-match">Be3</div>
+                            <div class="move-item move-match">Nd7</div>
+                            <div class="move-item move-match">Qd3</div>
+                            <div class="move-item move-match">f5</div>
+                            <div class="move-item move-match">Ng5</div>
+                            <div class="move-item move-match">f4</div>
+                            <div class="move-item move-match">Nf3</div>
+                            <div class="move-item move-match">fxe3</div>
+                            <div class="move-item move-match">Rxe3</div>
+                            <div class="move-item move-match">Nc5</div>
+                            <div class="move-item move-match">Qe2</div>
+                            <div class="move-item move-match">Rc6</div>
+                            <div class="move-item move-match">Rd1</div>
+                            <div class="move-item move-match">Rfc8</div>
+                            <div class="move-item move-match">Qd2</div>
+                            <div class="move-item move-match">Ne6</div>
+                            <div class="move-item move-match">c3</div>
+                            <div class="move-item move-match">Qc7</div>
+                            <div class="move-item move-match">Rd3</div>
+                            <div class="move-item move-match">Nf4</div>
+                            <div class="move-item move-match">Rxd6</div>
+                            <div class="move-item move-match">Rxd6</div>
+                            <div class="move-item move-match">Qxd6</div>
+                            <div class="move-item move-match">Qxd6</div>
+                            <div class="move-item move-match">Rxd6</div>
+                            <div class="move-item move-match">Ne2+</div>
+                            <div class="move-item move-match">Kf1</div>
+                            <div class="move-item move-match">Nxc3</div>
+                            <div class="move-item move-match">Rd7</div>
+                            <div class="move-item move-match">Bxe4</div>
+                            <div class="move-item move-match">Nxe5</div>
+                            <div class="move-item move-match">Re8</div>
+                            <div class="move-item move-match">Nf3</div>
+                            <div class="move-item move-diff">Bcf3</div>
+                            <div class="move-item move-match">gxf3</div>
+                            <div class="move-item move-match">Nxa2</div>
+                            <div class="move-item move-match">Kg2</div>
+                            <div class="move-item move-match">a5</div>
+                            <div class="move-item move-match">Ra7</div>
+                            <div class="move-item move-match">b4</div>
+                            <div class="move-item move-match">Rxa5</div>
+                            <div class="move-item move-match">Nc1</div>
+                            <div class="move-item move-match">Rb5</div>
+                            <div class="move-item move-match">Nd3</div>
+                            <div class="move-item move-match">Rd5</div>
+                            <div class="move-item move-match">Nf4</div>
+                            <div class="move-item move-match">Kg3</div>
+                            <div class="move-item move-match">Nxd5</div>
+                            <div class="move-item move-match">f4</div>
+                            <div class="move-item move-match">Rf8</div>
+                            <div class="move-item move-match">f3</div>
+                            <div class="move-item move-match">Rxf4</div>
+                            <div class="move-item move-match">h3</div>
+                            <div class="move-item move-match">Rd4</div>
+                            <div class="move-item move-match">f4</div>
+                            <div class="move-item move-match">Rd3+</div>
+                            <div class="move-item move-match">Kg4</div>
+                            <div class="move-item move-match">Rxb3</div>
+                            <div class="move-item move-match">f5</div>
+                            <div class="move-item move-match">Rc3</div>
+                            <div class="move-item move-match">f6</div>
+                            <div class="move-item move-diff">Nxf6</div>
+                            <div class="move-item move-match">Kg5</div>
+                            <div class="move-item move-match">b3</div>
+                            <div class="move-item move-match">h4</div>
+                            <div class="move-item move-match">b2</div>
+                            <div class="move-item move-match">Kf4</div>
+                            <div class="move-item move-match">b1=Q</div>
+                            <div class="move-item move-match">Ke5</div>
+                            <div class="move-item move-diff">Qe4</div>
+                            <div class="move-item move-match">Kd6</div>
+                            <div class="move-item move-match">Rc6</div>
+                        </div>
+                    </div>
+                    <div>
+                        <h4>Extracted Moves</h4>
+                        <div class="moves-list">
+                            <div class="move-item move-match">e4</div>
+                            <div class="move-item move-match">c5</div>
+                            <div class="move-item move-match">Nf3</div>
+                            <div class="move-item move-match">Nc6</div>
+                            <div class="move-item move-match">d4</div>
+                            <div class="move-item move-match">cxd4</div>
+                            <div class="move-item move-match">Nxd4</div>
+                            <div class="move-item move-match">Nf6</div>
+                            <div class="move-item move-match">Nc3</div>
+                            <div class="move-item move-match">e5</div>
+                            <div class="move-item move-match">Nf3</div>
+                            <div class="move-item move-match">Be7</div>
+                            <div class="move-item move-match">Bc4</div>
+                            <div class="move-item move-match">O-O</div>
+                            <div class="move-item move-match">O-O</div>
+                            <div class="move-item move-match">a6</div>
+                            <div class="move-item move-match">Bd2</div>
+                            <div class="move-item move-match">b5</div>
+                            <div class="move-item move-match">Bb3</div>
+                            <div class="move-item move-match">Bb7</div>
+                            <div class="move-item move-match">Re1</div>
+                            <div class="move-item move-match">d6</div>
+                            <div class="move-item move-match">Be3</div>
+                            <div class="move-item move-match">Na5</div>
+                            <div class="move-item move-match">Bd5</div>
+                            <div class="move-item move-match">Nxd5</div>
+                            <div class="move-item move-match">Nxd5</div>
+                            <div class="move-item move-match">Nc4</div>
+                            <div class="move-item move-diff">Nxe7+</div>
+                            <div class="move-item move-match">Qxe7</div>
+                            <div class="move-item move-match">Bc1</div>
+                            <div class="move-item move-match">Rac8</div>
+                            <div class="move-item move-match">b3</div>
+                            <div class="move-item move-match">Nb6</div>
+                            <div class="move-item move-match">Be3</div>
+                            <div class="move-item move-match">Nd7</div>
+                            <div class="move-item move-match">Qd3</div>
+                            <div class="move-item move-match">f5</div>
+                            <div class="move-item move-match">Ng5</div>
+                            <div class="move-item move-match">f4</div>
+                            <div class="move-item move-match">Nf3</div>
+                            <div class="move-item move-match">fxe3</div>
+                            <div class="move-item move-match">Rxe3</div>
+                            <div class="move-item move-match">Nc5</div>
+                            <div class="move-item move-match">Qe2</div>
+                            <div class="move-item move-match">Rc6</div>
+                            <div class="move-item move-match">Rd1</div>
+                            <div class="move-item move-match">Rfc8</div>
+                            <div class="move-item move-match">Qd2</div>
+                            <div class="move-item move-match">Ne6</div>
+                            <div class="move-item move-match">c3</div>
+                            <div class="move-item move-match">Qc7</div>
+                            <div class="move-item move-match">Rd3</div>
+                            <div class="move-item move-match">Nf4</div>
+                            <div class="move-item move-match">Rxd6</div>
+                            <div class="move-item move-match">Rxd6</div>
+                            <div class="move-item move-match">Qxd6</div>
+                            <div class="move-item move-match">Qxd6</div>
+                            <div class="move-item move-match">Rxd6</div>
+                            <div class="move-item move-match">Ne2+</div>
+                            <div class="move-item move-match">Kf1</div>
+                            <div class="move-item move-match">Nxc3</div>
+                            <div class="move-item move-match">Rd7</div>
+                            <div class="move-item move-match">Bxe4</div>
+                            <div class="move-item move-match">Nxe5</div>
+                            <div class="move-item move-match">Re8</div>
+                            <div class="move-item move-match">Nf3</div>
+                            <div class="move-item move-diff">Bxf3</div>
+                            <div class="move-item move-match">gxf3</div>
+                            <div class="move-item move-match">Nxa2</div>
+                            <div class="move-item move-match">Kg2</div>
+                            <div class="move-item move-match">a5</div>
+                            <div class="move-item move-match">Ra7</div>
+                            <div class="move-item move-match">b4</div>
+                            <div class="move-item move-match">Rxa5</div>
+                            <div class="move-item move-match">Nc1</div>
+                            <div class="move-item move-match">Rb5</div>
+                            <div class="move-item move-match">Nd3</div>
+                            <div class="move-item move-match">Rd5</div>
+                            <div class="move-item move-diff">Nf4+</div>
+                            <div class="move-item move-match">Kg3</div>
+                            <div class="move-item move-match">Nxd5</div>
+                            <div class="move-item move-match">f4</div>
+                            <div class="move-item move-match">Rf8</div>
+                            <div class="move-item move-match">f3</div>
+                            <div class="move-item move-match">Rxf4</div>
+                            <div class="move-item move-match">h3</div>
+                            <div class="move-item move-match">Rd4</div>
+                            <div class="move-item move-match">f4</div>
+                            <div class="move-item move-match">Rd3+</div>
+                            <div class="move-item move-match">Kg4</div>
+                            <div class="move-item move-match">Rxb3</div>
+                            <div class="move-item move-match">f5</div>
+                            <div class="move-item move-match">Rc3</div>
+                            <div class="move-item move-match">f6</div>
+                            <div class="move-item move-diff">Nxf6+</div>
+                            <div class="move-item move-match">Kg5</div>
+                            <div class="move-item move-match">b3</div>
+                            <div class="move-item move-match">h4</div>
+                            <div class="move-item move-match">b2</div>
+                            <div class="move-item move-match">Kf4</div>
+                            <div class="move-item move-match">b1=Q</div>
+                            <div class="move-item move-match">Ke5</div>
+                            <div class="move-item move-diff">Qe4+</div>
+                            <div class="move-item move-match">Kd6</div>
+                            <div class="move-item move-diff">Rc6#</div>
+                        </div>
+                    </div>
+                </div>
+                <div style="margin-top: 15px;">
+                    <h4>Generated PGN</h4>
+                    <pre style="background: white; padding: 10px; border-radius: 5px; overflow-x: auto;">[Date "2025.11.16"]
+[White "??"]
+[Black "??"]
+[Result "*"]
+
+1. e4 c5 
+ 2. Nf3 Nc6 
+ 3. d4 cxd4 
+ 4. Nxd4 Nf6 
+ 5. Nc3 e5 
+ 6. Nf3 Be7 
+ 7. Bc4 O-O 
+ 8. O-O a6 
+ 9. Bd2 b5 
+ 10. Bb3 Bb7 
+ 11. Re1 d6 
+ 12. Be3 Na5 
+ 13. Bd5 Nxd5 
+ 14. Nxd5 Nc4 
+ 15. Nxe7+ Qxe7 
+ 16. Bc1 Rac8 
+ 17. b3 Nb6 
+ 18. Be3 Nd7 
+ 19. Qd3 f5 
+ 20. Ng5 f4 
+ 21. Nf3 fxe3 
+ 22. Rxe3 Nc5 
+ 23. Qe2 Rc6 
+ 24. Rd1 Rfc8 
+ 25. Qd2 Ne6 
+ 26. c3 Qc7 
+ 27. Rd3 Nf4 
+ 28. Rxd6 Rxd6 
+ 29. Qxd6 Qxd6 
+ 30. Rxd6 Ne2+ 
+ 31. Kf1 Nxc3 
+ 32. Rd7 Bxe4 
+ 33. Nxe5 Re8 
+ 34. Nf3 Bxf3 
+ 35. gxf3 Nxa2 
+ 36. Kg2 a5 
+ 37. Ra7 b4 
+ 38. Rxa5 Nc1 
+ 39. Rb5 Nd3 
+ 40. Rd5 Nf4+ 
+ 41. Kg3 Nxd5 
+ 42. f4 Rf8 
+ 43. f3 Rxf4 
+ 44. h3 Rd4 
+ 45. f4 Rd3+ 
+ 46. Kg4 Rxb3 
+ 47. f5 Rc3 
+ 48. f6 Nxf6+ 
+ 49. Kg5 b3 
+ 50. h4 b2 
+ 51. Kf4 b1=Q 
+ 52. Ke5 Qe4+ 
+ 53. Kd6 Rc6# 
+ *
+</pre>
+                </div>
+            </div>
+            <div class="details-section">
+                <h3>English - Game4</h3>
+                <div class="moves-comparison">
+                    <div>
+                        <h4>Ground Truth Moves</h4>
+                        <div class="moves-list">
+                            <div class="move-item move-match">e4</div>
+                            <div class="move-item move-match">e6</div>
+                            <div class="move-item move-match">d4</div>
+                            <div class="move-item move-match">d5</div>
+                            <div class="move-item move-match">e5</div>
+                            <div class="move-item move-match">c5</div>
+                            <div class="move-item move-match">Nf3</div>
+                            <div class="move-item move-match">Nc6</div>
+                            <div class="move-item move-match">Bb5</div>
+                            <div class="move-item move-match">Bd7</div>
+                            <div class="move-item move-match">c3</div>
+                            <div class="move-item move-match">f6</div>
+                            <div class="move-item move-match">Bxc6</div>
+                            <div class="move-item move-match">Bxc6</div>
+                            <div class="move-item move-match">O-O</div>
+                            <div class="move-item move-match">c4</div>
+                            <div class="move-item move-match">Re1</div>
+                            <div class="move-item move-match">Bd7</div>
+                            <div class="move-item move-diff">Nh4</div>
+                            <div class="move-item move-match">g6</div>
+                            <div class="move-item move-match">Bf4</div>
+                            <div class="move-item move-match">Qe7</div>
+                            <div class="move-item move-match">Bg3</div>
+                            <div class="move-item move-match">Bg7</div>
+                            <div class="move-item move-match">Qf3</div>
+                            <div class="move-item move-match">f5</div>
+                            <div class="move-item move-match">b3</div>
+                            <div class="move-item move-match">Bb5</div>
+                            <div class="move-item move-diff">a4</div>
+                            <div class="move-item move-match">Ba6</div>
+                            <div class="move-item move-match">b4</div>
+                            <div class="move-item move-diff">b5</div>
+                            <div class="move-item move-diff">axb5</div>
+                            <div class="move-item move-match">Bxb5</div>
+                            <div class="move-item move-match">Ra5</div>
+                            <div class="move-item move-match">Qb7</div>
+                            <div class="move-item move-match">Na3</div>
+                            <div class="move-item move-match">a6</div>
+                            <div class="move-item move-match">Ra1</div>
+                            <div class="move-item move-match">Ne7</div>
+                            <div class="move-item move-diff">Nxb5</div>
+                            <div class="move-item move-match">O-O</div>
+                            <div class="move-item move-match">Nd6</div>
+                            <div class="move-item move-match">Qc6</div>
+                            <div class="move-item move-match">Bf4</div>
+                            <div class="move-item move-match">Nc8</div>
+                            <div class="move-item move-match">Qg3</div>
+                            <div class="move-item move-match">Ne7</div>
+                            <div class="move-item move-match">Bg5</div>
+                            <div class="move-item move-match">Qd7</div>
+                            <div class="move-item move-diff">Qf4</div>
+                            <div class="move-item move-match">Nc6</div>
+                            <div class="move-item move-match">Rxa6</div>
+                            <div class="move-item move-match">Rxa6</div>
+                            <div class="move-item move-match">Rxa6</div>
+                            <div class="move-item move-match">Nb8</div>
+                            <div class="move-item move-match">Ra1</div>
+                            <div class="move-item move-match">Nc6</div>
+                            <div class="move-item move-match">Bh6</div>
+                            <div class="move-item move-match">Nd8</div>
+                            <div class="move-item move-match">Ra8</div>
+                            <div class="move-item move-diff">Bxh6</div>
+                            <div class="move-item move-diff">Qxh6</div>
+                            <div class="move-item move-diff">Qg7</div>
+                            <div class="move-item move-diff">Qxg7+</div>
+                            <div class="move-item move-diff">Kxg7</div>
+                            <div class="move-item move-diff">b5</div>
+                            <div class="move-item move-diff">g5</div>
+                            <div class="move-item move-match">Nf3</div>
+                            <div class="move-item move-diff">h6</div>
+                            <div class="move-item move-match">b6</div>
+                            <div class="move-item move-match">Nc6</div>
+                            <div class="move-item move-match">b7</div>
+                            <div class="move-item move-match">g4</div>
+                            <div class="move-item move-match">Nd2</div>
+                            <div class="move-item move-match">Rb8</div>
+                            <div class="move-item move-match">Nb1</div>
+                            <div class="move-item move-match">Kf8</div>
+                            <div class="move-item move-match">Na3</div>
+                            <div class="move-item move-match">Ke7</div>
+                            <div class="move-item move-diff">Nab5</div>
+                            <div class="move-item move-match">Kd7</div>
+                            <div class="move-item move-match">g3</div>
+                            <div class="move-item move-match">h5</div>
+                            <div class="move-item move-match">Kg2</div>
+                            <div class="move-item move-match">Ke7</div>
+                            <div class="move-item move-match">h3</div>
+                            <div class="move-item move-match">Kf8</div>
+                            <div class="move-item move-diff">Nc7</div>
+                            <div class="move-item move-match">Kg7</div>
+                            <div class="move-item move-diff">Nxe6+</div>
+                            <div class="move-item move-match">Kg6</div>
+                            <div class="move-item move-diff">Nf4+</div>
+                            <div class="move-item move-match">Kg5</div>
+                            <div class="move-item move-diff">h4+</div>
+                            <div class="move-item move-match">Kh6</div>
+                            <div class="move-item move-match">e6</div>
+                            <div class="move-item move-match">Kg7</div>
+                            <div class="move-item move-match">e7</div>
+                            <div class="move-item move-match">Kf6</div>
+                            <div class="move-item move-match">e8=Q</div>
+                            <div class="move-item move-diff">Rxe8</div>
+                            <div class="move-item move-diff">Rxe8</div>
+                        </div>
+                    </div>
+                    <div>
+                        <h4>Extracted Moves</h4>
+                        <div class="moves-list">
+                            <div class="move-item move-match">e4</div>
+                            <div class="move-item move-match">e6</div>
+                            <div class="move-item move-match">d4</div>
+                            <div class="move-item move-match">d5</div>
+                            <div class="move-item move-match">e5</div>
+                            <div class="move-item move-match">c5</div>
+                            <div class="move-item move-match">Nf3</div>
+                            <div class="move-item move-match">Nc6</div>
+                            <div class="move-item move-match">Bb5</div>
+                            <div class="move-item move-match">Bd7</div>
+                            <div class="move-item move-match">c3</div>
+                            <div class="move-item move-match">f6</div>
+                            <div class="move-item move-match">Bxc6</div>
+                            <div class="move-item move-match">Bxc6</div>
+                            <div class="move-item move-match">O-O</div>
+                            <div class="move-item move-match">c4</div>
+                            <div class="move-item move-match">Re1</div>
+                            <div class="move-item move-match">Bd7</div>
+                            <div class="move-item move-diff">Nd4</div>
+                            <div class="move-item move-match">g6</div>
+                            <div class="move-item move-match">Bf4</div>
+                            <div class="move-item move-match">Qe7</div>
+                            <div class="move-item move-match">Bg3</div>
+                            <div class="move-item move-match">Bg7</div>
+                            <div class="move-item move-match">Qf3</div>
+                            <div class="move-item move-match">f5</div>
+                            <div class="move-item move-match">b3</div>
+                            <div class="move-item move-match">Bb5</div>
+                            <div class="move-item move-diff">Q4</div>
+                            <div class="move-item move-match">Ba6</div>
+                            <div class="move-item move-match">b4</div>
+                            <div class="move-item move-match">h5</div>
+                            <div class="move-item move-diff">Qxb5</div>
+                            <div class="move-item move-match">Bxb5</div>
+                            <div class="move-item move-match">Ra5</div>
+                            <div class="move-item move-match">Qb7</div>
+                            <div class="move-item move-match">Na3</div>
+                            <div class="move-item move-match">a6</div>
+                            <div class="move-item move-match">Ra1</div>
+                            <div class="move-item move-match">Ne7</div>
+                            <div class="move-item move-diff">Nxh5</div>
+                            <div class="move-item move-match">O-O</div>
+                            <div class="move-item move-match">Nd6</div>
+                            <div class="move-item move-match">Qc6</div>
+                            <div class="move-item move-diff">Bf1</div>
+                            <div class="move-item move-match">Nc8</div>
+                            <div class="move-item move-match">Qg3</div>
+                            <div class="move-item move-match">Ne7</div>
+                            <div class="move-item move-match">Bg5</div>
+                            <div class="move-item move-match">Qd7</div>
+                            <div class="move-item move-match">g4</div>
+                            <div class="move-item move-match">Nc6</div>
+                            <div class="move-item move-match">Rxa6</div>
+                            <div class="move-item move-match">Rxa6</div>
+                            <div class="move-item move-match">Rxa6</div>
+                            <div class="move-item move-match">Nb8</div>
+                            <div class="move-item move-match">Ra1</div>
+                            <div class="move-item move-match">Nc6</div>
+                            <div class="move-item move-match">Bh6</div>
+                            <div class="move-item move-match">Nd8</div>
+                            <div class="move-item move-match">Ra8</div>
+                            <div class="move-item move-diff">Bxg6</div>
+                            <div class="move-item move-match">Bxc6</div>
+                            <div class="move-item move-match">Qd7</div>
+                            <div class="move-item move-diff">Qb6</div>
+                            <div class="move-item move-diff">Qxg7</div>
+                            <div class="move-item move-diff">Qxe7</div>
+                            <div class="move-item move-diff">Q5</div>
+                            <div class="move-item move-match">f5</div>
+                            <div class="move-item move-match">Nc6</div>
+                            <div class="move-item move-match">Nf3</div>
+                            <div class="move-item move-match">g4</div>
+                            <div class="move-item move-match">b6</div>
+                            <div class="move-item move-match">Rb8</div>
+                            <div class="move-item move-match">b7</div>
+                            <div class="move-item move-match">Ke7</div>
+                            <div class="move-item move-match">Nd2</div>
+                            <div class="move-item move-match">Kd7</div>
+                            <div class="move-item move-match">Nb1</div>
+                            <div class="move-item move-match">h5</div>
+                            <div class="move-item move-diff">Nb3</div>
+                            <div class="move-item move-diff">Kg8</div>
+                            <div class="move-item move-diff">Nb5</div>
+                            <div class="move-item move-match">Kf8</div>
+                            <div class="move-item move-match">g3</div>
+                            <div class="move-item move-diff">Ng7</div>
+                            <div class="move-item move-match">Kg2</div>
+                            <div class="move-item move-match">Kg6</div>
+                            <div class="move-item move-match">h3</div>
+                            <div class="move-item move-match">Kg5</div>
+                            <div class="move-item move-diff">Nx7</div>
+                            <div class="move-item move-match">Kh6</div>
+                            <div class="move-item move-diff">Nxe6</div>
+                            <div class="move-item move-match">Kg7</div>
+                            <div class="move-item move-diff">Nf4</div>
+                            <div class="move-item move-match">Kf6</div>
+                            <div class="move-item move-diff">h4</div>
+                            <div class="move-item move-match">e6</div>
+                            <div class="move-item move-match">e7</div>
+                            <div class="move-item move-match">e8=Q</div>
+                        </div>
+                    </div>
+                </div>
+                <div style="margin-top: 15px;">
+                    <h4>Generated PGN</h4>
+                    <pre style="background: white; padding: 10px; border-radius: 5px; overflow-x: auto;">[Date "2025.11.16"]
+[White "??"]
+[Black "??"]
+[Result "*"]
+
+1. e4 e6 
+ 2. d4 d5 
+ 3. e5 c5 
+ 4. Nf3 Nc6 
+ 5. Bb5 Bd7 
+ 6. c3 f6 
+ 7. Bxc6 Bxc6 
+ 8. O-O c4 
+ 9. Re1 Bd7 
+ 10. Nd4 g6 
+ 11. Bf4 Qe7 
+ 12. Bg3 Bg7 
+ 13. Qf3 f5 
+ 14. b3 Bb5 
+ 15. Q4 Ba6 
+ 16. b4 h5 
+ 17. Qxb5 Bxb5 
+ 18. Ra5 Qb7 
+ 19. Na3 a6 
+ 20. Ra1 Ne7 
+ 21. Nxh5 O-O 
+ 22. Nd6 Qc6 
+ 23. Bf1 Nc8 
+ 24. Qg3 Ne7 
+ 25. Bg5 Qd7 
+ 26. g4 Nc6 
+ 27. Rxa6 Rxa6 
+ 28. Rxa6 Nb8 
+ 29. Ra1 Nc6 
+ 30. Bh6 Nd8 
+ 31. Ra8 Bxg6 
+ 32. Bxc6 Qd7 
+ 33. Qb6 Qxg7 
+ 34. Qxe7 Q5 
+ 35. f5 Nc6 
+ 36. Nf3 g4 
+ 37. b6 Rb8 
+ 38. b7 Ke7 
+ 39. Nd2 Kd7 
+ 40. Nb1 h5 
+ 41. Nb3 Kg8 
+ 42. Nb5 Kf8 
+ 43. g3 Ng7 
+ 44. Kg2 Kg6 
+ 45. h3 Kg5 
+ 46. Nx7 Kh6 
+ 47. Nxe6 Kg7 
+ 48. Nf4 Kf6 
+ 49. h4 50. e6 51. e7 52. e8=Q *
+</pre>
+                </div>
+            </div>
+            <div class="details-section">
+                <h3>English - Game5</h3>
+                <div class="moves-comparison">
+                    <div>
+                        <h4>Ground Truth Moves</h4>
+                        <div class="moves-list">
+                            <div class="move-item move-match">e4</div>
+                            <div class="move-item move-diff">e6</div>
+                            <div class="move-item move-match">d4</div>
+                            <div class="move-item move-match">d5</div>
+                            <div class="move-item move-match">e5</div>
+                            <div class="move-item move-match">c5</div>
+                            <div class="move-item move-match">Nf3</div>
+                            <div class="move-item move-match">Nc6</div>
+                            <div class="move-item move-match">Bb5</div>
+                            <div class="move-item move-diff">Bd7</div>
+                            <div class="move-item move-match">c3</div>
+                            <div class="move-item move-match">f6</div>
+                            <div class="move-item move-diff">Bxc6</div>
+                            <div class="move-item move-diff">Bxc6</div>
+                            <div class="move-item move-match">O-O</div>
+                            <div class="move-item move-diff">c4</div>
+                            <div class="move-item move-match">Re1</div>
+                            <div class="move-item move-diff">Bd7</div>
+                            <div class="move-item move-diff">Nh4</div>
+                            <div class="move-item move-match">g6</div>
+                            <div class="move-item move-diff">Bf4</div>
+                            <div class="move-item move-diff">Qe7</div>
+                            <div class="move-item move-diff">Bg3</div>
+                            <div class="move-item move-diff">Bg7</div>
+                            <div class="move-item move-diff">Qf3</div>
+                            <div class="move-item move-match">f5</div>
+                            <div class="move-item move-diff">b3</div>
+                            <div class="move-item move-match">Bb5</div>
+                            <div class="move-item move-diff">a4</div>
+                            <div class="move-item move-diff">Ba6</div>
+                            <div class="move-item move-diff">b4</div>
+                            <div class="move-item move-match">b5</div>
+                            <div class="move-item move-diff">axb5</div>
+                            <div class="move-item move-diff">Bxb5</div>
+                            <div class="move-item move-diff">Ra5</div>
+                            <div class="move-item move-diff">Qb7</div>
+                            <div class="move-item move-diff">Na3</div>
+                            <div class="move-item move-diff">a6</div>
+                            <div class="move-item move-diff">Ra1</div>
+                            <div class="move-item move-diff">Ne7</div>
+                            <div class="move-item move-diff">Nxb5</div>
+                            <div class="move-item move-match">O-O</div>
+                            <div class="move-item move-diff">Nd6</div>
+                            <div class="move-item move-diff">Qc6</div>
+                            <div class="move-item move-diff">Bf4</div>
+                            <div class="move-item move-diff">Nc8</div>
+                            <div class="move-item move-diff">Qg3</div>
+                            <div class="move-item move-diff">Ne7</div>
+                            <div class="move-item move-match">Bg5</div>
+                            <div class="move-item move-diff">Qd7</div>
+                            <div class="move-item move-diff">Qf4</div>
+                            <div class="move-item move-match">Nc6</div>
+                            <div class="move-item move-diff">Rxa6</div>
+                            <div class="move-item move-diff">Rxa6</div>
+                            <div class="move-item move-diff">Rxa6</div>
+                            <div class="move-item move-match">Nb8</div>
+                            <div class="move-item move-diff">Ra1</div>
+                            <div class="move-item move-match">Nc6</div>
+                            <div class="move-item move-match">Bh6</div>
+                            <div class="move-item move-diff">Nd8</div>
+                            <div class="move-item move-match">Ra8</div>
+                            <div class="move-item move-diff">Bxh6</div>
+                            <div class="move-item move-diff">Qxh6</div>
+                            <div class="move-item move-diff">Qg7</div>
+                            <div class="move-item move-diff">Qxg7+</div>
+                            <div class="move-item move-diff">Kxg7</div>
+                            <div class="move-item move-match">b5</div>
+                            <div class="move-item move-diff">g5</div>
+                            <div class="move-item move-match">Nf3</div>
+                            <div class="move-item move-diff">h6</div>
+                            <div class="move-item move-diff">b6</div>
+                            <div class="move-item move-match">Nc6</div>
+                            <div class="move-item move-diff">b7</div>
+                            <div class="move-item move-match">g4</div>
+                            <div class="move-item move-match">Nd2</div>
+                            <div class="move-item move-diff">Rb8</div>
+                            <div class="move-item move-diff">Nb1</div>
+                            <div class="move-item move-diff">Kf8</div>
+                            <div class="move-item move-diff">Na3</div>
+                            <div class="move-item move-diff">Ke7</div>
+                            <div class="move-item move-diff">Nab5</div>
+                            <div class="move-item move-diff">Kd7</div>
+                            <div class="move-item move-diff">g3</div>
+                            <div class="move-item move-match">h5</div>
+                            <div class="move-item move-diff">Kg2</div>
+                            <div class="move-item move-diff">Ke7</div>
+                            <div class="move-item move-match">h3</div>
+                            <div class="move-item move-diff">Kf8</div>
+                            <div class="move-item move-match">Nc7</div>
+                            <div class="move-item move-diff">Kg7</div>
+                            <div class="move-item move-diff">Nxe6+</div>
+                            <div class="move-item move-diff">Kg6</div>
+                            <div class="move-item move-diff">Nf4+</div>
+                            <div class="move-item move-diff">Kg5</div>
+                            <div class="move-item move-diff">h4+</div>
+                            <div class="move-item move-diff">Kh6</div>
+                            <div class="move-item move-diff">e6</div>
+                            <div class="move-item move-diff">Kg7</div>
+                            <div class="move-item move-diff">e7</div>
+                            <div class="move-item move-diff">Kf6</div>
+                            <div class="move-item move-diff">e8=Q</div>
+                            <div class="move-item move-match">Rxe8</div>
+                            <div class="move-item move-match">Rxe8</div>
+                        </div>
+                    </div>
+                    <div>
+                        <h4>Extracted Moves</h4>
+                        <div class="moves-list">
+                            <div class="move-item move-match">e4</div>
+                            <div class="move-item move-match">e5</div>
+                            <div class="move-item move-match">Nf3</div>
+                            <div class="move-item move-match">Nc6</div>
+                            <div class="move-item move-match">Bb5</div>
+                            <div class="move-item move-match">g6</div>
+                            <div class="move-item move-match">O-O</div>
+                            <div class="move-item move-diff">Nf6</div>
+                            <div class="move-item move-match">Re1</div>
+                            <div class="move-item move-diff">Be7</div>
+                            <div class="move-item move-diff">Bb3</div>
+                            <div class="move-item move-match">b5</div>
+                            <div class="move-item move-match">h3</div>
+                            <div class="move-item move-match">O-O</div>
+                            <div class="move-item move-match">c3</div>
+                            <div class="move-item move-diff">Na5</div>
+                            <div class="move-item move-diff">Qxb3</div>
+                            <div class="move-item move-diff">Nxb3</div>
+                            <div class="move-item move-diff">d3</div>
+                            <div class="move-item move-diff">Bb7</div>
+                            <div class="move-item move-diff">Nxe5</div>
+                            <div class="move-item move-diff">Bc5</div>
+                            <div class="move-item move-diff">Ne4</div>
+                            <div class="move-item move-diff">d6</div>
+                            <div class="move-item move-match">Bg5</div>
+                            <div class="move-item move-diff">Re8</div>
+                            <div class="move-item move-match">d4</div>
+                            <div class="move-item move-match">d5</div>
+                            <div class="move-item move-match">e5</div>
+                            <div class="move-item move-diff">Bb6</div>
+                            <div class="move-item move-diff">exf6</div>
+                            <div class="move-item move-diff">Rc6</div>
+                            <div class="move-item move-diff">Nxe1</div>
+                            <div class="move-item move-diff">Rxe1</div>
+                            <div class="move-item move-match">Bh6</div>
+                            <div class="move-item move-diff">gxf6</div>
+                            <div class="move-item move-match">Nd2</div>
+                            <div class="move-item move-diff">Qc8</div>
+                            <div class="move-item move-match">Nf3</div>
+                            <div class="move-item move-diff">Qe2</div>
+                            <div class="move-item move-diff">Rc1</div>
+                            <div class="move-item move-match">Ra8</div>
+                            <div class="move-item move-diff">Rd8</div>
+                            <div class="move-item move-diff">Qd3</div>
+                            <div class="move-item move-diff">Qxd5</div>
+                            <div class="move-item move-match">Rxe8</div>
+                            <div class="move-item move-diff">Qd8</div>
+                            <div class="move-item move-diff">Qe2</div>
+                            <div class="move-item move-diff">Nf1</div>
+                            <div class="move-item move-diff">Qe6</div>
+                            <div class="move-item move-diff">Qa8</div>
+                            <div class="move-item move-match">c5</div>
+                            <div class="move-item move-diff">cxd4</div>
+                            <div class="move-item move-diff">cxd4</div>
+                            <div class="move-item move-diff">Ne3</div>
+                            <div class="move-item move-match">f5</div>
+                            <div class="move-item move-diff">Qxe8</div>
+                            <div class="move-item move-diff">Qxd6</div>
+                            <div class="move-item move-diff">Qxe8</div>
+                            <div class="move-item move-diff">Qf8</div>
+                            <div class="move-item move-diff">Nxf5</div>
+                            <div class="move-item move-diff">Kxe8</div>
+                            <div class="move-item move-diff">Ne5</div>
+                            <div class="move-item move-diff">Ke8</div>
+                            <div class="move-item move-match">Nc6</div>
+                            <div class="move-item move-match">f6</div>
+                            <div class="move-item move-match">d5</div>
+                            <div class="move-item move-diff">d7</div>
+                            <div class="move-item move-match">Nb8</div>
+                            <div class="move-item move-diff">Bc5</div>
+                            <div class="move-item move-diff">Nxa6</div>
+                            <div class="move-item move-diff">Kc8</div>
+                            <div class="move-item move-diff">Q3</div>
+                            <div class="move-item move-diff">Bf8</div>
+                            <div class="move-item move-diff">Nb4</div>
+                            <div class="move-item move-diff">Kb7</div>
+                            <div class="move-item move-diff">axb3</div>
+                            <div class="move-item move-diff">Bxh1</div>
+                            <div class="move-item move-diff">f4</div>
+                            <div class="move-item move-match">Nc7</div>
+                            <div class="move-item move-diff">Nf2</div>
+                            <div class="move-item move-diff">Nd7</div>
+                            <div class="move-item move-diff">Nd4</div>
+                            <div class="move-item move-match">h5</div>
+                            <div class="move-item move-diff">Nc5</div>
+                            <div class="move-item move-diff">Ng8</div>
+                            <div class="move-item move-match">Nc6</div>
+                            <div class="move-item move-diff">Nd7</div>
+                            <div class="move-item move-match">g4</div>
+                            <div class="move-item move-diff">Qb8</div>
+                            <div class="move-item move-match">d4</div>
+                            <div class="move-item move-diff">Qf7</div>
+                            <div class="move-item move-diff">Qf7</div>
+                        </div>
+                    </div>
+                </div>
+                <div style="margin-top: 15px;">
+                    <h4>Generated PGN</h4>
+                    <pre style="background: white; padding: 10px; border-radius: 5px; overflow-x: auto;">[Date "2025.11.16"]
+[White "??"]
+[Black "??"]
+[Result "*"]
+
+1. e4 e5 
+ 2. Nf3 Nc6 
+ 3. Bb5 g6 
+ 4. O-O Nf6 
+ 5. Re1 Be7 
+ 6. Bb3 b5 
+ 7. h3 O-O 
+ 8. c3 Na5 
+ 9. Qxb3 Nxb3 
+ 10. d3 Bb7 
+ 11. Nxe5 Bc5 
+ 12. Ne4 d6 
+ 13. Bg5 Re8 
+ 14. d4 d5 
+ 15. e5 Bb6 
+ 16. exf6 Rc6 
+ 17. Nxe1 Rxe1 
+ 18. Bh6 gxf6 
+ 19. Nd2 Qc8 
+ 20. Nf3 Qe2 
+ 21. Rc1 Ra8 
+ 22. Rd8 Qd3 
+ 23. Qxd5 Rxe8 
+ 24. Qd8 Qe2 
+ 25. Nf1 Qe6 
+ 26. Qa8 c5 
+ 27. cxd4 cxd4 
+ 28. Ne3 f5 
+ 29. Qxe8 Qxd6 
+ 30. Qxe8 Qf8 
+ 31. Nxf5 Kxe8 
+ 32. Ne5 Ke8 
+ 33. Nc6 f6 
+ 34. d5 d7 
+ 35. Nb8 Bc5 
+ 36. Nxa6 Kc8 
+ 37. Q3 Bf8 
+ 38. Nb4 Kb7 
+ 39. axb3 Bxh1 
+ 40. f4 Nc7 
+ 41. Nf2 Nd7 
+ 42. Nd4 h5 
+ 43. Nc5 Ng8 
+ 44. Nc6 Nd7 
+ 45. g4 Qb8 
+ 46. d4 Qf7 
+ Qf7 
+ *
+</pre>
+                </div>
+            </div>
+            <div class="details-section">
+                <h3>English - Game6</h3>
+                <div class="moves-comparison">
+                    <div>
+                        <h4>Ground Truth Moves</h4>
+                        <div class="moves-list">
+                            <div class="move-item move-match">e4</div>
+                            <div class="move-item move-match">c5</div>
+                            <div class="move-item move-match">Nf3</div>
+                            <div class="move-item move-match">d6</div>
+                            <div class="move-item move-diff">Bb5+</div>
+                            <div class="move-item move-diff">Nd7</div>
+                            <div class="move-item move-diff">O-O</div>
+                            <div class="move-item move-match">a6</div>
+                            <div class="move-item move-diff">Bxd7+</div>
+                            <div class="move-item move-diff">Bxd7</div>
+                            <div class="move-item move-match">c3</div>
+                            <div class="move-item move-match">Nf6</div>
+                            <div class="move-item move-match">Re1</div>
+                            <div class="move-item move-match">e6</div>
+                            <div class="move-item move-match">d4</div>
+                            <div class="move-item move-match">cxd4</div>
+                            <div class="move-item move-match">cxd4</div>
+                            <div class="move-item move-match">Be7</div>
+                            <div class="move-item move-match">Nc3</div>
+                            <div class="move-item move-diff">O-O</div>
+                            <div class="move-item move-diff">Ng5</div>
+                            <div class="move-item move-match">e5</div>
+                            <div class="move-item move-diff">h3</div>
+                            <div class="move-item move-match">exd4</div>
+                            <div class="move-item move-match">Qxd4</div>
+                            <div class="move-item move-match">Rc8</div>
+                            <div class="move-item move-match">Bf4</div>
+                            <div class="move-item move-diff">Nh5</div>
+                            <div class="move-item move-diff">Bxd6</div>
+                            <div class="move-item move-match">Bxh3</div>
+                            <div class="move-item move-diff">Nxh3</div>
+                            <div class="move-item move-diff">Bxd6</div>
+                            <div class="move-item move-match">e5</div>
+                            <div class="move-item move-match">Bc5</div>
+                            <div class="move-item move-diff">Qxd8</div>
+                            <div class="move-item move-diff">Rfxd8</div>
+                            <div class="move-item move-diff">g4</div>
+                            <div class="move-item move-match">Ng3</div>
+                            <div class="move-item move-diff">Kg2</div>
+                            <div class="move-item move-match">Rd2</div>
+                            <div class="move-item move-match">Rab1</div>
+                            <div class="move-item move-diff">h5</div>
+                            <div class="move-item move-diff">Kxg3</div>
+                            <div class="move-item move-diff">Rd3+</div>
+                            <div class="move-item move-diff">Kg2</div>
+                            <div class="move-item move-diff">hxg4</div>
+                            <div class="move-item move-match">Nf4</div>
+                            <div class="move-item move-diff">Rf3</div>
+                            <div class="move-item move-diff">Nfe2</div>
+                            <div class="move-item move-diff">Rxf2+</div>
+                            <div class="move-item move-match">Kg3</div>
+                            <div class="move-item move-diff">b5</div>
+                            <div class="move-item move-match">Ne4</div>
+                            <div class="move-item move-match">Rf3+</div>
+                            <div class="move-item move-diff">Kxg4</div>
+                            <div class="move-item move-diff">Re3</div>
+                            <div class="move-item move-diff">Nxc5</div>
+                            <div class="move-item move-diff">Rxc5</div>
+                            <div class="move-item move-match">Nf4</div>
+                            <div class="move-item move-diff">Rexe5</div>
+                            <div class="move-item move-match">Rxe5</div>
+                            <div class="move-item move-match">Rxe5</div>
+                            <div class="move-item move-diff">Rc1</div>
+                            <div class="move-item move-match">f6</div>
+                            <div class="move-item move-diff">Rc8+</div>
+                            <div class="move-item move-match">Kh7</div>
+                            <div class="move-item move-match">Ra8</div>
+                            <div class="move-item move-match">Re4</div>
+                        </div>
+                    </div>
+                    <div>
+                        <h4>Extracted Moves</h4>
+                        <div class="moves-list">
+                            <div class="move-item move-match">e4</div>
+                            <div class="move-item move-match">c5</div>
+                            <div class="move-item move-match">Nf3</div>
+                            <div class="move-item move-match">d6</div>
+                            <div class="move-item move-diff">Bc4</div>
+                            <div class="move-item move-diff">Nfd7</div>
+                            <div class="move-item move-match">c3</div>
+                            <div class="move-item move-match">a6</div>
+                            <div class="move-item move-match">Re1</div>
+                            <div class="move-item move-diff">Bd7</div>
+                            <div class="move-item move-match">d4</div>
+                            <div class="move-item move-match">Nf6</div>
+                            <div class="move-item move-match">cxd4</div>
+                            <div class="move-item move-match">e6</div>
+                            <div class="move-item move-match">Nc3</div>
+                            <div class="move-item move-match">cxd4</div>
+                            <div class="move-item move-diff">Nd5</div>
+                            <div class="move-item move-match">Be7</div>
+                            <div class="move-item move-match">Nf3</div>
+                            <div class="move-item move-diff">0-0</div>
+                            <div class="move-item move-match">Qxd4</div>
+                            <div class="move-item move-match">e5</div>
+                            <div class="move-item move-match">Bf4</div>
+                            <div class="move-item move-match">exd4</div>
+                            <div class="move-item move-diff">Bxb6</div>
+                            <div class="move-item move-match">Rc8</div>
+                            <div class="move-item move-diff">Nxb3</div>
+                            <div class="move-item move-diff">Na5</div>
+                            <div class="move-item move-match">e5</div>
+                            <div class="move-item move-match">Bxh3</div>
+                            <div class="move-item move-diff">fxe6</div>
+                            <div class="move-item move-diff">Bxb6</div>
+                            <div class="move-item move-diff">Qf4</div>
+                            <div class="move-item move-match">Bc5</div>
+                            <div class="move-item move-diff">Kf2</div>
+                            <div class="move-item move-diff">Rfd8</div>
+                            <div class="move-item move-match">Rab1</div>
+                            <div class="move-item move-match">Ng3</div>
+                            <div class="move-item move-diff">Kxb3</div>
+                            <div class="move-item move-diff">Bf2</div>
+                            <div class="move-item move-diff">Kb2</div>
+                            <div class="move-item move-diff">a5</div>
+                            <div class="move-item move-match">Nf4</div>
+                            <div class="move-item move-diff">Rxf4</div>
+                            <div class="move-item move-diff">Nh2</div>
+                            <div class="move-item move-diff">bxa4</div>
+                            <div class="move-item move-match">Kg3</div>
+                            <div class="move-item move-diff">Rb3</div>
+                            <div class="move-item move-match">Ne4</div>
+                            <div class="move-item move-diff">Rxe3</div>
+                            <div class="move-item move-diff">fxh4</div>
+                            <div class="move-item move-diff">Rg3</div>
+                            <div class="move-item move-match">Nf6</div>
+                            <div class="move-item move-match">Rf3+</div>
+                            <div class="move-item move-match">Nf4</div>
+                            <div class="move-item move-match">Re4</div>
+                            <div class="move-item move-diff">Bxe5</div>
+                            <div class="move-item move-diff">Bxc3</div>
+                            <div class="move-item move-diff">Rc7</div>
+                            <div class="move-item move-match">Rxe5</div>
+                            <div class="move-item move-diff">Rg8</div>
+                            <div class="move-item move-match">Rxe5</div>
+                            <div class="move-item move-match">Ra8</div>
+                            <div class="move-item move-match">f6</div>
+                            <div class="move-item move-diff">Kf3</div>
+                            <div class="move-item move-match">Kh7</div>
+                            <div class="move-item move-diff">h4</div>
+                            <div class="move-item move-match">Re4</div>
+                            <div class="move-item move-diff">a5</div>
+                            <div class="move-item move-diff">Rc4</div>
+                            <div class="move-item move-diff">axb4</div>
+                            <div class="move-item move-diff">Rd4</div>
+                            <div class="move-item move-diff">Na3</div>
+                            <div class="move-item move-diff">Rxh4</div>
+                            <div class="move-item move-diff">Kb3</div>
+                            <div class="move-item move-diff">R6b6</div>
+                            <div class="move-item move-diff">Qa2</div>
+                            <div class="move-item move-match">Rd2</div>
+                        </div>
+                    </div>
+                </div>
+                <div style="margin-top: 15px;">
+                    <h4>Generated PGN</h4>
+                    <pre style="background: white; padding: 10px; border-radius: 5px; overflow-x: auto;">[Date "2025.11.16"]
+[White "??"]
+[Black "??"]
+[Result "*"]
+
+1. e4 c5 
+ 2. Nf3 d6 
+ 3. Bc4 Nfd7 
+ 4. c3 a6 
+ 5. Re1 Bd7 
+ 6. d4 Nf6 
+ 7. cxd4 e6 
+ 8. Nc3 cxd4 
+ 9. Nd5 Be7 
+ 10. Nf3 0-0 
+ 11. Qxd4 e5 
+ 12. Bf4 exd4 
+ 13. Bxb6 Rc8 
+ 14. Nxb3 Na5 
+ 15. e5 Bxh3 
+ 16. fxe6 Bxb6 
+ 17. Qf4 Bc5 
+ 18. Kf2 Rfd8 
+ 19. Rab1 Ng3 
+ 20. Kxb3 Bf2 
+ 21. Kb2 a5 
+ 22. Nf4 Rxf4 
+ 23. Nh2 bxa4 
+ 24. Kg3 Rb3 
+ 25. Ne4 Rxe3 
+ 26. fxh4 Rg3 
+ 27. Nf6 Rf3+ 
+ 28. Nf4 Re4 
+ 29. Bxe5 Bxc3 
+ 30. Rc7 Rxe5 
+ 31. Rg8 Rxe5 
+ 32. Ra8 f6 
+ 33. Kf3 Kh7 
+ 34. h4 Re4 
+ 35. a5 Rc4 
+ 36. axb4 Rd4 
+ 37. Na3 Rxh4 
+ 38. Kb3 R6b6 
+ Qa2 
+ Rd2 
+ *
+</pre>
+                </div>
+            </div>
+            <div class="details-section">
+                <h3>English - Game7</h3>
+                <div class="moves-comparison">
+                    <div>
+                        <h4>Ground Truth Moves</h4>
+                        <div class="moves-list">
+                            <div class="move-item move-match">e4</div>
+                            <div class="move-item move-diff">e6</div>
+                            <div class="move-item move-match">d4</div>
+                            <div class="move-item move-match">d5</div>
+                            <div class="move-item move-match">e5</div>
+                            <div class="move-item move-match">c5</div>
+                            <div class="move-item move-match">Nf3</div>
+                            <div class="move-item move-match">Nc6</div>
+                            <div class="move-item move-match">Bb5</div>
+                            <div class="move-item move-match">Bd7</div>
+                            <div class="move-item move-match">Bxc6</div>
+                            <div class="move-item move-match">bxc6</div>
+                            <div class="move-item move-match">c3</div>
+                            <div class="move-item move-match">cxd4</div>
+                            <div class="move-item move-match">cxd4</div>
+                            <div class="move-item move-match">c5</div>
+                            <div class="move-item move-match">O-O</div>
+                            <div class="move-item move-match">cxd4</div>
+                            <div class="move-item move-match">Nxd4</div>
+                            <div class="move-item move-match">Bc5</div>
+                            <div class="move-item move-match">Re1</div>
+                            <div class="move-item move-match">h6</div>
+                            <div class="move-item move-match">Nc3</div>
+                            <div class="move-item move-match">Qb6</div>
+                            <div class="move-item move-match">Be3</div>
+                            <div class="move-item move-match">Qc7</div>
+                            <div class="move-item move-match">f4</div>
+                            <div class="move-item move-match">Ne7</div>
+                            <div class="move-item move-match">a3</div>
+                            <div class="move-item move-match">O-O</div>
+                            <div class="move-item move-match">b4</div>
+                            <div class="move-item move-match">Bxd4</div>
+                            <div class="move-item move-match">Bxd4</div>
+                            <div class="move-item move-match">Nf5</div>
+                            <div class="move-item move-match">Rc1</div>
+                            <div class="move-item move-match">Qb7</div>
+                            <div class="move-item move-match">Qd3</div>
+                            <div class="move-item move-diff">Rac8</div>
+                            <div class="move-item move-match">Bc5</div>
+                            <div class="move-item move-diff">Rfe8</div>
+                            <div class="move-item move-diff">Ne2</div>
+                            <div class="move-item move-match">Bb5</div>
+                            <div class="move-item move-diff">Qh3</div>
+                            <div class="move-item move-match">Bxe2</div>
+                            <div class="move-item move-match">Rxe2</div>
+                            <div class="move-item move-diff">Qb5</div>
+                            <div class="move-item move-diff">Rec2</div>
+                            <div class="move-item move-match">Qd7</div>
+                            <div class="move-item move-match">g4</div>
+                            <div class="move-item move-match">Ne7</div>
+                            <div class="move-item move-diff">Qh4</div>
+                            <div class="move-item move-match">Ng6</div>
+                            <div class="move-item move-match">Qg3</div>
+                            <div class="move-item move-match">a5</div>
+                            <div class="move-item move-match">f5</div>
+                            <div class="move-item move-match">exf5</div>
+                            <div class="move-item move-match">gxf5</div>
+                            <div class="move-item move-match">Qxf5</div>
+                            <div class="move-item move-match">Rf2</div>
+                            <div class="move-item move-match">Qxe5</div>
+                            <div class="move-item move-match">Qf3</div>
+                            <div class="move-item move-diff">Qg5+</div>
+                            <div class="move-item move-match">Rg2</div>
+                            <div class="move-item move-diff">Qxc1+</div>
+                            <div class="move-item move-diff">Kf2</div>
+                            <div class="move-item move-diff">axb4</div>
+                            <div class="move-item move-match">Be3</div>
+                            <div class="move-item move-match">Qxa3</div>
+                        </div>
+                    </div>
+                    <div>
+                        <h4>Extracted Moves</h4>
+                        <div class="moves-list">
+                            <div class="move-item move-match">e4</div>
+                            <div class="move-item move-diff">d6</div>
+                            <div class="move-item move-match">d4</div>
+                            <div class="move-item move-match">d5</div>
+                            <div class="move-item move-match">e5</div>
+                            <div class="move-item move-diff">c6</div>
+                            <div class="move-item move-match">Nf3</div>
+                            <div class="move-item move-match">Nc6</div>
+                            <div class="move-item move-match">Bb5</div>
+                            <div class="move-item move-match">Bd7</div>
+                            <div class="move-item move-match">Bxc6</div>
+                            <div class="move-item move-match">bxc6</div>
+                            <div class="move-item move-match">c3</div>
+                            <div class="move-item move-match">cxd4</div>
+                            <div class="move-item move-match">cxd4</div>
+                            <div class="move-item move-match">c5</div>
+                            <div class="move-item move-match">O-O</div>
+                            <div class="move-item move-match">cxd4</div>
+                            <div class="move-item move-match">Nxd4</div>
+                            <div class="move-item move-match">Bc5</div>
+                            <div class="move-item move-match">Re1</div>
+                            <div class="move-item move-match">h6</div>
+                            <div class="move-item move-match">Nc3</div>
+                            <div class="move-item move-match">Qb6</div>
+                            <div class="move-item move-match">Be3</div>
+                            <div class="move-item move-match">Qc7</div>
+                            <div class="move-item move-match">f4</div>
+                            <div class="move-item move-match">Ne7</div>
+                            <div class="move-item move-match">a3</div>
+                            <div class="move-item move-match">O-O</div>
+                            <div class="move-item move-match">b4</div>
+                            <div class="move-item move-match">Bxd4</div>
+                            <div class="move-item move-match">Bxd4</div>
+                            <div class="move-item move-match">Nf5</div>
+                            <div class="move-item move-match">Rc1</div>
+                            <div class="move-item move-match">Qb7</div>
+                            <div class="move-item move-match">Qd3</div>
+                            <div class="move-item move-diff">Rc8</div>
+                            <div class="move-item move-match">Bc5</div>
+                            <div class="move-item move-diff">Be8</div>
+                            <div class="move-item move-match">Ne7</div>
+                            <div class="move-item move-diff">Bh5</div>
+                            <div class="move-item move-match">Qd3</div>
+                            <div class="move-item move-match">Bxe2</div>
+                            <div class="move-item move-match">Rxe2</div>
+                            <div class="move-item move-diff">Qh5</div>
+                            <div class="move-item move-diff">Rc2</div>
+                            <div class="move-item move-match">Qd7</div>
+                            <div class="move-item move-match">g4</div>
+                            <div class="move-item move-match">Ne7</div>
+                            <div class="move-item move-diff">Qd4</div>
+                            <div class="move-item move-match">Ng6</div>
+                            <div class="move-item move-match">Qg3</div>
+                            <div class="move-item move-match">a5</div>
+                            <div class="move-item move-match">f5</div>
+                            <div class="move-item move-match">exf5</div>
+                            <div class="move-item move-match">gxf5</div>
+                            <div class="move-item move-match">Qxf5</div>
+                            <div class="move-item move-match">Rf2</div>
+                            <div class="move-item move-match">Qxe5</div>
+                            <div class="move-item move-match">Qf3</div>
+                            <div class="move-item move-diff">Qg5</div>
+                            <div class="move-item move-match">Rg2</div>
+                            <div class="move-item move-diff">Qc1+</div>
+                            <div class="move-item move-diff">Kf3</div>
+                            <div class="move-item move-diff">Qxb4</div>
+                            <div class="move-item move-match">Be3</div>
+                            <div class="move-item move-match">Qxa3</div>
+                            <div class="move-item move-diff">Qd5</div>
+                            <div class="move-item move-diff">Qa2</div>
+                        </div>
+                    </div>
+                </div>
+                <div style="margin-top: 15px;">
+                    <h4>Generated PGN</h4>
+                    <pre style="background: white; padding: 10px; border-radius: 5px; overflow-x: auto;">[Date "2025.11.16"]
+[White "??"]
+[Black "??"]
+[Result "*"]
+
+1. e4 d6 
+ 2. d4 d5 
+ 3. e5 c6 
+ 4. Nf3 Nc6 
+ 5. Bb5 Bd7 
+ 6. Bxc6 bxc6 
+ 7. c3 cxd4 
+ 8. cxd4 c5 
+ 9. O-O cxd4 
+ 10. Nxd4 Bc5 
+ 11. Re1 h6 
+ 12. Nc3 Qb6 
+ 13. Be3 Qc7 
+ 14. f4 Ne7 
+ 15. a3 O-O 
+ 16. b4 Bxd4 
+ 17. Bxd4 Nf5 
+ 18. Rc1 Qb7 
+ 19. Qd3 Rc8 
+ 20. Bc5 Be8 
+ 21. Ne7 Bh5 
+ 22. Qd3 Bxe2 
+ 23. Rxe2 Qh5 
+ 24. Rc2 Qd7 
+ 25. g4 Ne7 
+ 26. Qd4 Ng6 
+ 27. Qg3 a5 
+ 28. f5 exf5 
+ 29. gxf5 Qxf5 
+ 30. Rf2 Qxe5 
+ 31. Qf3 Qg5 
+ 32. Rg2 Qc1+ 
+ 33. Kf3 Qxb4 
+ 34. Be3 Qxa3 
+ 35. Qd5 Qa2 
+ *
+</pre>
+                </div>
+            </div>
+            <div class="details-section">
+                <h3>English - Game8</h3>
+                <div class="moves-comparison">
+                    <div>
+                        <h4>Ground Truth Moves</h4>
+                        <div class="moves-list">
+                            <div class="move-item move-match">e4</div>
+                            <div class="move-item move-match">e5</div>
+                            <div class="move-item move-match">Nc3</div>
+                            <div class="move-item move-match">Nc6</div>
+                            <div class="move-item move-match">Nf3</div>
+                            <div class="move-item move-match">Nf6</div>
+                            <div class="move-item move-match">Bc4</div>
+                            <div class="move-item move-diff">Bc5</div>
+                            <div class="move-item move-match">d3</div>
+                            <div class="move-item move-diff">Ng4</div>
+                            <div class="move-item move-match">Ng5</div>
+                            <div class="move-item move-diff">Bxf2+</div>
+                            <div class="move-item move-match">Kf1</div>
+                            <div class="move-item move-match">d5</div>
+                            <div class="move-item move-match">Bxd5</div>
+                            <div class="move-item move-match">O-O</div>
+                            <div class="move-item move-match">h3</div>
+                            <div class="move-item move-match">Ne3+</div>
+                            <div class="move-item move-match">Bxe3</div>
+                            <div class="move-item move-match">Bxe3</div>
+                            <div class="move-item move-match">h4</div>
+                            <div class="move-item move-match">Bxg5</div>
+                            <div class="move-item move-match">hxg5</div>
+                            <div class="move-item move-match">Qxg5</div>
+                            <div class="move-item move-match">Qh5</div>
+                            <div class="move-item move-match">Qf6+</div>
+                            <div class="move-item move-match">Kg1</div>
+                            <div class="move-item move-match">h6</div>
+                            <div class="move-item move-match">Rf1</div>
+                            <div class="move-item move-match">Qe7</div>
+                            <div class="move-item move-diff">Rh3</div>
+                            <div class="move-item move-diff">Bxh3</div>
+                            <div class="move-item move-diff">Bxf7+</div>
+                            <div class="move-item move-match">Rxf7</div>
+                            <div class="move-item move-match">Rxf7</div>
+                            <div class="move-item move-diff">Qxf7</div>
+                            <div class="move-item move-diff">Qxh3</div>
+                            <div class="move-item move-match">Rf8</div>
+                            <div class="move-item move-match">g3</div>
+                            <div class="move-item move-match">Qf2+</div>
+                            <div class="move-item move-match">Kh1</div>
+                            <div class="move-item move-match">Qe1+</div>
+                            <div class="move-item move-match">Kh2</div>
+                            <div class="move-item move-diff">Rf2+</div>
+                            <div class="move-item move-diff">Qg2</div>
+                            <div class="move-item move-diff">Rxg2+</div>
+                            <div class="move-item move-diff">Kxg2</div>
+                            <div class="move-item move-match">Nd4</div>
+                            <div class="move-item move-match">Kh3</div>
+                            <div class="move-item move-match">g5</div>
+                            <div class="move-item move-diff">g4</div>
+                            <div class="move-item move-diff">Qe3+</div>
+                            <div class="move-item move-match">Kh2</div>
+                            <div class="move-item move-match">Qf2+</div>
+                            <div class="move-item move-match">Kh3</div>
+                            <div class="move-item move-match">Nf3</div>
+                            <div class="move-item move-match">Nd5</div>
+                            <div class="move-item move-diff">Qh2</div>
+                        </div>
+                    </div>
+                    <div>
+                        <h4>Extracted Moves</h4>
+                        <div class="moves-list">
+                            <div class="move-item move-match">e4</div>
+                            <div class="move-item move-match">e5</div>
+                            <div class="move-item move-match">Nc3</div>
+                            <div class="move-item move-match">Nc6</div>
+                            <div class="move-item move-match">Nf3</div>
+                            <div class="move-item move-match">Nf6</div>
+                            <div class="move-item move-match">Bc4</div>
+                            <div class="move-item move-diff">Bg4</div>
+                            <div class="move-item move-match">d3</div>
+                            <div class="move-item move-diff">Bxf2</div>
+                            <div class="move-item move-match">Ng5</div>
+                            <div class="move-item move-match">d5</div>
+                            <div class="move-item move-match">Kf1</div>
+                            <div class="move-item move-match">O-O</div>
+                            <div class="move-item move-match">Bxd5</div>
+                            <div class="move-item move-match">Ne3+</div>
+                            <div class="move-item move-match">h3</div>
+                            <div class="move-item move-match">Bxe3</div>
+                            <div class="move-item move-match">Bxe3</div>
+                            <div class="move-item move-match">Bxg5</div>
+                            <div class="move-item move-match">h4</div>
+                            <div class="move-item move-match">Qxg5</div>
+                            <div class="move-item move-match">hxg5</div>
+                            <div class="move-item move-match">Qf6+</div>
+                            <div class="move-item move-match">Qh5</div>
+                            <div class="move-item move-match">h6</div>
+                            <div class="move-item move-match">Kg1</div>
+                            <div class="move-item move-match">Qe7</div>
+                            <div class="move-item move-match">Rf1</div>
+                            <div class="move-item move-diff">Bxh7+</div>
+                            <div class="move-item move-diff">Rh2</div>
+                            <div class="move-item move-match">Rxf7</div>
+                            <div class="move-item move-diff">Bxf7</div>
+                            <div class="move-item move-match">Rf8</div>
+                            <div class="move-item move-diff">Qxg3</div>
+                            <div class="move-item move-match">Qf2+</div>
+                            <div class="move-item move-diff">g8</div>
+                            <div class="move-item move-match">Qe1+</div>
+                            <div class="move-item move-match">Kh1</div>
+                            <div class="move-item move-diff">Rf2</div>
+                            <div class="move-item move-match">Kh2</div>
+                            <div class="move-item move-diff">Rxg2</div>
+                            <div class="move-item move-diff">Qa7</div>
+                            <div class="move-item move-match">Nd4</div>
+                            <div class="move-item move-diff">Nxg2</div>
+                            <div class="move-item move-match">g5</div>
+                            <div class="move-item move-match">Kh2</div>
+                            <div class="move-item move-match">Qf2+</div>
+                            <div class="move-item move-match">g3</div>
+                            <div class="move-item move-diff">Nf3+</div>
+                            <div class="move-item move-match">Kh3</div>
+                            <div class="move-item move-diff">Qh2#</div>
+                            <div class="move-item move-match">Nd5</div>
+                        </div>
+                    </div>
+                </div>
+                <div style="margin-top: 15px;">
+                    <h4>Generated PGN</h4>
+                    <pre style="background: white; padding: 10px; border-radius: 5px; overflow-x: auto;">[Date "2025.11.16"]
+[White "??"]
+[Black "??"]
+[Result "*"]
+
+1. e4 e5 
+ 2. Nc3 Nc6 
+ 3. Nf3 Nf6 
+ 4. Bc4 Bg4 
+ 5. d3 Bxf2 
+ 6. Ng5 d5 
+ 7. Kf1 O-O 
+ 8. Bxd5 Ne3+ 
+ 9. h3 Bxe3 
+ 10. Bxe3 Bxg5 
+ 11. h4 Qxg5 
+ 12. hxg5 Qf6+ 
+ 13. Qh5 h6 
+ 14. Kg1 Qe7 
+ 15. Rf1 Bxh7+ 
+ 16. Rh2 Rxf7 
+ 17. Bxf7 Rf8 
+ 18. Qxg3 Qf2+ 
+ 19. g8 Qe1+ 
+ 20. Kh1 Rf2 
+ 21. Kh2 Rxg2 
+ 22. Qa7 Nd4 
+ 23. Nxg2 g5 
+ 24. Kh2 Qf2+ 
+ 25. g3 Nf3+ 
+ 26. Kh3 Qh2# 
+ 27. Nd5 *
+</pre>
+                </div>
+            </div>
+            <div class="details-section">
+                <h3>English - Game9</h3>
+                <div class="moves-comparison">
+                    <div>
+                        <h4>Ground Truth Moves</h4>
+                        <div class="moves-list">
+                            <div class="move-item move-match">e4</div>
+                            <div class="move-item move-match">e5</div>
+                            <div class="move-item move-match">Nf3</div>
+                            <div class="move-item move-match">Nc6</div>
+                            <div class="move-item move-match">Bc4</div>
+                            <div class="move-item move-match">Nf6</div>
+                            <div class="move-item move-match">d3</div>
+                            <div class="move-item move-match">Bc5</div>
+                            <div class="move-item move-match">c3</div>
+                            <div class="move-item move-match">O-O</div>
+                            <div class="move-item move-diff">b4</div>
+                            <div class="move-item move-match">Bb6</div>
+                            <div class="move-item move-diff">a4</div>
+                            <div class="move-item move-diff">a6</div>
+                            <div class="move-item move-match">O-O</div>
+                            <div class="move-item move-match">h6</div>
+                            <div class="move-item move-match">Be3</div>
+                            <div class="move-item move-match">Ba7</div>
+                            <div class="move-item move-diff">Nbd2</div>
+                            <div class="move-item move-match">d6</div>
+                            <div class="move-item move-match">h3</div>
+                            <div class="move-item move-match">Be6</div>
+                            <div class="move-item move-match">Bxe6</div>
+                            <div class="move-item move-match">fxe6</div>
+                            <div class="move-item move-match">Bxa7</div>
+                            <div class="move-item move-match">Rxa7</div>
+                            <div class="move-item move-match">d4</div>
+                            <div class="move-item move-match">exd4</div>
+                            <div class="move-item move-match">cxd4</div>
+                            <div class="move-item move-match">Nxb4</div>
+                            <div class="move-item move-diff">Qb3</div>
+                            <div class="move-item move-match">c5</div>
+                            <div class="move-item move-diff">Qxe6+</div>
+                            <div class="move-item move-diff">Rf7</div>
+                            <div class="move-item move-match">dxc5</div>
+                            <div class="move-item move-match">dxc5</div>
+                            <div class="move-item move-match">Ne5</div>
+                            <div class="move-item move-match">Qe7</div>
+                            <div class="move-item move-diff">Qxf7+</div>
+                            <div class="move-item move-match">Qxf7</div>
+                            <div class="move-item move-match">Nxf7</div>
+                            <div class="move-item move-match">Kxf7</div>
+                            <div class="move-item move-diff">Rac1</div>
+                            <div class="move-item move-match">b6</div>
+                            <div class="move-item move-match">a5</div>
+                            <div class="move-item move-match">Rd7</div>
+                            <div class="move-item move-match">Nc4</div>
+                            <div class="move-item move-match">b5</div>
+                            <div class="move-item move-diff">Ne5+</div>
+                        </div>
+                    </div>
+                    <div>
+                        <h4>Extracted Moves</h4>
+                        <div class="moves-list">
+                            <div class="move-item move-match">e4</div>
+                            <div class="move-item move-match">e5</div>
+                            <div class="move-item move-match">Nf3</div>
+                            <div class="move-item move-match">Nc6</div>
+                            <div class="move-item move-match">Bc4</div>
+                            <div class="move-item move-match">Nf6</div>
+                            <div class="move-item move-match">d3</div>
+                            <div class="move-item move-match">Bc5</div>
+                            <div class="move-item move-match">c3</div>
+                            <div class="move-item move-diff">0-0</div>
+                            <div class="move-item move-match">O-O</div>
+                            <div class="move-item move-match">Bb6</div>
+                            <div class="move-item move-match">Be3</div>
+                            <div class="move-item move-diff">g6</div>
+                            <div class="move-item move-diff">Nd2</div>
+                            <div class="move-item move-match">h6</div>
+                            <div class="move-item move-match">h3</div>
+                            <div class="move-item move-match">Ba7</div>
+                            <div class="move-item move-match">Bxe6</div>
+                            <div class="move-item move-match">d6</div>
+                            <div class="move-item move-match">Bxa7</div>
+                            <div class="move-item move-match">Be6</div>
+                            <div class="move-item move-match">d4</div>
+                            <div class="move-item move-match">fxe6</div>
+                            <div class="move-item move-match">cxd4</div>
+                            <div class="move-item move-match">Rxa7</div>
+                            <div class="move-item move-diff">Bb3</div>
+                            <div class="move-item move-match">exd4</div>
+                            <div class="move-item move-diff">Qe6+</div>
+                            <div class="move-item move-match">Nxb4</div>
+                            <div class="move-item move-match">dxc5</div>
+                            <div class="move-item move-match">c5</div>
+                            <div class="move-item move-match">Ne5</div>
+                            <div class="move-item move-diff">Rxf3</div>
+                            <div class="move-item move-match">Qxf7</div>
+                            <div class="move-item move-match">dxc5</div>
+                            <div class="move-item move-match">Nxf7</div>
+                            <div class="move-item move-match">Qe7</div>
+                            <div class="move-item move-diff">Rc1</div>
+                            <div class="move-item move-match">Qxf7</div>
+                            <div class="move-item move-match">a5</div>
+                            <div class="move-item move-match">Kxf7</div>
+                            <div class="move-item move-match">Nc4</div>
+                            <div class="move-item move-match">b6</div>
+                            <div class="move-item move-diff">4</div>
+                            <div class="move-item move-match">Rd7</div>
+                            <div class="move-item move-diff">4</div>
+                            <div class="move-item move-match">b5</div>
+                            <div class="move-item move-diff">4</div>
+                            <div class="move-item move-diff">4</div>
+                            <div class="move-item move-diff">4</div>
+                            <div class="move-item move-diff">4</div>
+                            <div class="move-item move-diff">4</div>
+                            <div class="move-item move-diff">4</div>
+                            <div class="move-item move-diff">4</div>
+                            <div class="move-item move-diff">4</div>
+                            <div class="move-item move-diff">4</div>
+                            <div class="move-item move-diff">4</div>
+                            <div class="move-item move-diff">4</div>
+                            <div class="move-item move-diff">4</div>
+                            <div class="move-item move-diff">4</div>
+                        </div>
+                    </div>
+                </div>
+                <div style="margin-top: 15px;">
+                    <h4>Generated PGN</h4>
+                    <pre style="background: white; padding: 10px; border-radius: 5px; overflow-x: auto;">[Date "2025.11.16"]
+[White "??"]
+[Black "??"]
+[Result "*"]
+
+1. e4 e5 
+ 2. Nf3 Nc6 
+ 3. Bc4 Nf6 
+ 4. d3 Bc5 
+ 5. c3 0-0 
+ 6. O-O Bb6 
+ 7. Be3 g6 
+ 8. Nd2 h6 
+ 9. h3 Ba7 
+ 10. Bxe6 d6 
+ 11. Bxa7 Be6 
+ 12. d4 fxe6 
+ 13. cxd4 Rxa7 
+ 14. Bb3 exd4 
+ 15. Qe6+ Nxb4 
+ 16. dxc5 c5 
+ 17. Ne5 Rxf3 
+ 18. Qxf7 dxc5 
+ 19. Nxf7 Qe7 
+ 20. Rc1 Qxf7 
+ 21. a5 Kxf7 
+ 22. Nc4 b6 
+ 23. 4 Rd7 
+ 24. 4 b5 
+ 25. 4 26. 4 27. 4 28. 4 29. 4 30. 4 31. 4 32. 4 33. 4 34. 4 35. 4 36. 4 37. 4 *
+</pre>
+                </div>
+            </div>
+            <div class="details-section">
+                <h3>Greek - Game1</h3>
+                <div class="moves-comparison">
+                    <div>
+                        <h4>Ground Truth Moves</h4>
+                        <div class="moves-list">
+                            <div class="move-item move-match">e4</div>
+                            <div class="move-item move-match">e5</div>
+                            <div class="move-item move-match">Nf3</div>
+                            <div class="move-item move-diff">Nc6</div>
+                            <div class="move-item move-match">Bb5</div>
+                            <div class="move-item move-diff">Nf6</div>
+                            <div class="move-item move-match">O-O</div>
+                            <div class="move-item move-match">a6</div>
+                            <div class="move-item move-match">Ba4</div>
+                            <div class="move-item move-match">Be7</div>
+                            <div class="move-item move-match">Re1</div>
+                            <div class="move-item move-diff">b5</div>
+                            <div class="move-item move-match">Bb3</div>
+                            <div class="move-item move-match">O-O</div>
+                            <div class="move-item move-diff">h3</div>
+                            <div class="move-item move-match">d5</div>
+                            <div class="move-item move-match">exd5</div>
+                            <div class="move-item move-match">Nxd5</div>
+                            <div class="move-item move-match">Nxe5</div>
+                            <div class="move-item move-match">Nxe5</div>
+                            <div class="move-item move-match">Rxe5</div>
+                            <div class="move-item move-match">c6</div>
+                            <div class="move-item move-match">d4</div>
+                            <div class="move-item move-match">Be6</div>
+                            <div class="move-item move-diff">Nc3</div>
+                            <div class="move-item move-match">Nxc3</div>
+                            <div class="move-item move-diff">bxc3</div>
+                            <div class="move-item move-match">c5</div>
+                            <div class="move-item move-diff">Bxe6</div>
+                            <div class="move-item move-diff">Bf6</div>
+                            <div class="move-item move-match">Rd5</div>
+                            <div class="move-item move-diff">Qc7</div>
+                            <div class="move-item move-match">Bg4</div>
+                            <div class="move-item move-diff">Rfe8</div>
+                            <div class="move-item move-match">Be3</div>
+                            <div class="move-item move-match">Rad8</div>
+                            <div class="move-item move-match">Rxd8</div>
+                            <div class="move-item move-match">Rxd8</div>
+                            <div class="move-item move-match">Qd2</div>
+                            <div class="move-item move-match">h6</div>
+                            <div class="move-item move-match">Re1</div>
+                            <div class="move-item move-match">Qd6</div>
+                            <div class="move-item move-match">Bf4</div>
+                            <div class="move-item move-match">Qd5</div>
+                            <div class="move-item move-match">Bf3</div>
+                            <div class="move-item move-match">Qd7</div>
+                            <div class="move-item move-match">d5</div>
+                            <div class="move-item move-match">g5</div>
+                            <div class="move-item move-match">Bg4</div>
+                            <div class="move-item move-diff">Qb7</div>
+                            <div class="move-item move-match">Be5</div>
+                            <div class="move-item move-match">Bxe5</div>
+                            <div class="move-item move-match">Rxe5</div>
+                            <div class="move-item move-match">f6</div>
+                            <div class="move-item move-match">Re1</div>
+                            <div class="move-item move-match">Rxd5</div>
+                            <div class="move-item move-diff">Qxd5+</div>
+                            <div class="move-item move-match">Qxd5</div>
+                            <div class="move-item move-diff">Be6+</div>
+                            <div class="move-item move-match">Qxe6</div>
+                            <div class="move-item move-match">Rxe6</div>
+                            <div class="move-item move-diff">Kf7</div>
+                            <div class="move-item move-match">Rxa6</div>
+                            <div class="move-item move-diff">h5</div>
+                            <div class="move-item move-match">Ra5</div>
+                            <div class="move-item move-diff">c4</div>
+                            <div class="move-item move-match">Rxb5</div>
+                            <div class="move-item move-match">Ke6</div>
+                            <div class="move-item move-match">Rb4</div>
+                            <div class="move-item move-match">Kd5</div>
+                            <div class="move-item move-match">a4</div>
+                            <div class="move-item move-diff">f5</div>
+                            <div class="move-item move-match">a5</div>
+                            <div class="move-item move-diff">f4</div>
+                            <div class="move-item move-match">a6</div>
+                            <div class="move-item move-match">Ke4</div>
+                            <div class="move-item move-match">a7</div>
+                            <div class="move-item move-diff">f3</div>
+                            <div class="move-item move-diff">a8=Q+</div>
+                            <div class="move-item move-diff">Kf5</div>
+                            <div class="move-item move-diff">Rb5+</div>
+                            <div class="move-item move-diff">Kg6</div>
+                            <div class="move-item move-match">Qa6+</div>
+                            <div class="move-item move-diff">Kf7</div>
+                            <div class="move-item move-diff">Rb7+</div>
+                            <div class="move-item move-match">Ke8</div>
+                            <div class="move-item move-match">Qa8#</div>
+                        </div>
+                    </div>
+                    <div>
+                        <h4>Extracted Moves</h4>
+                        <div class="moves-list">
+                            <div class="move-item move-match">e4</div>
+                            <div class="move-item move-match">e5</div>
+                            <div class="move-item move-match">Nf3</div>
+                            <div class="move-item move-diff">Nxd6</div>
+                            <div class="move-item move-match">Bb5</div>
+                            <div class="move-item move-diff">Nj6</div>
+                            <div class="move-item move-match">O-O</div>
+                            <div class="move-item move-diff">ο6</div>
+                            <div class="move-item move-match">Ba4</div>
+                            <div class="move-item move-match">Be7</div>
+                            <div class="move-item move-diff">Re8</div>
+                            <div class="move-item move-match">d5</div>
+                            <div class="move-item move-match">Bb3</div>
+                            <div class="move-item move-match">O-O</div>
+                            <div class="move-item move-diff">Θ3</div>
+                            <div class="move-item move-match">d5</div>
+                            <div class="move-item move-match">exd5</div>
+                            <div class="move-item move-match">Nxd5</div>
+                            <div class="move-item move-diff">Nxe4</div>
+                            <div class="move-item move-match">Nxe5</div>
+                            <div class="move-item move-match">Rxe5</div>
+                            <div class="move-item move-match">c6</div>
+                            <div class="move-item move-match">d4</div>
+                            <div class="move-item move-match">Be6</div>
+                            <div class="move-item move-diff">Nxf3</div>
+                            <div class="move-item move-match">Nxc3</div>
+                            <div class="move-item move-diff">hxf3</div>
+                            <div class="move-item move-match">c5</div>
+                            <div class="move-item move-diff">Bxe3</div>
+                            <div class="move-item move-diff">Bc6</div>
+                            <div class="move-item move-match">Rd5</div>
+                            <div class="move-item move-diff">Qe7</div>
+                            <div class="move-item move-match">Bg4</div>
+                            <div class="move-item move-diff">Rιe8</div>
+                            <div class="move-item move-match">Be3</div>
+                            <div class="move-item move-match">Rad8</div>
+                            <div class="move-item move-match">Rxd8</div>
+                            <div class="move-item move-match">Rxd8</div>
+                            <div class="move-item move-match">Qd2</div>
+                            <div class="move-item move-match">h6</div>
+                            <div class="move-item move-match">Re1</div>
+                            <div class="move-item move-match">Qd6</div>
+                            <div class="move-item move-match">Bf4</div>
+                            <div class="move-item move-match">Qd5</div>
+                            <div class="move-item move-match">Bf3</div>
+                            <div class="move-item move-match">Qd7</div>
+                            <div class="move-item move-match">d5</div>
+                            <div class="move-item move-match">g5</div>
+                            <div class="move-item move-match">Bg4</div>
+                            <div class="move-item move-match">Qd7</div>
+                            <div class="move-item move-match">Be5</div>
+                            <div class="move-item move-match">Bxe5</div>
+                            <div class="move-item move-match">Rxe5</div>
+                            <div class="move-item move-match">f6</div>
+                            <div class="move-item move-diff">Re8</div>
+                            <div class="move-item move-match">Rxd5</div>
+                            <div class="move-item move-match">Qxd5</div>
+                            <div class="move-item move-match">Qxd5</div>
+                            <div class="move-item move-match">Be6</div>
+                            <div class="move-item move-match">Qxe6</div>
+                            <div class="move-item move-match">Rxe6</div>
+                            <div class="move-item move-diff">Kτ7</div>
+                            <div class="move-item move-match">Rxa6</div>
+                            <div class="move-item move-diff">Θ5</div>
+                            <div class="move-item move-match">Ra5</div>
+                            <div class="move-item move-diff">g4</div>
+                            <div class="move-item move-match">Rxb5</div>
+                            <div class="move-item move-match">Ke6</div>
+                            <div class="move-item move-match">Rb4</div>
+                            <div class="move-item move-match">Kd5</div>
+                            <div class="move-item move-match">a4</div>
+                            <div class="move-item move-diff">N5</div>
+                            <div class="move-item move-match">a5</div>
+                            <div class="move-item move-diff">N4</div>
+                            <div class="move-item move-match">a6</div>
+                            <div class="move-item move-match">Ke4</div>
+                            <div class="move-item move-match">a7</div>
+                            <div class="move-item move-diff">N3</div>
+                            <div class="move-item move-diff">a8=Q</div>
+                            <div class="move-item move-diff">KN5</div>
+                            <div class="move-item move-diff">RQ5+</div>
+                            <div class="move-item move-diff">Kn6</div>
+                            <div class="move-item move-match">Qa6+</div>
+                            <div class="move-item move-diff">Kι7</div>
+                            <div class="move-item move-diff">RQ7+</div>
+                            <div class="move-item move-match">Ke8</div>
+                            <div class="move-item move-match">Qa8#</div>
+                        </div>
+                    </div>
+                </div>
+                <div style="margin-top: 15px;">
+                    <h4>Generated PGN</h4>
+                    <pre style="background: white; padding: 10px; border-radius: 5px; overflow-x: auto;">[Date "2025.11.16"]
+[White "??"]
+[Black "??"]
+[Result "*"]
+
+1. e4 e5 
+ 2. Nf3 Nxd6 
+ 3. Bb5 Nj6 
+ 4. O-O ο6 
+ 5. Ba4 Be7 
+ 6. Re8 d5 
+ 7. Bb3 O-O 
+ 8. Θ3 d5 
+ 9. exd5 Nxd5 
+ 10. Nxe4 Nxe5 
+ 11. Rxe5 c6 
+ 12. d4 Be6 
+ 13. Nxf3 Nxc3 
+ 14. hxf3 c5 
+ 15. Bxe3 Bc6 
+ 16. Rd5 Qe7 
+ 17. Bg4 Rιe8 
+ 18. Be3 Rad8 
+ 19. Rxd8 Rxd8 
+ 20. Qd2 h6 
+ 21. Re1 Qd6 
+ 22. Bf4 Qd5 
+ 23. Bf3 Qd7 
+ 24. d5 g5 
+ 25. Bg4 Qd7 
+ 26. Be5 Bxe5 
+ 27. Rxe5 f6 
+ 28. Re8 Rxd5 
+ 29. Qxd5 Qxd5 
+ 30. Be6 Qxe6 
+ 31. Rxe6 Kτ7 
+ 32. Rxa6 Θ5 
+ 33. Ra5 g4 
+ 34. Rxb5 Ke6 
+ 35. Rb4 Kd5 
+ 36. a4 N5 
+ 37. a5 N4 
+ 38. a6 Ke4 
+ 39. a7 N3 
+ 40. a8=Q KN5 
+ 41. RQ5+ Kn6 
+ 42. Qa6+ Kι7 
+ 43. RQ7+ Ke8 
+ 44. Qa8# *
+</pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

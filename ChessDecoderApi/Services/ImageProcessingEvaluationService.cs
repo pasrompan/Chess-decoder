@@ -7,6 +7,8 @@ using System.Threading.Tasks;
 using ChessDecoderApi.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
 
 namespace ChessDecoderApi.Services
 {
@@ -32,8 +34,10 @@ namespace ChessDecoderApi.Services
         /// <param name="imagePath">Path to the test image</param>
         /// <param name="groundTruthPath">Path to the ground truth PGN file</param>
         /// <param name="language">Language for chess notation (default: English)</param>
+        /// <param name="expectedColumns">Expected number of columns in the chess notation table (default: 4)</param>
+        /// <param name="autoCrop">Whether to automatically crop the image to table boundaries before processing (default: false)</param>
         /// <returns>Evaluation result with normalized score (0 = perfect)</returns>
-        public async Task<EvaluationResult> EvaluateAsync(string imagePath, string groundTruthPath, string language = "English")
+        public async Task<EvaluationResult> EvaluateAsync(string imagePath, string groundTruthPath, string language = "English", int expectedColumns = 4, bool autoCrop = false)
         {
             if (!_useRealApi)
             {
@@ -47,6 +51,9 @@ namespace ChessDecoderApi.Services
                 Language = language
             };
 
+            // Declare croppedImagePath outside try block so it's accessible in catch block for cleanup
+            string? croppedImagePath = null;
+
             try
             {
                 // Load ground truth moves
@@ -56,9 +63,36 @@ namespace ChessDecoderApi.Services
                 _logger.LogInformation("Loaded {Count} ground truth moves from {Path}", 
                     groundTruthMoves.Count, groundTruthPath);
 
+                // Handle autoCrop if enabled
+                string imagePathForProcessing = imagePath;
+                
+                if (autoCrop)
+                {
+                    _logger.LogInformation("Auto-crop enabled, finding table boundaries and cropping image");
+                    
+                    using var originalImage = Image.Load<Rgba32>(imagePath);
+                    var tableBoundaries = _imageProcessingService.FindTableBoundaries(originalImage);
+                    
+                    var croppedImageBytes = await _imageProcessingService.CropImageAsync(
+                        imagePath, 
+                        tableBoundaries.X, 
+                        tableBoundaries.Y, 
+                        tableBoundaries.Width, 
+                        tableBoundaries.Height);
+
+                    var extension = Path.HasExtension(imagePath) ? Path.GetExtension(imagePath) : ".jpg";
+                    var croppedFileName = $"{Guid.NewGuid()}_cropped{extension}";
+                    croppedImagePath = Path.Combine(Path.GetTempPath(), croppedFileName);
+                    await File.WriteAllBytesAsync(croppedImagePath, croppedImageBytes);
+                    
+                    imagePathForProcessing = croppedImagePath;
+                }
+
                 // Extract moves directly from the image
+                // Always use column detection (original behavior), even when autoCrop is enabled
+                // autoCrop only affects whether we crop the image first, not whether we use column detection
                 var startTime = DateTime.UtcNow;
-                var (whiteMoves, blackMoves) = await _imageProcessingService.ExtractMovesFromImageToStringAsync(imagePath, language);
+                var (whiteMoves, blackMoves) = await _imageProcessingService.ExtractMovesFromImageToStringAsync(imagePathForProcessing, language, useColumnDetection: autoCrop, expectedColumns);
                 var extractedMoves = new List<string>();
                 int maxMoves = Math.Max(whiteMoves.Count, blackMoves.Count);
                 for (int i = 0; i < maxMoves; i++)
@@ -82,12 +116,38 @@ namespace ChessDecoderApi.Services
                 result.IsSuccessful = true;
 
                 _logger.LogInformation("Evaluation completed. Normalized Score: {Score:F3}", result.NormalizedScore);
+                
+                // Clean up cropped image if it was created
+                if (croppedImagePath != null && File.Exists(croppedImagePath))
+                {
+                    try
+                    {
+                        File.Delete(croppedImagePath);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to delete cropped image file: {Path}", croppedImagePath);
+                    }
+                }
             }
             catch (Exception ex)
             {
                 result.IsSuccessful = false;
                 result.ErrorMessage = ex.Message;
                 _logger.LogError(ex, "Error during evaluation of image {ImagePath}", imagePath);
+                
+                // Clean up cropped image if it was created
+                if (croppedImagePath != null && File.Exists(croppedImagePath))
+                {
+                    try
+                    {
+                        File.Delete(croppedImagePath);
+                    }
+                    catch (Exception cleanupEx)
+                    {
+                        _logger.LogWarning(cleanupEx, "Failed to delete cropped image file during error cleanup: {Path}", croppedImagePath);
+                    }
+                }
             }
 
             return result;

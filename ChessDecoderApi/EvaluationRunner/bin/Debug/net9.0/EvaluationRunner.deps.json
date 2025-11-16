@@ -1,0 +1,34 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v9.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v9.0": {
+      "EvaluationRunner/1.0.0": {
+        "dependencies": {
+          "System.Net.Http.Json": "9.0.0"
+        },
+        "runtime": {
+          "EvaluationRunner.dll": {}
+        }
+      },
+      "System.Net.Http.Json/9.0.0": {}
+    }
+  },
+  "libraries": {
+    "EvaluationRunner/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "System.Net.Http.Json/9.0.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-e8s0BFOwHaFTqz6wi3l+9tm0SuKOUs5wiahHTjnAabF9n1+0NuZeG/vOLo2vSfUp+DlIChaRfnAiOFkRpHN/ew==",
+      "path": "system.net.http.json/9.0.0",
+      "hashPath": "system.net.http.json.9.0.0.nupkg.sha512"
+    }
+  }
+}
