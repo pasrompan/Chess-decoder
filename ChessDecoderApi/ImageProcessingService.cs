@@ -311,12 +311,12 @@ namespace ChessDecoderApi.Services
         {
             try
             {
-                string apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY") ?? 
-                    _configuration["OPENAI_API_KEY"] ?? 
-                    throw new UnauthorizedAccessException("OPENAI_API_KEY environment variable not set");
+                string apiKey = Environment.GetEnvironmentVariable("GEMINI_API_KEY") ?? 
+                    _configuration["GEMINI_API_KEY"] ?? 
+                    throw new UnauthorizedAccessException("GEMINI_API_KEY environment variable not set");
 
                 var client = _httpClientFactory.CreateClient();
-                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+                client.DefaultRequestHeaders.Add("x-goog-api-key", apiKey);
                 
                 var base64Image = Convert.ToBase64String(imageBytes);
 
@@ -341,31 +341,31 @@ namespace ChessDecoderApi.Services
 
                 var requestData = new
                 {
-                    model = "gpt-5-chat-latest",
-                    messages = new[]
+                    contents = new[]
                     {
                         new
                         {
-                            role = "user",
-                            content = new object[]
+                            parts = new object[]
                             {
                                 new
                                 {
-                                    type = "text",
                                     text = promptText
                                 },
                                 new
                                 {
-                                    type = "image_url",
-                                    image_url = new
+                                    inline_data = new
                                     {
-                                        url = $"data:image/jpeg;base64,{base64Image}"
+                                        mime_type = "image/jpeg",
+                                        data = base64Image
                                     }
                                 }
                             }
                         }
                     },
-                    max_tokens = 1000
+                    generationConfig = new
+                    {
+                        maxOutputTokens = 1000
+                    }
                 };
 
                 var content = new StringContent(
@@ -373,7 +373,7 @@ namespace ChessDecoderApi.Services
                     Encoding.UTF8,
                     "application/json");
 
-                var response = await client.PostAsync("https://api.openai.com/v1/chat/completions", content);
+                var response = await client.PostAsync("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent", content);
                 
                 if (!response.IsSuccessStatusCode)
                 {
@@ -383,16 +383,27 @@ namespace ChessDecoderApi.Services
                     }
                     
                     var errorContent = await response.Content.ReadAsStringAsync();
-                    throw new Exception($"OpenAI API error: {response.StatusCode} - {errorContent}");
+                    throw new Exception($"Gemini API error: {response.StatusCode} - {errorContent}");
                 }
 
                 var responseContent = await response.Content.ReadAsStringAsync();
                 using var jsonDoc = JsonDocument.Parse(responseContent);
                 
-                var choices = jsonDoc.RootElement.GetProperty("choices");
-                var messageContent = choices[0].GetProperty("message").GetProperty("content").GetString();
+                if (!jsonDoc.RootElement.TryGetProperty("candidates", out var candidates) || candidates.GetArrayLength() == 0)
+                {
+                    throw new Exception("Gemini API returned no candidates in response");
+                }
                 
-                return messageContent ?? string.Empty;
+                var contentElement = candidates[0].GetProperty("content");
+                var parts = contentElement.GetProperty("parts");
+                if (parts.GetArrayLength() == 0)
+                {
+                    throw new Exception("Gemini API returned no parts in response");
+                }
+                
+                var text = parts[0].GetProperty("text").GetString();
+                
+                return text ?? string.Empty;
             }
             catch (Exception ex)
             {
@@ -530,42 +541,42 @@ namespace ChessDecoderApi.Services
                 imageBytes = ms.ToArray();
             }
 
-            string apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY") ?? 
-                _configuration["OPENAI_API_KEY"] ?? 
-                throw new UnauthorizedAccessException("OPENAI_API_KEY environment variable not set");
+            string apiKey = Environment.GetEnvironmentVariable("GEMINI_API_KEY") ?? 
+                _configuration["GEMINI_API_KEY"] ?? 
+                throw new UnauthorizedAccessException("GEMINI_API_KEY environment variable not set");
 
             var client = _httpClientFactory.CreateClient();
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+            client.DefaultRequestHeaders.Add("x-goog-api-key", apiKey);
             
             var base64Image = Convert.ToBase64String(imageBytes);
 
             var requestData = new
             {
-                model = "gpt-5-chat-latest",
-                messages = new[]
+                contents = new[]
                 {
                     new
                     {
-                        role = "user",
-                        content = new object[]
+                        parts = new object[]
                         {
                             new
                             {
-                                type = "text",
                                 text = promptText
                             },
                             new
                             {
-                                type = "image_url",
-                                image_url = new
+                                inline_data = new
                                 {
-                                    url = $"data:image/jpeg;base64,{base64Image}"
+                                    mime_type = "image/jpeg",
+                                    data = base64Image
                                 }
                             }
                         }
                     }
                 },
-                max_tokens = 1000
+                generationConfig = new
+                {
+                    maxOutputTokens = 1000
+                }
             };
 
             var content = new StringContent(
@@ -573,7 +584,7 @@ namespace ChessDecoderApi.Services
                 Encoding.UTF8,
                 "application/json");
 
-            var response = await client.PostAsync("https://api.openai.com/v1/chat/completions", content);
+            var response = await client.PostAsync("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent", content);
             
             if (!response.IsSuccessStatusCode)
             {
@@ -583,16 +594,27 @@ namespace ChessDecoderApi.Services
                 }
                 
                 var errorContent = await response.Content.ReadAsStringAsync();
-                throw new Exception($"OpenAI API error: {response.StatusCode} - {errorContent}");
+                throw new Exception($"Gemini API error: {response.StatusCode} - {errorContent}");
             }
 
             var responseContent = await response.Content.ReadAsStringAsync();
             using var jsonDoc = JsonDocument.Parse(responseContent);
             
-            var choices = jsonDoc.RootElement.GetProperty("choices");
-            var messageContent = choices[0].GetProperty("message").GetProperty("content").GetString();
+            if (!jsonDoc.RootElement.TryGetProperty("candidates", out var candidates) || candidates.GetArrayLength() == 0)
+            {
+                throw new Exception("Gemini API returned no candidates in response");
+            }
             
-            return messageContent?.Replace("`", "") ?? string.Empty;
+            var contentElement = candidates[0].GetProperty("content");
+            var parts = contentElement.GetProperty("parts");
+            if (parts.GetArrayLength() == 0)
+            {
+                throw new Exception("Gemini API returned no parts in response");
+            }
+            
+            var text = parts[0].GetProperty("text").GetString();
+            
+            return text?.Replace("`", "") ?? string.Empty;
         }
 
         /// <summary>
