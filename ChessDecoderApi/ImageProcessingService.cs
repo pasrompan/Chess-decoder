@@ -307,147 +307,245 @@ namespace ChessDecoderApi.Services
             return imageBytes;
         }
 
-        public virtual async Task<string> ExtractTextFromImageAsync(byte[] imageBytes, string language)
+        public virtual async Task<string> ExtractTextFromImageAsync(byte[] imageBytes, string language, string provider = "gemini")
         {
             try
             {
-                string apiKey = Environment.GetEnvironmentVariable("GEMINI_API_KEY") ?? 
-                    _configuration["GEMINI_API_KEY"] ?? 
-                    throw new UnauthorizedAccessException("GEMINI_API_KEY environment variable not set");
-
-                var client = _httpClientFactory.CreateClient();
-                client.DefaultRequestHeaders.Add("x-goog-api-key", apiKey);
+                provider = provider?.ToLowerInvariant() ?? "gemini";
                 
-                var base64Image = Convert.ToBase64String(imageBytes);
-
-                // Get valid characters for the specified language
-                var validChars = GetChessNotationCharacters(language);
-
-                // Build the prompt with the valid characters
-                var promptText = "You are an OCR engine. Transcribe all visible chess moves from this image exactly as they appear, but only include characters that are valid in a chess game.";
-                promptText += $"The characters are written in {language}, valid characters are: ";
-                
-                // Add each valid character to the prompt
-                for (int i = 0; i < validChars.Length; i++)
+                return provider switch
                 {
-                    if (i > 0)
-                    {
-                        promptText += ", ";
-                    }
-                    promptText += validChars[i];
-                }
-                
-                promptText += ". Do not include any other characters, and preserve any misspellings or punctuation errors. \n Return the raw text as a json list having all the moves.";
-
-                var requestData = new
-                {
-                    contents = new[]
-                    {
-                        new
-                        {
-                            parts = new object[]
-                            {
-                                new
-                                {
-                                    text = promptText
-                                },
-                                new
-                                {
-                                    inline_data = new
-                                    {
-                                        mime_type = "image/jpeg",
-                                        data = base64Image
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    generationConfig = new
-                    {
-                        maxOutputTokens = 4000,
-                        thinking_config = new
-                        {
-                            thinking_level = "low"
-                        },
-                    }
+                    "gemini" => await ExtractTextFromImageWithGeminiAsync(imageBytes, language),
+                    "openai" => await ExtractTextFromImageWithOpenAIAsync(imageBytes, language),
+                    _ => throw new ArgumentException($"Unsupported provider: {provider}. Supported providers are 'gemini' and 'openai'.", nameof(provider))
                 };
-
-                var content = new StringContent(
-                    JsonSerializer.Serialize(requestData),
-                    Encoding.UTF8,
-                    "application/json");
-
-                var response = await client.PostAsync("https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent", content);
-                
-                if (!response.IsSuccessStatusCode)
-                {
-                    if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
-                    {
-                        throw new UnauthorizedAccessException("Invalid API key");
-                    }
-                    
-                    var errorContent = await response.Content.ReadAsStringAsync();
-                    throw new Exception($"Gemini API error: {response.StatusCode} - {errorContent}");
-                }
-
-                var responseContent = await response.Content.ReadAsStringAsync();
-                using var jsonDoc = JsonDocument.Parse(responseContent);
-                
-                if (!jsonDoc.RootElement.TryGetProperty("candidates", out var candidates) || candidates.GetArrayLength() == 0)
-                {
-                    throw new Exception("Gemini API returned no candidates in response");
-                }
-                
-                var firstCandidate = candidates[0];
-                
-                // Check for finish reason (e.g., MAX_TOKENS indicates response was truncated)
-                if (firstCandidate.TryGetProperty("finishReason", out var finishReason))
-                {
-                    var finishReasonValue = finishReason.GetString();
-                    if (finishReasonValue == "MAX_TOKENS")
-                    {
-                        _logger.LogWarning("Gemini API response was truncated due to MAX_TOKENS limit. Consider increasing maxOutputTokens.");
-                        throw new Exception("Gemini API response was truncated because it exceeded the maximum token limit. The response may be incomplete. Consider increasing maxOutputTokens in the request.");
-                    }
-                }
-                
-                // Check if content exists and is not empty
-                if (!firstCandidate.TryGetProperty("content", out var contentElement) || contentElement.ValueKind == JsonValueKind.Null)
-                {
-                    throw new Exception("Gemini API returned empty content in response");
-                }
-                
-                // Check if parts array exists
-                if (!contentElement.TryGetProperty("parts", out var parts) || parts.GetArrayLength() == 0)
-                {
-                    throw new Exception("Gemini API returned no parts in response");
-                }
-                
-                // Extract text from the first part
-                var firstPart = parts[0];
-                if (!firstPart.TryGetProperty("text", out var textElement))
-                {
-                    throw new Exception("Gemini API response part does not contain 'text' property");
-                }
-                
-                var text = textElement.GetString();
-                
-                // Optionally log usage metadata if available
-                if (jsonDoc.RootElement.TryGetProperty("usageMetadata", out var usageMetadata))
-                {
-                    if (usageMetadata.TryGetProperty("totalTokenCount", out var totalTokens))
-                    {
-                        _logger.LogDebug("Gemini API usage: {TotalTokens} total tokens", totalTokens.GetInt32());
-                    }
-                }
-                
-                return text ?? string.Empty;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error extracting text from image");
+                _logger.LogError(ex, "Error extracting text from image with provider {Provider}", provider);
                 throw;
             }
+        }
+
+        private async Task<string> ExtractTextFromImageWithGeminiAsync(byte[] imageBytes, string language)
+        {
+            string apiKey = Environment.GetEnvironmentVariable("GEMINI_API_KEY") ?? 
+                _configuration["GEMINI_API_KEY"] ?? 
+                throw new UnauthorizedAccessException("GEMINI_API_KEY environment variable not set");
+
+            var client = _httpClientFactory.CreateClient();
+            client.DefaultRequestHeaders.Add("x-goog-api-key", apiKey);
+            
+            var base64Image = Convert.ToBase64String(imageBytes);
+
+            // Get valid characters for the specified language
+            var validChars = GetChessNotationCharacters(language);
+
+            // Build the prompt with the valid characters
+            var promptText = "You are an OCR engine. Transcribe all visible chess moves from this image exactly as they appear, but only include characters that are valid in a chess game.";
+            promptText += $"The characters are written in {language}, valid characters are: ";
+            
+            // Add each valid character to the prompt
+            for (int i = 0; i < validChars.Length; i++)
+            {
+                if (i > 0)
+                {
+                    promptText += ", ";
+                }
+                promptText += validChars[i];
+            }
+            
+            promptText += ". Do not include any other characters, and preserve any misspellings or punctuation errors. \n Return the raw text as a json list having all the moves.";
+
+            var requestData = new
+            {
+                contents = new[]
+                {
+                    new
+                    {
+                        parts = new object[]
+                        {
+                            new
+                            {
+                                text = promptText
+                            },
+                            new
+                            {
+                                inline_data = new
+                                {
+                                    mime_type = "image/jpeg",
+                                    data = base64Image
+                                }
+                            }
+                        }
+                    }
+                },
+                generationConfig = new
+                {
+                    maxOutputTokens = 4000,
+                    thinking_config = new
+                    {
+                        thinking_level = "low"
+                    },
+                }
+            };
+
+            var content = new StringContent(
+                JsonSerializer.Serialize(requestData),
+                Encoding.UTF8,
+                "application/json");
+
+            var response = await client.PostAsync("https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent", content);
+            
+            if (!response.IsSuccessStatusCode)
+            {
+                if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                {
+                    throw new UnauthorizedAccessException("Invalid API key");
+                }
+                
+                var errorContent = await response.Content.ReadAsStringAsync();
+                throw new Exception($"Gemini API error: {response.StatusCode} - {errorContent}");
+            }
+
+            var responseContent = await response.Content.ReadAsStringAsync();
+            using var jsonDoc = JsonDocument.Parse(responseContent);
+            
+            if (!jsonDoc.RootElement.TryGetProperty("candidates", out var candidates) || candidates.GetArrayLength() == 0)
+            {
+                throw new Exception("Gemini API returned no candidates in response");
+            }
+            
+            var firstCandidate = candidates[0];
+            
+            // Check for finish reason (e.g., MAX_TOKENS indicates response was truncated)
+            if (firstCandidate.TryGetProperty("finishReason", out var finishReason))
+            {
+                var finishReasonValue = finishReason.GetString();
+                if (finishReasonValue == "MAX_TOKENS")
+                {
+                    _logger.LogWarning("Gemini API response was truncated due to MAX_TOKENS limit. Consider increasing maxOutputTokens.");
+                    throw new Exception("Gemini API response was truncated because it exceeded the maximum token limit. The response may be incomplete. Consider increasing maxOutputTokens in the request.");
+                }
+            }
+            
+            // Check if content exists and is not empty
+            if (!firstCandidate.TryGetProperty("content", out var contentElement) || contentElement.ValueKind == JsonValueKind.Null)
+            {
+                throw new Exception("Gemini API returned empty content in response");
+            }
+            
+            // Check if parts array exists
+            if (!contentElement.TryGetProperty("parts", out var parts) || parts.GetArrayLength() == 0)
+            {
+                throw new Exception("Gemini API returned no parts in response");
+            }
+            
+            // Extract text from the first part
+            var firstPart = parts[0];
+            if (!firstPart.TryGetProperty("text", out var textElement))
+            {
+                throw new Exception("Gemini API response part does not contain 'text' property");
+            }
+            
+            var text = textElement.GetString();
+            
+            // Optionally log usage metadata if available
+            if (jsonDoc.RootElement.TryGetProperty("usageMetadata", out var usageMetadata))
+            {
+                if (usageMetadata.TryGetProperty("totalTokenCount", out var totalTokens))
+                {
+                    _logger.LogDebug("Gemini API usage: {TotalTokens} total tokens", totalTokens.GetInt32());
+                }
+            }
+            
+            return text ?? string.Empty;
+        }
+
+        private async Task<string> ExtractTextFromImageWithOpenAIAsync(byte[] imageBytes, string language)
+        {
+            string apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY") ?? 
+                _configuration["OPENAI_API_KEY"] ?? 
+                throw new UnauthorizedAccessException("OPENAI_API_KEY environment variable not set");
+
+            var client = _httpClientFactory.CreateClient();
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+            
+            var base64Image = Convert.ToBase64String(imageBytes);
+
+            // Get valid characters for the specified language
+            var validChars = GetChessNotationCharacters(language);
+
+            // Build the prompt with the valid characters
+            var promptText = "You are an OCR engine. Transcribe all visible chess moves from this image exactly as they appear, but only include characters that are valid in a chess game.";
+            promptText += $"The characters are written in {language}, valid characters are: ";
+            
+            // Add each valid character to the prompt
+            for (int i = 0; i < validChars.Length; i++)
+            {
+                if (i > 0)
+                {
+                    promptText += ", ";
+                }
+                promptText += validChars[i];
+            }
+            
+            promptText += ". Do not include any other characters, and preserve any misspellings or punctuation errors. \n Return the raw text as a json list having all the moves.";
+
+            var requestData = new
+            {
+                model = "gpt-5-chat-latest",
+                messages = new[]
+                {
+                    new
+                    {
+                        role = "user",
+                        content = new object[]
+                        {
+                            new
+                            {
+                                type = "text",
+                                text = promptText
+                            },
+                            new
+                            {
+                                type = "image_url",
+                                image_url = new
+                                {
+                                    url = $"data:image/jpeg;base64,{base64Image}"
+                                }
+                            }
+                        }
+                    }
+                },
+                max_tokens = 1000
+            };
+
+            var content = new StringContent(
+                JsonSerializer.Serialize(requestData),
+                Encoding.UTF8,
+                "application/json");
+
+            var response = await client.PostAsync("https://api.openai.com/v1/chat/completions", content);
+            
+            if (!response.IsSuccessStatusCode)
+            {
+                if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                {
+                    throw new UnauthorizedAccessException("Invalid API key");
+                }
+                
+                var errorContent = await response.Content.ReadAsStringAsync();
+                throw new Exception($"OpenAI API error: {response.StatusCode} - {errorContent}");
+            }
+
+            var responseContent = await response.Content.ReadAsStringAsync();
+            using var jsonDoc = JsonDocument.Parse(responseContent);
+            
+            var choices = jsonDoc.RootElement.GetProperty("choices");
+            var messageContent = choices[0].GetProperty("message").GetProperty("content").GetString();
+            
+            return messageContent ?? string.Empty;
         }
 
         private Task<string[]> ConvertGreekMovesToEnglishAsync(string[] greekMoves)
