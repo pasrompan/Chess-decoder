@@ -364,7 +364,11 @@ namespace ChessDecoderApi.Services
                     },
                     generationConfig = new
                     {
-                        maxOutputTokens = 1000
+                        maxOutputTokens = 4000,
+                        thinking_config = new
+                        {
+                            thinking_level = "low"
+                        },
                     }
                 };
 
@@ -373,7 +377,7 @@ namespace ChessDecoderApi.Services
                     Encoding.UTF8,
                     "application/json");
 
-                var response = await client.PostAsync("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent", content);
+                var response = await client.PostAsync("https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent", content);
                 
                 if (!response.IsSuccessStatusCode)
                 {
@@ -394,14 +398,48 @@ namespace ChessDecoderApi.Services
                     throw new Exception("Gemini API returned no candidates in response");
                 }
                 
-                var contentElement = candidates[0].GetProperty("content");
-                var parts = contentElement.GetProperty("parts");
-                if (parts.GetArrayLength() == 0)
+                var firstCandidate = candidates[0];
+                
+                // Check for finish reason (e.g., MAX_TOKENS indicates response was truncated)
+                if (firstCandidate.TryGetProperty("finishReason", out var finishReason))
+                {
+                    var finishReasonValue = finishReason.GetString();
+                    if (finishReasonValue == "MAX_TOKENS")
+                    {
+                        _logger.LogWarning("Gemini API response was truncated due to MAX_TOKENS limit. Consider increasing maxOutputTokens.");
+                        throw new Exception("Gemini API response was truncated because it exceeded the maximum token limit. The response may be incomplete. Consider increasing maxOutputTokens in the request.");
+                    }
+                }
+                
+                // Check if content exists and is not empty
+                if (!firstCandidate.TryGetProperty("content", out var contentElement) || contentElement.ValueKind == JsonValueKind.Null)
+                {
+                    throw new Exception("Gemini API returned empty content in response");
+                }
+                
+                // Check if parts array exists
+                if (!contentElement.TryGetProperty("parts", out var parts) || parts.GetArrayLength() == 0)
                 {
                     throw new Exception("Gemini API returned no parts in response");
                 }
                 
-                var text = parts[0].GetProperty("text").GetString();
+                // Extract text from the first part
+                var firstPart = parts[0];
+                if (!firstPart.TryGetProperty("text", out var textElement))
+                {
+                    throw new Exception("Gemini API response part does not contain 'text' property");
+                }
+                
+                var text = textElement.GetString();
+                
+                // Optionally log usage metadata if available
+                if (jsonDoc.RootElement.TryGetProperty("usageMetadata", out var usageMetadata))
+                {
+                    if (usageMetadata.TryGetProperty("totalTokenCount", out var totalTokens))
+                    {
+                        _logger.LogDebug("Gemini API usage: {TotalTokens} total tokens", totalTokens.GetInt32());
+                    }
+                }
                 
                 return text ?? string.Empty;
             }

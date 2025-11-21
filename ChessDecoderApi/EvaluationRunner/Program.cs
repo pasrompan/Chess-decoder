@@ -10,6 +10,13 @@ class Program
     private const string EvaluationEndpoint = "/api/Evaluation/evaluate";
     private const int NumberOfColumns = 6;
     private const bool AutoCrop = false;
+    
+    // Rate limiting: Delay between requests to avoid hitting RPM limits
+    // Based on Gemini model limits:
+    // - Gemini 2.5 Flash: 1,000 RPM = 60ms per request (using 100ms for safety margin)
+    // - Gemini 2.0 Flash: 2,000 RPM = 30ms per request (using 50ms for safety margin)
+    // Using 100ms as a conservative default to work with most models
+    private const int DelayBetweenRequestsMs = 100;
 
     static async Task Main(string[] args)
     {
@@ -49,6 +56,7 @@ class Program
 
         Console.WriteLine($"Starting evaluation run...");
         Console.WriteLine($"Scanning directory: {evaluationExamplesPath}");
+        Console.WriteLine($"Rate limiting: {DelayBetweenRequestsMs}ms delay between requests to respect RPM limits");
         Console.WriteLine();
 
         var allResults = new List<EvaluationRunResult>();
@@ -183,6 +191,9 @@ class Program
                 result.IsSuccessful = false;
                 result.ErrorMessage = $"API error: {response.StatusCode} - {errorContent}";
             }
+            
+            // Rate limiting: Wait before next request to avoid hitting RPM limits
+            await Task.Delay(DelayBetweenRequestsMs);
         }
         catch (Exception ex)
         {
