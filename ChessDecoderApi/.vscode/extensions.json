@@ -1,0 +1,6 @@
+{
+  // Recommend installing the Dotnet Test Explorer extension so its commands are available
+  "recommendations": [
+    "formulahendry.dotnet-test-explorer"
+  ]
+}

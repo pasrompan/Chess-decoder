@@ -23,7 +23,10 @@ public interface IImageExtractionService
     /// <summary>
     /// Extract raw text from image bytes using OCR
     /// </summary>
-    Task<string> ExtractTextFromImageAsync(byte[] imageBytes, string language);
+    /// <param name="imageBytes">The image bytes to process</param>
+    /// <param name="language">The language of the chess notation</param>
+    /// <param name="provider">The OCR provider to use: "gemini" (default) or "openai"</param>
+    Task<string> ExtractTextFromImageAsync(byte[] imageBytes, string language, string provider = "gemini");
 
     /// <summary>
     /// Debug endpoint to upload image with custom prompt

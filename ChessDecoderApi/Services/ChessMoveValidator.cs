@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
+using Chess;
 
 namespace ChessDecoderApi.Services
 {
@@ -192,6 +194,582 @@ namespace ChessDecoderApi.Services
             validatedMove.ValidationText = string.Empty;
             result.Moves.Add(validatedMove);
             return result;
+        }
+
+        public void ValidateMovesInGameContext(ChessMoveValidationResult whiteValidation, ChessMoveValidationResult blackValidation)
+        {
+            try
+            {
+                var board = new ChessBoard();
+                int maxMoves = Math.Max(whiteValidation.Moves.Count, blackValidation.Moves.Count);
+
+                for (int i = 0; i < maxMoves; i++)
+                {
+                    // Validate white move
+                    if (i < whiteValidation.Moves.Count)
+                    {
+                        var whiteMove = whiteValidation.Moves[i];
+                        if (!string.IsNullOrWhiteSpace(whiteMove.NormalizedNotation))
+                        {
+                            var moveNotation = RemoveCheckAndCheckmate(whiteMove.NormalizedNotation);
+                            try
+                            {
+                                // Move validates and executes the move, throws exception if invalid
+                                board.Move(moveNotation);
+                            }
+                            catch (Exception ex)
+                            {
+                                // Move is invalid in game context - try to get best move from engine
+                                var bestMove = GetBestMoveFromEngine(board, moveNotation);
+                                if (!string.IsNullOrEmpty(bestMove))
+                                {
+                                    try
+                                    {
+                                        // Replace invalid move with best move
+                                        board.Move(bestMove);
+                                        whiteMove.NormalizedNotation = bestMove;
+                                        whiteMove.ValidationStatus = "warning";
+                                        whiteMove.ValidationText = string.IsNullOrEmpty(whiteMove.ValidationText) 
+                                            ? $"Invalid move '{moveNotation}' replaced with engine suggestion: '{bestMove}'" 
+                                            : whiteMove.ValidationText + $"; Invalid move '{moveNotation}' replaced with engine suggestion: '{bestMove}'";
+                                        _logger.LogInformation("Replaced invalid white move '{OriginalMove}' with engine suggestion '{BestMove}' at move {MoveNumber}", 
+                                            moveNotation, bestMove, i + 1);
+                                    }
+                                    catch (Exception bestMoveEx)
+                                    {
+                                        // Even the best move failed, mark as error
+                                        whiteMove.ValidationStatus = "error";
+                                        whiteMove.ValidationText = string.IsNullOrEmpty(whiteMove.ValidationText) 
+                                            ? $"Invalid move in game context: '{moveNotation}' is not a legal move ({ex.Message}). Engine suggestion '{bestMove}' also failed: {bestMoveEx.Message}" 
+                                            : whiteMove.ValidationText + $"; Invalid move in game context: {ex.Message}. Engine suggestion failed: {bestMoveEx.Message}";
+                                        whiteValidation.IsValid = false;
+                                    }
+                                }
+                                else
+                                {
+                                    // No legal moves available
+                                    whiteMove.ValidationStatus = "error";
+                                    whiteMove.ValidationText = string.IsNullOrEmpty(whiteMove.ValidationText) 
+                                        ? $"Invalid move in game context: '{moveNotation}' is not a legal move ({ex.Message}). No legal moves available." 
+                                        : whiteMove.ValidationText + $"; Invalid move in game context: {ex.Message}. No legal moves available.";
+                                    whiteValidation.IsValid = false;
+                                }
+                            }
+                        }
+                    }
+
+                    // Validate black move
+                    if (i < blackValidation.Moves.Count)
+                    {
+                        var blackMove = blackValidation.Moves[i];
+                        if (!string.IsNullOrWhiteSpace(blackMove.NormalizedNotation))
+                        {
+                            var moveNotation = RemoveCheckAndCheckmate(blackMove.NormalizedNotation);
+                            try
+                            {
+                                // Move validates and executes the move, throws exception if invalid
+                                board.Move(moveNotation);
+                            }
+                            catch (Exception ex)
+                            {
+                                // Move is invalid in game context - try to get best move from engine
+                                var bestMove = GetBestMoveFromEngine(board, moveNotation);
+                                if (!string.IsNullOrEmpty(bestMove))
+                                {
+                                    try
+                                    {
+                                        // Replace invalid move with best move
+                                        board.Move(bestMove);
+                                        blackMove.NormalizedNotation = bestMove;
+                                        blackMove.ValidationStatus = "warning";
+                                        blackMove.ValidationText = string.IsNullOrEmpty(blackMove.ValidationText) 
+                                            ? $"Invalid move '{moveNotation}' replaced with engine suggestion: '{bestMove}'" 
+                                            : blackMove.ValidationText + $"; Invalid move '{moveNotation}' replaced with engine suggestion: '{bestMove}'";
+                                        _logger.LogInformation("Replaced invalid black move '{OriginalMove}' with engine suggestion '{BestMove}' at move {MoveNumber}", 
+                                            moveNotation, bestMove, i + 1);
+                                    }
+                                    catch (Exception bestMoveEx)
+                                    {
+                                        // Even the best move failed, mark as error
+                                        blackMove.ValidationStatus = "error";
+                                        blackMove.ValidationText = string.IsNullOrEmpty(blackMove.ValidationText) 
+                                            ? $"Invalid move in game context: '{moveNotation}' is not a legal move ({ex.Message}). Engine suggestion '{bestMove}' also failed: {bestMoveEx.Message}" 
+                                            : blackMove.ValidationText + $"; Invalid move in game context: {ex.Message}. Engine suggestion failed: {bestMoveEx.Message}";
+                                        blackValidation.IsValid = false;
+                                    }
+                                }
+                                else
+                                {
+                                    // No legal moves available
+                                    blackMove.ValidationStatus = "error";
+                                    blackMove.ValidationText = string.IsNullOrEmpty(blackMove.ValidationText) 
+                                        ? $"Invalid move in game context: '{moveNotation}' is not a legal move ({ex.Message}). No legal moves available." 
+                                        : blackMove.ValidationText + $"; Invalid move in game context: {ex.Message}. No legal moves available.";
+                                    blackValidation.IsValid = false;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error validating moves in game context");
+                // Mark all moves as having warning if we can't validate
+                foreach (var move in whiteValidation.Moves)
+                {
+                    if (move.ValidationStatus == "valid")
+                    {
+                        move.ValidationStatus = "warning";
+                        move.ValidationText = string.IsNullOrEmpty(move.ValidationText) 
+                            ? "Unable to validate move in game context" 
+                            : move.ValidationText + "; Unable to validate move in game context";
+                    }
+                }
+                foreach (var move in blackValidation.Moves)
+                {
+                    if (move.ValidationStatus == "valid")
+                    {
+                        move.ValidationStatus = "warning";
+                        move.ValidationText = string.IsNullOrEmpty(move.ValidationText) 
+                            ? "Unable to validate move in game context" 
+                            : move.ValidationText + "; Unable to validate move in game context";
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Gets the best move from the chess engine for the current board position.
+        /// First prioritizes moves similar to the original invalid move (using Levenshtein distance),
+        /// then uses move evaluation for ties.
+        /// </summary>
+        /// <param name="board">The current chess board position</param>
+        /// <param name="originalMove">The original invalid move to compare against</param>
+        /// <returns>The best move in SAN notation, or null if no legal moves are available</returns>
+        private string? GetBestMoveFromEngine(ChessBoard board, string? originalMove = null)
+        {
+            try
+            {
+                // Get all legal moves from the current position
+                var legalMoves = GetLegalMoves(board);
+
+                _logger.LogInformation("Legal moves: {LegalMoves}", string.Join(", ", legalMoves));
+                if (legalMoves == null || legalMoves.Count == 0)
+                {
+                    _logger.LogWarning("No legal moves available from current position");
+                    return null;
+                }
+
+                // Normalize original move for comparison (remove non-important characters)
+                var normalizedOriginal = NormalizeMoveForComparison(originalMove ?? string.Empty);
+
+                // Evaluate all moves and calculate distance from original
+                var moveCandidates = new List<(string Move, int Distance, int Score)>();
+
+                foreach (var move in legalMoves)
+                {
+                    try
+                    {
+                        // Calculate Levenshtein distance from original move
+                        var normalizedMove = NormalizeMoveForComparison(move);
+                        var distance = CalculateLevenshteinDistance(normalizedOriginal, normalizedMove);
+
+                        // Strong preference: if the destination square matches, reduce distance significantly
+                        // This handles cases like "Bc3" -> "c3" where the square matches but piece indicator differs
+                        if (normalizedOriginal.Length >= 2 && normalizedMove.Length >= 2)
+                        {
+                            var originalSquare = normalizedOriginal.Substring(normalizedOriginal.Length - 2);
+                            var moveSquare = normalizedMove.Substring(normalizedMove.Length - 2);
+                            
+                            if (originalSquare == moveSquare)
+                            {
+                                // Destination square matches - this is very similar (likely OCR/detection error on piece)
+                                distance = Math.Max(0, distance - 3); // Strong preference for matching squares
+                                _logger.LogDebug("Move '{Move}' matches destination square '{Square}' with original, reducing distance", move, moveSquare);
+                            }
+                        }
+
+                        // Test the move on a copy of the board for evaluation
+                        var testBoard = CloneBoard(board);
+                        int moveScore;
+                        if (testBoard == null)
+                        {
+                            // If cloning fails, just evaluate based on move notation
+                            moveScore = EvaluateMoveByNotation(move);
+                        }
+                        else
+                        {
+                            testBoard.Move(move);
+                            moveScore = EvaluateMove(move, testBoard);
+                        }
+
+                        moveCandidates.Add((move, distance, moveScore));
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogDebug(ex, "Error evaluating move '{Move}'", move);
+                        // Skip this move and continue
+                        continue;
+                    }
+                }
+
+                if (moveCandidates.Count == 0)
+                {
+                    return null;
+                }
+
+                // First, find the minimum distance (most similar to original)
+                var minDistance = moveCandidates.Min(c => c.Distance);
+                
+                // Filter to moves with minimum distance
+                var closestMoves = moveCandidates.Where(c => c.Distance == minDistance).ToList();
+
+                // If there's a tie, pick the one with the best evaluation score
+                var bestCandidate = closestMoves.OrderByDescending(c => c.Score).First();
+
+                _logger.LogInformation("Selected move '{BestMove}' (distance: {Distance}, score: {Score}) from {TotalMoves} legal moves", 
+                    bestCandidate.Move, bestCandidate.Distance, bestCandidate.Score, legalMoves.Count);
+
+                return bestCandidate.Move;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting best move from engine");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Clones a ChessBoard by creating a new board and replaying all moves.
+        /// This is a fallback method when direct cloning is not available.
+        /// </summary>
+        private ChessBoard? CloneBoard(ChessBoard board)
+        {
+            try
+            {
+                // Try to get FEN using reflection
+                var boardType = board.GetType();
+                var fenProperty = boardType.GetProperty("Fen") ?? 
+                                 boardType.GetProperty("FEN") ??
+                                 boardType.GetProperty("Position");
+                
+                if (fenProperty != null)
+                {
+                    var fen = fenProperty.GetValue(board)?.ToString();
+                    if (!string.IsNullOrEmpty(fen))
+                    {
+                        // Try to create a new board with FEN
+                        var constructor = typeof(ChessBoard).GetConstructor(new[] { typeof(string) });
+                        if (constructor != null)
+                        {
+                            return (ChessBoard)constructor.Invoke(new[] { fen });
+                        }
+                    }
+                }
+
+                // If FEN approach doesn't work, return null to use fallback evaluation
+                return null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Gets all legal moves from the current board position.
+        /// Uses the Moves() method from ChessBoard to get legal moves.
+        /// </summary>
+        /// <param name="board">The current chess board position</param>
+        /// <returns>List of legal moves in SAN notation</returns>
+        private List<string> GetLegalMoves(ChessBoard board)
+        {
+            var legalMoves = new List<string>();
+
+            try
+            {
+                // Use reflection to call the Moves() method
+                var boardType = board.GetType();
+                var movesMethod = boardType.GetMethod("Moves", new[] { typeof(bool), typeof(bool) });
+                
+                if (movesMethod != null)
+                {
+                    // Call Moves(allowAmbiguousCastle: false, generateSan: true)
+                    var moves = movesMethod.Invoke(board, new object[] { false, true });
+                    
+                    if (moves is IEnumerable<object> moveList)
+                    {
+                        foreach (var move in moveList)
+                        {
+                            // Try to get SAN notation from the move object
+                            var moveType = move.GetType();
+                            
+                            // Try common property names for SAN notation
+                            var sanProperty = moveType.GetProperty("San") ?? 
+                                            moveType.GetProperty("Notation") ?? 
+                                            moveType.GetProperty("ToString");
+                            
+                            if (sanProperty != null)
+                            {
+                                var san = sanProperty.GetValue(move)?.ToString();
+                                if (!string.IsNullOrEmpty(san))
+                                {
+                                    legalMoves.Add(san);
+                                }
+                            }
+                            else
+                            {
+                                // Fallback to ToString
+                                var moveStr = move.ToString();
+                                if (!string.IsNullOrEmpty(moveStr))
+                                {
+                                    legalMoves.Add(moveStr);
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // If still no moves found, try the testing method as fallback
+                if (legalMoves.Count == 0)
+                {
+                    _logger.LogWarning("Moves() method returned no moves, falling back to testing method");
+                    legalMoves = GetLegalMovesByTesting(board);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error getting legal moves using Moves() method, falling back to testing method");
+                legalMoves = GetLegalMovesByTesting(board);
+            }
+
+            return legalMoves;
+        }
+
+        /// <summary>
+        /// Gets legal moves by testing all possible move patterns.
+        /// This is a fallback method when reflection doesn't work.
+        /// Note: This is a simplified approach that may not find all legal moves.
+        /// </summary>
+        private List<string> GetLegalMovesByTesting(ChessBoard board)
+        {
+            var legalMoves = new List<string>();
+            var files = new[] { "a", "b", "c", "d", "e", "f", "g", "h" };
+            var ranks = new[] { "1", "2", "3", "4", "5", "6", "7", "8" };
+            var pieces = new[] { "K", "Q", "R", "B", "N" };
+
+            // Test castling moves
+            try
+            {
+                var testBoard = CloneBoard(board);
+                if (testBoard != null)
+                {
+                    testBoard.Move("O-O");
+                    legalMoves.Add("O-O");
+                }
+            }
+            catch { }
+
+            try
+            {
+                var testBoard = CloneBoard(board);
+                if (testBoard != null)
+                {
+                    testBoard.Move("O-O-O");
+                    legalMoves.Add("O-O-O");
+                }
+            }
+            catch { }
+
+            // Test a limited set of common moves (to avoid performance issues)
+            // This is a simplified approach - in production, you'd want a more comprehensive method
+            foreach (var file in files)
+            {
+                foreach (var rank in ranks)
+                {
+                    var square = file + rank;
+                    
+                    // Test pawn moves
+                    try
+                    {
+                        var testBoard = CloneBoard(board);
+                        if (testBoard != null)
+                        {
+                            testBoard.Move(square);
+                            legalMoves.Add(square);
+                        }
+                    }
+                    catch { }
+
+                    // Test piece moves (limited to avoid too many tests)
+                    foreach (var piece in pieces)
+                    {
+                        try
+                        {
+                            var testBoard = CloneBoard(board);
+                            if (testBoard != null)
+                            {
+                                var move = piece + square;
+                                testBoard.Move(move);
+                                legalMoves.Add(move);
+                            }
+                        }
+                        catch { }
+
+                        // Test captures
+                        try
+                        {
+                            var testBoard = CloneBoard(board);
+                            if (testBoard != null)
+                            {
+                                var move = piece + "x" + square;
+                                testBoard.Move(move);
+                                legalMoves.Add(move);
+                            }
+                        }
+                        catch { }
+                    }
+                }
+            }
+
+            return legalMoves;
+        }
+
+        /// <summary>
+        /// Evaluates a move and returns a score. Higher scores are better.
+        /// Scoring: captures > checks > other moves
+        /// </summary>
+        private int EvaluateMove(string move, ChessBoard board)
+        {
+            // Start with base evaluation from notation
+            int score = EvaluateMoveByNotation(move);
+
+            // Additional evaluation based on board state if possible
+            try
+            {
+                // Try to check if the move gives check using reflection
+                var boardType = board.GetType();
+                var isCheckProperty = boardType.GetProperty("IsCheck") ?? 
+                                     boardType.GetProperty("InCheck");
+                if (isCheckProperty != null)
+                {
+                    var isCheck = (bool)(isCheckProperty.GetValue(board) ?? false);
+                    if (isCheck)
+                    {
+                        score += 50; // Bonus for moves that give check
+                    }
+                }
+            }
+            catch { }
+
+            return score;
+        }
+
+        /// <summary>
+        /// Evaluates a move based on its notation only (without board state).
+        /// This is used as a fallback when board evaluation is not possible.
+        /// </summary>
+        private int EvaluateMoveByNotation(string move)
+        {
+            int score = 0;
+
+            // Prefer captures (moves with 'x')
+            if (move.Contains('x'))
+            {
+                score += 100;
+            }
+
+            // Prefer center squares (e4, e5, d4, d5)
+            if (move.Contains("e4") || move.Contains("e5") || move.Contains("d4") || move.Contains("d5"))
+            {
+                score += 10;
+            }
+
+            // Prefer developing pieces (moving knights and bishops)
+            if (move.StartsWith("N") || move.StartsWith("B"))
+            {
+                score += 5;
+            }
+
+            // Prefer castling (good for king safety)
+            if (move.StartsWith("O-O"))
+            {
+                score += 15;
+            }
+
+            return score;
+        }
+
+        /// <summary>
+        /// Normalizes a move string for comparison by removing non-important characters.
+        /// Removes: '+', 'x', '#', '=', and whitespace for distance calculation.
+        /// </summary>
+        private string NormalizeMoveForComparison(string move)
+        {
+            if (string.IsNullOrEmpty(move))
+                return string.Empty;
+
+            // Remove non-important characters: check (+), checkmate (#), capture (x), promotion (=)
+            var normalized = move.Replace("+", "")
+                                 .Replace("#", "")
+                                 .Replace("x", "")
+                                 .Replace("=", "")
+                                 .Replace(" ", "")
+                                 .ToUpperInvariant();
+
+            return normalized;
+        }
+
+        /// <summary>
+        /// Calculates the Levenshtein distance between two strings.
+        /// Returns the minimum number of single-character edits needed to transform one string into another.
+        /// </summary>
+        private int CalculateLevenshteinDistance(string s, string t)
+        {
+            if (string.IsNullOrEmpty(s))
+                return string.IsNullOrEmpty(t) ? 0 : t.Length;
+
+            if (string.IsNullOrEmpty(t))
+                return s.Length;
+
+            int n = s.Length;
+            int m = t.Length;
+            int[,] d = new int[n + 1, m + 1];
+
+            // Initialize first row and column
+            for (int i = 0; i <= n; i++)
+                d[i, 0] = i;
+
+            for (int j = 0; j <= m; j++)
+                d[0, j] = j;
+
+            // Fill the matrix
+            for (int i = 1; i <= n; i++)
+            {
+                for (int j = 1; j <= m; j++)
+                {
+                    int cost = (t[j - 1] == s[i - 1]) ? 0 : 1;
+
+                    d[i, j] = Math.Min(
+                        Math.Min(d[i - 1, j] + 1,      // deletion
+                                 d[i, j - 1] + 1),      // insertion
+                        d[i - 1, j - 1] + cost);        // substitution
+                }
+            }
+
+            return d[n, m];
+        }
+
+        /// <summary>
+        /// Removes check (+) and checkmate (#) symbols from move notation for validation
+        /// </summary>
+        private string RemoveCheckAndCheckmate(string move)
+        {
+            if (string.IsNullOrEmpty(move))
+                return move;
+            
+            return move.TrimEnd('+', '#');
         }
 
         private void ValidateGameLevelRules(List<ValidatedMove> moves, ChessMoveValidationResult result)

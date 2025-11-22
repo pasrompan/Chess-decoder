@@ -14,5 +14,9 @@ public class GameEvaluationRequest
     public IFormFile GroundTruth { get; set; } = null!;
 
     public string Language { get; set; } = "English";
+
+    public int NumberOfColumns { get; set; } = 4;
+
+    public bool AutoCrop { get; set; } = false;
 }
 

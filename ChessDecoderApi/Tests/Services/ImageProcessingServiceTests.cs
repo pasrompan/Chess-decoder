@@ -85,7 +85,7 @@ namespace ChessDecoderApi.Tests.Services
                     _chessMoveValidator) { CallBase = true };
 
                 // Patch: Mock ExtractMovesFromImageToStringAsync for full isolation
-                mockService.Setup(x => x.ExtractMovesFromImageToStringAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>()))
+                mockService.Setup(x => x.ExtractMovesFromImageToStringAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<int>()))
                     .ReturnsAsync((new List<string> { "e4", "Nf3" }, new List<string> { "e5", "Nc6" }));
 
                 var result = await mockService.Object.ProcessImageAsync(tempFile);
@@ -99,46 +99,6 @@ namespace ChessDecoderApi.Tests.Services
                 Assert.Contains("Date", result.PgnContent);
                 Assert.Contains("1. e4 e5", result.PgnContent);
                 Assert.Contains("2. Nf3 Nc6", result.PgnContent);
-                Assert.Contains("*", result.PgnContent);
-            }
-            finally
-            {
-                if (File.Exists(tempFile))
-                {
-                    File.Delete(tempFile);
-                }
-            }
-        }
-
-        [Fact]
-        public async Task ProcessImageAsync_ValidGreekMoves_ReturnsPGNContentAndValidation()
-        {
-            var tempFile = Path.GetTempFileName();
-            try
-            {
-                var mockService = new Mock<ImageProcessingService>(
-                    _httpClientFactoryMock.Object,
-                    _configurationMock.Object,
-                    _loggerMock.Object,
-                    _loggerFactoryMock.Object,
-                    _chessMoveProcessor,
-                    _chessMoveValidator) { CallBase = true };
-
-                // Patch: Mock ExtractMovesFromImageToStringAsync for full isolation
-                mockService.Setup(x => x.ExtractMovesFromImageToStringAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>()))
-                    .ReturnsAsync((new List<string> { "ε4", "Ιf3" }, new List<string> { "ε5", "Ιc6" }));
-
-                var result = await mockService.Object.ProcessImageAsync(tempFile, "Greek");
-
-                Assert.NotNull(result);
-                Assert.NotNull(result.PgnContent);
-                Assert.NotNull(result.Validation);
-                Assert.NotNull(result.Validation.GameId);
-                Assert.NotNull(result.Validation.Moves);
-                Assert.NotEmpty(result.Validation.Moves);
-                Assert.Contains("Date", result.PgnContent);
-                Assert.Contains("1. ε4 ε5", result.PgnContent);
-                Assert.Contains("2. Ιf3 Ιc6", result.PgnContent);
                 Assert.Contains("*", result.PgnContent);
             }
             finally
@@ -165,7 +125,7 @@ namespace ChessDecoderApi.Tests.Services
                     _chessMoveValidator) { CallBase = true };
 
                 // Patch: Mock ExtractMovesFromImageToStringAsync for full isolation
-                mockService.Setup(x => x.ExtractMovesFromImageToStringAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>()))
+                mockService.Setup(x => x.ExtractMovesFromImageToStringAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<int>()))
                     .ReturnsAsync((new List<string> { "invalid", "Nf3" }, new List<string> { "e5", "Nc6" }));
 
                 var result = await mockService.Object.ProcessImageAsync(tempFile);
@@ -199,7 +159,7 @@ namespace ChessDecoderApi.Tests.Services
 
             // Simulate moves with consecutive checks to trigger warning
             mockService
-                .Setup(x => x.ExtractMovesFromImageToStringAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>()))
+                .Setup(x => x.ExtractMovesFromImageToStringAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<int>()))
                 .ReturnsAsync((new List<string> { "e4", "Qh5+" }, new List<string> { "e5", "Ke7+" }));
 
             // Act

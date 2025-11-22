@@ -32,9 +32,9 @@ public class ImageExtractionService : IImageExtractionService
         return await _imageProcessingService.ExtractMovesFromImageToStringAsync(imagePath, language, useColumnDetection);
     }
 
-    public async Task<string> ExtractTextFromImageAsync(byte[] imageBytes, string language)
+    public async Task<string> ExtractTextFromImageAsync(byte[] imageBytes, string language, string provider = "gemini")
     {
-        return await _imageProcessingService.ExtractTextFromImageAsync(imageBytes, language);
+        return await _imageProcessingService.ExtractTextFromImageAsync(imageBytes, language, provider);
     }
 
     public async Task<string> DebugUploadAsync(string imagePath, string promptText)

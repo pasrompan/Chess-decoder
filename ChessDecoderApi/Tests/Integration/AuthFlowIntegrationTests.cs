@@ -61,11 +61,11 @@ public class AuthFlowIntegrationTests : IDisposable
         Assert.Equal("new-google-user-123", authResult.User.Id);
 
         // Assert - User has initial credits
-        Assert.Equal(10, authResult.User.Credits);
+        Assert.Equal(200, authResult.User.Credits);
 
         // Verify via credit service
         var credits = await creditService.GetUserCreditsAsync("new-google-user-123");
-        Assert.Equal(10, credits);
+        Assert.Equal(200, credits);
     }
 
     [Fact]

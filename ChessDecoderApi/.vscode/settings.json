@@ -1,0 +1,18 @@
+{
+  // .NET Core Test Explorer Configuration
+  // Extension ID: formulahendry.dotnet-test-explorer
+  "dotnet-test-explorer.testProjectPath": "Tests/Tests.csproj",
+  "dotnet-test-explorer.useTreeView": true,
+  "dotnet-test-explorer.showCodeLens": true,
+  "dotnet-test-explorer.pathForResultFile": "${workspaceFolder}/TestResults",
+  "dotnet-test-explorer.autoWatch": true,
+  "dotnet-test-explorer.buildConfiguration": "Debug",
+  
+  // Additional .NET settings
+  "omnisharp.enableRoslynAnalyzers": true,
+  "omnisharp.enableEditorConfigSupport": true,
+  "files.exclude": {
+    "**/bin": false,
+    "**/obj": false
+  }
+}
