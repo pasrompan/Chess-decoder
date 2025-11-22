@@ -34,10 +34,10 @@ namespace ChessDecoderApi.Services
         /// <param name="imagePath">Path to the test image</param>
         /// <param name="groundTruthPath">Path to the ground truth PGN file</param>
         /// <param name="language">Language for chess notation (default: English)</param>
-        /// <param name="expectedColumns">Expected number of columns in the chess notation table (default: 4)</param>
+        /// <param name="expectedColumns">Expected number of columns in the chess notation table (default: 6)</param>
         /// <param name="autoCrop">Whether to automatically crop the image to table boundaries before processing (default: false)</param>
         /// <returns>Evaluation result with normalized score (0 = perfect)</returns>
-        public async Task<EvaluationResult> EvaluateAsync(string imagePath, string groundTruthPath, string language = "English", int expectedColumns = 4, bool autoCrop = false)
+        public async Task<EvaluationResult> EvaluateAsync(string imagePath, string groundTruthPath, string language = "English", int expectedColumns = 6, bool autoCrop = false)
         {
             if (!_useRealApi)
             {

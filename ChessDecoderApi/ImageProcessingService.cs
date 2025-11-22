@@ -71,7 +71,7 @@ namespace ChessDecoderApi.Services
         /// <param name="language">Language for chess notation (default: English)</param>
         /// <param name="useColumnDetection">Whether to use heuristics for column detection or fall back to equal division</param>
         /// <returns>Tuple of two lists: whiteMoves and blackMoves</returns>
-        public virtual async Task<(List<string> whiteMoves, List<string> blackMoves)> ExtractMovesFromImageToStringAsync(string imagePath, string language = "English", bool useColumnDetection = true, int expectedColumns = 4)
+        public virtual async Task<(List<string> whiteMoves, List<string> blackMoves)> ExtractMovesFromImageToStringAsync(string imagePath, string language = "English", bool useColumnDetection = true, int expectedColumns = 6)
         {
             Image<Rgba32> image;
             
@@ -188,7 +188,7 @@ namespace ChessDecoderApi.Services
         /// <param name="language">Language for chess notation (default: English)</param>
         /// <param name="useColumnDetection">Whether to use heuristics for column detection or fall back to equal division</param>
         /// <returns>PGN formatted string containing the chess moves</returns>
-        public async Task<ChessGameResponse> ProcessImageAsync(string imagePath, string language = "English", bool useColumnDetection = true, int expectedColumns = 4)
+        public async Task<ChessGameResponse> ProcessImageAsync(string imagePath, string language = "English", bool useColumnDetection = true, int expectedColumns = 6)
         {
             // Extract moves from the image
             var (whiteMoves, blackMoves) = await ExtractMovesFromImageToStringAsync(imagePath, language, useColumnDetection, expectedColumns);

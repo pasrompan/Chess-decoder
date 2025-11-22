@@ -219,8 +219,31 @@ namespace ChessDecoderApi.Services
                             }
                             catch (Exception ex)
                             {
+                                // Check if board is in a terminal state (checkmate/stalemate) before attempting engine suggestions
+                                var terminalState = GetTerminalState(board);
+                                if (terminalState != null)
+                                {
+                                    // Board is in terminal state - no legal moves available
+                                    whiteMove.ValidationStatus = "error";
+                                    whiteMove.ValidationText = string.IsNullOrEmpty(whiteMove.ValidationText) 
+                                        ? $"Invalid move in game context: '{moveNotation}' is not a legal move ({ex.Message}). {terminalState}" 
+                                        : whiteMove.ValidationText + $"; Invalid move in game context: {ex.Message}. {terminalState}";
+                                    whiteValidation.IsValid = false;
+                                    continue; // Skip to next move since we can't proceed from terminal state
+                                }
+
                                 // Move is invalid in game context - try to get best move from engine
-                                var bestMove = GetBestMoveFromEngine(board, moveNotation);
+                                string? bestMove = null;
+                                try
+                                {
+                                    bestMove = GetBestMoveFromEngine(board, moveNotation);
+                                }
+                                catch (Exception engineEx)
+                                {
+                                    _logger.LogWarning(engineEx, "Error getting best move from engine for white move '{Move}' at move {MoveNumber}", moveNotation, i + 1);
+                                    // Continue to handle as if no move was found
+                                }
+
                                 if (!string.IsNullOrEmpty(bestMove))
                                 {
                                     try
@@ -247,11 +270,14 @@ namespace ChessDecoderApi.Services
                                 }
                                 else
                                 {
-                                    // No legal moves available
+                                    // No legal moves available - check if it's due to terminal state
+                                    var finalTerminalState = GetTerminalState(board);
+                                    var errorMessage = finalTerminalState ?? "No legal moves available from this position.";
+                                    
                                     whiteMove.ValidationStatus = "error";
                                     whiteMove.ValidationText = string.IsNullOrEmpty(whiteMove.ValidationText) 
-                                        ? $"Invalid move in game context: '{moveNotation}' is not a legal move ({ex.Message}). No legal moves available." 
-                                        : whiteMove.ValidationText + $"; Invalid move in game context: {ex.Message}. No legal moves available.";
+                                        ? $"Invalid move in game context: '{moveNotation}' is not a legal move ({ex.Message}). {errorMessage}" 
+                                        : whiteMove.ValidationText + $"; Invalid move in game context: {ex.Message}. {errorMessage}";
                                     whiteValidation.IsValid = false;
                                 }
                             }
@@ -272,8 +298,31 @@ namespace ChessDecoderApi.Services
                             }
                             catch (Exception ex)
                             {
+                                // Check if board is in a terminal state (checkmate/stalemate) before attempting engine suggestions
+                                var terminalState = GetTerminalState(board);
+                                if (terminalState != null)
+                                {
+                                    // Board is in terminal state - no legal moves available
+                                    blackMove.ValidationStatus = "error";
+                                    blackMove.ValidationText = string.IsNullOrEmpty(blackMove.ValidationText) 
+                                        ? $"Invalid move in game context: '{moveNotation}' is not a legal move ({ex.Message}). {terminalState}" 
+                                        : blackMove.ValidationText + $"; Invalid move in game context: {ex.Message}. {terminalState}";
+                                    blackValidation.IsValid = false;
+                                    continue; // Skip to next move since we can't proceed from terminal state
+                                }
+
                                 // Move is invalid in game context - try to get best move from engine
-                                var bestMove = GetBestMoveFromEngine(board, moveNotation);
+                                string? bestMove = null;
+                                try
+                                {
+                                    bestMove = GetBestMoveFromEngine(board, moveNotation);
+                                }
+                                catch (Exception engineEx)
+                                {
+                                    _logger.LogWarning(engineEx, "Error getting best move from engine for black move '{Move}' at move {MoveNumber}", moveNotation, i + 1);
+                                    // Continue to handle as if no move was found
+                                }
+
                                 if (!string.IsNullOrEmpty(bestMove))
                                 {
                                     try
@@ -300,11 +349,14 @@ namespace ChessDecoderApi.Services
                                 }
                                 else
                                 {
-                                    // No legal moves available
+                                    // No legal moves available - check if it's due to terminal state
+                                    var finalTerminalState = GetTerminalState(board);
+                                    var errorMessage = finalTerminalState ?? "No legal moves available from this position.";
+                                    
                                     blackMove.ValidationStatus = "error";
                                     blackMove.ValidationText = string.IsNullOrEmpty(blackMove.ValidationText) 
-                                        ? $"Invalid move in game context: '{moveNotation}' is not a legal move ({ex.Message}). No legal moves available." 
-                                        : blackMove.ValidationText + $"; Invalid move in game context: {ex.Message}. No legal moves available.";
+                                        ? $"Invalid move in game context: '{moveNotation}' is not a legal move ({ex.Message}). {errorMessage}" 
+                                        : blackMove.ValidationText + $"; Invalid move in game context: {ex.Message}. {errorMessage}";
                                     blackValidation.IsValid = false;
                                 }
                             }
@@ -770,6 +822,56 @@ namespace ChessDecoderApi.Services
                 return move;
             
             return move.TrimEnd('+', '#');
+        }
+
+        /// <summary>
+        /// Checks if the board is in a terminal state (checkmate or stalemate).
+        /// Returns a descriptive message if terminal, null otherwise.
+        /// </summary>
+        private string? GetTerminalState(ChessBoard board)
+        {
+            try
+            {
+                // First check if there are any legal moves available
+                var legalMoves = GetLegalMoves(board);
+                if (legalMoves == null || legalMoves.Count == 0)
+                {
+                    // No legal moves - could be checkmate or stalemate
+                    // Try to determine which by checking if the current player is in check
+                    var boardType = board.GetType();
+                    var isCheckProperty = boardType.GetProperty("IsCheck") ?? 
+                                         boardType.GetProperty("InCheck");
+                    
+                    bool isInCheck = false;
+                    if (isCheckProperty != null)
+                    {
+                        try
+                        {
+                            isInCheck = (bool)(isCheckProperty.GetValue(board) ?? false);
+                        }
+                        catch
+                        {
+                            // If we can't determine check state, assume stalemate
+                        }
+                    }
+
+                    if (isInCheck)
+                    {
+                        return "Game is in checkmate - no legal moves available.";
+                    }
+                    else
+                    {
+                        return "Game is in stalemate - no legal moves available.";
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Error checking terminal state of board");
+                // If we can't determine the state, return null to allow normal error handling
+            }
+
+            return null; // Not in terminal state
         }
 
         private void ValidateGameLevelRules(List<ValidatedMove> moves, ChessMoveValidationResult result)
