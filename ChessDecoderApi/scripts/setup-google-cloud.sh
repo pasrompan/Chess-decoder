@@ -60,6 +60,7 @@ echo "🔐 Creating secrets..."
 echo -n "$(read -p "Enter OpenAI API Key: " -s)" | gcloud secrets create openai-api-key --data-file=-
 echo -n "$(read -p "Enter Google Vision API Key: " -s)" | gcloud secrets create google-vision-api-key --data-file=-
 echo -n "$(read -p "Enter Google Client ID: " -s)" | gcloud secrets create google-client-id --data-file=-
+echo -n "$(read -p "Enter Gemini API Key: " -s)" | gcloud secrets create gemini-api-key --data-file=-
 
 # Grant Cloud Run access to secrets
 echo "🔑 Granting Cloud Run access to secrets..."
@@ -72,6 +73,10 @@ gcloud secrets add-iam-policy-binding google-vision-api-key \
     --role="roles/secretmanager.secretAccessor"
 
 gcloud secrets add-iam-policy-binding google-client-id \
+    --member="serviceAccount:$PROJECT_ID@appspot.gserviceaccount.com" \
+    --role="roles/secretmanager.secretAccessor"
+
+gcloud secrets add-iam-policy-binding gemini-api-key \
     --member="serviceAccount:$PROJECT_ID@appspot.gserviceaccount.com" \
     --role="roles/secretmanager.secretAccessor"
 

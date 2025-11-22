@@ -69,7 +69,7 @@ steps:
       - '--set-env-vars'
       - 'ASPNETCORE_ENVIRONMENT=Production,ConnectionStrings__DefaultConnection=Data Source=/app/data/chessdecoder.db,PORT=8080,GOOGLE_CLOUD_PROJECT=$PROJECT_ID,GOOGLE_CLOUD_DATABASE_BUCKET=chessdecoder-db-$PROJECT_ID,GOOGLE_CLOUD_IMAGES_BUCKET=chessdecoder-images-$PROJECT_ID'
       - '--set-secrets'
-      - 'OPENAI_API_KEY=openai-api-key:latest,GOOGLE_VISION_API_KEY=google-vision-api-key:latest,GOOGLE_CLIENT_ID=google-client-id:latest'
+      - 'OPENAI_API_KEY=openai-api-key:latest,GOOGLE_VISION_API_KEY=google-vision-api-key:latest,GOOGLE_CLIENT_ID=google-client-id:latest,GEMINI_API_KEY=gemini-api-key:latest'
 
   # Grant Cloud Run service account permissions for Cloud Storage
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
@@ -94,6 +94,12 @@ steps:
         gcloud projects add-iam-policy-binding $$PROJECT_ID \
           --member="serviceAccount:$$SERVICE_ACCOUNT" \
           --role="roles/storage.objectViewer"
+        
+        # Grant Secret Manager access for Gemini API key
+        echo "Granting Secret Manager access to service account: $$SERVICE_ACCOUNT"
+        gcloud secrets add-iam-policy-binding gemini-api-key \
+          --member="serviceAccount:$$SERVICE_ACCOUNT" \
+          --role="roles/secretmanager.secretAccessor" || echo "Warning: gemini-api-key secret may not exist yet"
 
 images:
   - 'gcr.io/$PROJECT_ID/chess-decoder-api:$COMMIT_SHA'

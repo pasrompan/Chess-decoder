@@ -76,6 +76,7 @@ ConnectionStrings__DefaultConnection=Data Source=data/chessdecoder.db
 - `openai-api-key` - OpenAI API key
 - `google-vision-api-key` - Google Vision API key
 - `google-client-id` - Google OAuth client ID
+- `gemini-api-key` - Gemini API key (required for OCR)
 
 ### **Cloud Storage Buckets**
 - **Database Bucket**: `chessdecoder-db-PROJECT_ID`
