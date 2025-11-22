@@ -107,7 +107,7 @@ public class AuthServiceTests
         _userRepositoryMock.Verify(x => x.CreateAsync(It.Is<User>(u => 
             u.Id == "new-user-123" && 
             u.Email == "newuser@example.com" &&
-            u.Credits == 10)), Times.Once);
+            u.Credits == 200)), Times.Once);
     }
 
     [Fact]

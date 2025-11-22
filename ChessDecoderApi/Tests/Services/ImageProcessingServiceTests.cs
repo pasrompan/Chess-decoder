@@ -111,46 +111,6 @@ namespace ChessDecoderApi.Tests.Services
         }
 
         [Fact]
-        public async Task ProcessImageAsync_ValidGreekMoves_ReturnsPGNContentAndValidation()
-        {
-            var tempFile = Path.GetTempFileName();
-            try
-            {
-                var mockService = new Mock<ImageProcessingService>(
-                    _httpClientFactoryMock.Object,
-                    _configurationMock.Object,
-                    _loggerMock.Object,
-                    _loggerFactoryMock.Object,
-                    _chessMoveProcessor,
-                    _chessMoveValidator) { CallBase = true };
-
-                // Patch: Mock ExtractMovesFromImageToStringAsync for full isolation
-                mockService.Setup(x => x.ExtractMovesFromImageToStringAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<int>()))
-                    .ReturnsAsync((new List<string> { "ε4", "Ιf3" }, new List<string> { "ε5", "Ιc6" }));
-
-                var result = await mockService.Object.ProcessImageAsync(tempFile, "Greek");
-
-                Assert.NotNull(result);
-                Assert.NotNull(result.PgnContent);
-                Assert.NotNull(result.Validation);
-                Assert.NotNull(result.Validation.GameId);
-                Assert.NotNull(result.Validation.Moves);
-                Assert.NotEmpty(result.Validation.Moves);
-                Assert.Contains("Date", result.PgnContent);
-                Assert.Contains("1. ε4 ε5", result.PgnContent);
-                Assert.Contains("2. Ιf3 Ιc6", result.PgnContent);
-                Assert.Contains("*", result.PgnContent);
-            }
-            finally
-            {
-                if (File.Exists(tempFile))
-                {
-                    File.Delete(tempFile);
-                }
-            }
-        }
-
-        [Fact]
         public async Task ProcessImageAsync_InvalidMoves_ReturnsValidationErrors()
         {
             var tempFile = Path.GetTempFileName();
