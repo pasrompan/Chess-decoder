@@ -13,6 +13,6 @@ public interface IImageManipulationService
     /// <summary>
     /// Create an image with column boundaries drawn for visualization
     /// </summary>
-    Task<byte[]> CreateImageWithBoundariesAsync(string imagePath, int expectedColumns = 6);
+    Task<byte[]> CreateImageWithBoundariesAsync(string imagePath);
 }
 

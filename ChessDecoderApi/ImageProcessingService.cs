@@ -1847,9 +1847,8 @@ namespace ChessDecoderApi.Services
         /// Uses automatic chess column detection for improved accuracy.
         /// </summary>
         /// <param name="imagePath">Path to the chess moves image</param>
-        /// <param name="expectedColumns">Expected number of columns (default: 6, used as fallback)</param>
         /// <returns>Byte array of the image with table and column boundaries drawn</returns>
-        public async Task<byte[]> CreateImageWithBoundariesAsync(string imagePath, int expectedColumns = 6)
+        public async Task<byte[]> CreateImageWithBoundariesAsync(string imagePath)
         {
             using var image = Image.Load<Rgba32>(imagePath);
             
@@ -1857,8 +1856,8 @@ namespace ChessDecoderApi.Services
             var tableBoundaries = FindTableBoundaries(image);
             _logger.LogInformation($"Found table boundaries: X={tableBoundaries.X}, Y={tableBoundaries.Y}, Width={tableBoundaries.Width}, Height={tableBoundaries.Height}");
             
-            // Step 2: Automatically detect chess columns within the table boundaries
-            var columnBoundaries = DetectChessColumnsAutomatically(image, tableBoundaries);
+            // Step 2: Automatically detect chess columns within the table boundaries (using default 6 columns)
+            var columnBoundaries = DetectChessColumnsAutomatically(image, tableBoundaries, useHeuristics: true, expectedColumns: 6);
             
             // Clone the image to draw on
             using var imageWithBoundaries = image.Clone();

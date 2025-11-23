@@ -150,7 +150,7 @@ public class GameProcessingService : IGameProcessingService
         {
             if (request.AutoCrop)
             {
-                var imageWithBoundaries = await _imageManipulationService.CreateImageWithBoundariesAsync(imagePathForProcessing, 6);
+                var imageWithBoundaries = await _imageManipulationService.CreateImageWithBoundariesAsync(imagePathForProcessing);
                 processedImageBase64 = Convert.ToBase64String(imageWithBoundaries);
             }
             else
@@ -286,7 +286,7 @@ public class GameProcessingService : IGameProcessingService
         // Generate image
         if (autoCrop)
         {
-            var imageWithBoundaries = await _imageManipulationService.CreateImageWithBoundariesAsync(imagePathForProcessing, 6);
+            var imageWithBoundaries = await _imageManipulationService.CreateImageWithBoundariesAsync(imagePathForProcessing);
             processedImageBase64 = Convert.ToBase64String(imageWithBoundaries);
         }
         else

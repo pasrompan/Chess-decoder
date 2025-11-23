@@ -82,9 +82,7 @@ public class DebugController : ControllerBase
     /// Debug endpoint to split columns and return boundary information
     /// </summary>
     [HttpPost("split-columns")]
-    public async Task<IActionResult> DebugSplitColumns(
-        IFormFile? image,
-        [FromForm] int expectedColumns = 6)
+    public async Task<IActionResult> DebugSplitColumns(IFormFile? image)
     {
         if (image == null || image.Length == 0)
         {
@@ -94,11 +92,6 @@ public class DebugController : ControllerBase
         if (!image.ContentType.StartsWith("image/"))
         {
             return BadRequest(new { message = "Uploaded file must be an image" });
-        }
-
-        if (expectedColumns < 1 || expectedColumns > 20)
-        {
-            return BadRequest(new { message = "Expected columns must be between 1 and 20" });
         }
 
         try
@@ -114,7 +107,8 @@ public class DebugController : ControllerBase
                 using var loadedImage = Image.Load<Rgba32>(tempFilePath);
                 
                 var tableBoundaries = _imageAnalysisService.FindTableBoundaries(loadedImage);
-                var columnBoundaries = _imageAnalysisService.DetectChessColumnsAutomatically(loadedImage, tableBoundaries);
+                // Use default 6 columns for auto-detection
+                var columnBoundaries = _imageAnalysisService.DetectChessColumnsAutomatically(loadedImage, tableBoundaries, useHeuristics: true, expectedColumns: 6);
                 
                 var columnWidths = new List<int>();
                 for (int i = 0; i < columnBoundaries.Count - 1; i++)
@@ -127,7 +121,7 @@ public class DebugController : ControllerBase
                     imageFileName = image.FileName,
                     imageWidth = columnBoundaries.Last(),
                     imageHeight = loadedImage.Height,
-                    expectedColumns = expectedColumns,
+                    actualColumns = columnBoundaries.Count - 1,
                     columnBoundaries = columnBoundaries,
                     columnData = columnBoundaries.Take(columnBoundaries.Count - 1).Select((start, index) => new
                     {
@@ -164,9 +158,7 @@ public class DebugController : ControllerBase
     /// Debug endpoint to visualize column boundaries on an image
     /// </summary>
     [HttpPost("image-with-boundaries")]
-    public async Task<IActionResult> DebugImageWithBoundaries(
-        IFormFile? image,
-        [FromForm] int expectedColumns = 6)
+    public async Task<IActionResult> DebugImageWithBoundaries(IFormFile? image)
     {
         if (image == null || image.Length == 0)
         {
@@ -176,11 +168,6 @@ public class DebugController : ControllerBase
         if (!image.ContentType.StartsWith("image/"))
         {
             return BadRequest(new { message = "Uploaded file must be an image" });
-        }
-
-        if (expectedColumns < 1 || expectedColumns > 20)
-        {
-            return BadRequest(new { message = "Expected columns must be between 1 and 20" });
         }
 
         try
@@ -193,7 +180,7 @@ public class DebugController : ControllerBase
                     await image.CopyToAsync(stream);
                 }
 
-                var imageWithBoundaries = await _imageManipulationService.CreateImageWithBoundariesAsync(tempFilePath, expectedColumns);
+                var imageWithBoundaries = await _imageManipulationService.CreateImageWithBoundariesAsync(tempFilePath);
                 return File(imageWithBoundaries, "image/jpeg", $"boundaries_{image.FileName}");
             }
             finally

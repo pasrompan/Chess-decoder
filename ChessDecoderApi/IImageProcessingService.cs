@@ -16,7 +16,7 @@ namespace ChessDecoderApi.Services
         List<int> SplitImageIntoColumns(Image<Rgba32> image, int expectedColumns, Rectangle? searchRegion);
         List<int> SplitImageIntoColumns(string imagePath, int expectedColumns = 6);
         List<int> DetectChessColumnsAutomatically(Image<Rgba32> image, Rectangle? searchRegion = null, bool useHeuristics = true, int expectedColumns = 4);
-        Task<byte[]> CreateImageWithBoundariesAsync(string imagePath, int expectedColumns = 6);
+        Task<byte[]> CreateImageWithBoundariesAsync(string imagePath);
         Task<byte[]> CropImageAsync(string imagePath, int x, int y, int width, int height);
         Rectangle FindTableBoundaries(Image<Rgba32> image);
         List<Point> GetDetectedCorners(Image<Rgba32> image);
