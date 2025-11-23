@@ -149,8 +149,7 @@ public class GameControllerTests
             Image = fileMock.Object,
             UserId = "test-user",
             Language = "English",
-            AutoCrop = false,
-            ExpectedColumns = 4
+            AutoCrop = false
         };
     }
 }

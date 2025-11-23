@@ -16,13 +16,5 @@ public class GameUploadRequest
     public string Language { get; set; } = "English";
 
     public bool AutoCrop { get; set; } = false;
-
-    public int ExpectedColumns { get; set; } = 4;
-
-    /// <summary>
-    /// If true, uses whole image processing (sends entire image to LLM without column splitting).
-    /// If false, uses column splitting approach (default).
-    /// </summary>
-    public bool UseWholeImageProcessing { get; set; } = false;
 }
 

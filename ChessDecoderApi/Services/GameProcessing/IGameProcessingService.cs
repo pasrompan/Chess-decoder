@@ -16,6 +16,6 @@ public interface IGameProcessingService
     /// <summary>
     /// Process a mock upload (no credit deduction, no database save)
     /// </summary>
-    Task<GameProcessingResponse> ProcessMockUploadAsync(IFormFile image, string language = "English", bool autoCrop = false, int expectedColumns = 4);
+    Task<GameProcessingResponse> ProcessMockUploadAsync(IFormFile image, string language = "English", bool autoCrop = false);
 }
 

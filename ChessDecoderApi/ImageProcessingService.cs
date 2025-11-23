@@ -65,110 +65,13 @@ namespace ChessDecoderApi.Services
         }
 
         /// <summary>
-        /// Extracts chess moves from an image and returns two lists: white and black moves.
-        /// </summary>
-        /// <param name="imagePath">Path to the chess image or URL</param>
-        /// <param name="language">Language for chess notation (default: English)</param>
-        /// <returns>Tuple of two lists: whiteMoves and blackMoves</returns>
-        public virtual async Task<(List<string> whiteMoves, List<string> blackMoves)> ExtractMovesFromImageToStringAsync(string imagePath, string language = "English", int expectedColumns = 6)
-        {
-            Image<Rgba32> image;
-            
-            // Check if it's a URL or local file path
-            if (Uri.TryCreate(imagePath, UriKind.Absolute, out var uri) && (uri.Scheme == "http" || uri.Scheme == "https"))
-            {
-                // Download image from URL
-                using var httpClient = _httpClientFactory.CreateClient();
-                var imageBytes = await httpClient.GetByteArrayAsync(imagePath);
-                image = Image.Load<Rgba32>(imageBytes);
-            }
-            else
-            {
-                // Local file path
-                if (!File.Exists(imagePath))
-                {
-                    throw new FileNotFoundException("Image file not found", imagePath);
-                }
-                image = Image.Load<Rgba32>(imagePath);
-            }
-            int width = image.Width;
-            int height = image.Height;
-
-            // Use the entire image as the search region
-            Rectangle searchRegion = new Rectangle(0, 0, width, height);
-            _logger.LogInformation($"Using full image dimensions: Width={width}, Height={height}");
-
-            // Divide chess columns using equal division
-            _logger.LogInformation("Using equal division on full image with expectedColumns: {ExpectedColumns}", expectedColumns);
-            List<int> boundaries = DetectChessColumnsAutomatically(image, searchRegion, useHeuristics: false, expectedColumns);
-            var whiteMoves = new List<string>();
-            var blackMoves = new List<string>();
-
-            for (int i = 0; i < boundaries.Count - 1; i++)
-            {
-                int colStart = boundaries[i];
-                int colEnd = boundaries[i + 1];
-                int colWidth = colEnd - colStart;
-                if (colWidth <= 0) continue;
-                var rect = new Rectangle(colStart, 0, colWidth, height);
-                using var columnImage = image.Clone(ctx => ctx.Crop(rect));
-                byte[] imageBytes;
-                using (var ms = new MemoryStream())
-                {
-                    columnImage.SaveAsJpeg(ms);
-                    imageBytes = ms.ToArray();
-                }
-                string text = await ExtractTextFromImageAsync(imageBytes, language);
-                string[] moves;
-                try
-                {
-                    if (language == "Greek")
-                    {
-                        _logger.LogInformation($"Processing Greek chess notation for column {i}");
-                        string[] greekMoves = await _chessMoveProcessor.ProcessChessMovesAsync(text);
-                        moves = await ConvertGreekMovesToEnglishAsync(greekMoves);
-                    }
-                    else
-                    {
-                        _logger.LogInformation($"Processing standard chess notation for column {i}");
-                        moves = await _chessMoveProcessor.ProcessChessMovesAsync(text);
-                    }
-
-                    if (moves == null || moves.Length == 0)
-                    {
-                        _logger.LogWarning($"No valid moves were extracted from column {i}");
-                        continue;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, $"Error processing chess moves for column {i} and language: {language}");
-                    continue;
-                }
-
-                // Merge moves into white and black lists
-                if (i % 2 == 0)
-                {
-                    whiteMoves.AddRange(moves);
-                }
-                else
-                {
-                    blackMoves.AddRange(moves);
-                }
-            }
-
-            return (whiteMoves, blackMoves);
-        }
-
-        /// <summary>
-        /// Extracts chess moves from an image by sending the whole image to LLM (without splitting into columns).
+        /// Extracts chess moves from an image by sending the whole image to LLM.
         /// The LLM is instructed to parse columns and return moves in JSON format.
         /// </summary>
         /// <param name="imagePath">Path to the chess image or URL</param>
         /// <param name="language">Language for chess notation (default: English)</param>
-        /// <param name="expectedColumns">Expected number of columns in the chess notation table (default: 6)</param>
         /// <returns>Tuple of two lists: whiteMoves and blackMoves</returns>
-        public virtual async Task<(List<string> whiteMoves, List<string> blackMoves)> ExtractMovesFromImageToStringAsyncWholeImage(string imagePath, string language = "English", int expectedColumns = 6)
+        public virtual async Task<(List<string> whiteMoves, List<string> blackMoves)> ExtractMovesFromImageToStringAsync(string imagePath, string language = "English")
         {
             Image<Rgba32> image;
             
@@ -361,15 +264,11 @@ namespace ChessDecoderApi.Services
         /// </summary>
         /// <param name="imagePath">Path to the chess image or URL</param>
         /// <param name="language">Language for chess notation (default: English)</param>
-        /// <param name="expectedColumns">Expected number of columns (default: 6)</param>
-        /// <param name="useWholeImageProcessing">If true, sends whole image to LLM. If false, splits into columns (default: false)</param>
         /// <returns>PGN formatted string containing the chess moves</returns>
-        public async Task<ChessGameResponse> ProcessImageAsync(string imagePath, string language = "English", int expectedColumns = 6, bool useWholeImageProcessing = false)
+        public async Task<ChessGameResponse> ProcessImageAsync(string imagePath, string language = "English")
         {
-            // Extract moves from the image
-            var (whiteMoves, blackMoves) = useWholeImageProcessing
-                ? await ExtractMovesFromImageToStringAsyncWholeImage(imagePath, language, expectedColumns)
-                : await ExtractMovesFromImageToStringAsync(imagePath, language, expectedColumns);
+            // Extract moves from the image using whole image processing
+            var (whiteMoves, blackMoves) = await ExtractMovesFromImageToStringAsync(imagePath, language);
 
             // Validate white and black moves separately
             var whiteValidation = _chessMoveValidator.ValidateMoves(whiteMoves.ToArray());

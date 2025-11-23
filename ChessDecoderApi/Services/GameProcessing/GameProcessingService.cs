@@ -142,17 +142,15 @@ public class GameProcessingService : IGameProcessingService
         }
 
         var startTime = DateTime.UtcNow;
-        var result = await _imageExtractionService.ProcessImageAsync(imagePathForProcessing, request.Language, request.ExpectedColumns, request.UseWholeImageProcessing);
+        var result = await _imageExtractionService.ProcessImageAsync(imagePathForProcessing, request.Language);
         var processingTime = DateTime.UtcNow - startTime;
-        
-        _logger.LogInformation("Processed image using {Method} method", request.UseWholeImageProcessing ? "whole image" : "column splitting");
 
         // Generate processed image with boundaries
         try
         {
             if (request.AutoCrop)
             {
-                var imageWithBoundaries = await _imageManipulationService.CreateImageWithBoundariesAsync(imagePathForProcessing, request.ExpectedColumns);
+                var imageWithBoundaries = await _imageManipulationService.CreateImageWithBoundariesAsync(imagePathForProcessing, 6);
                 processedImageBase64 = Convert.ToBase64String(imageWithBoundaries);
             }
             else
@@ -249,9 +247,9 @@ public class GameProcessingService : IGameProcessingService
         };
     }
 
-    public async Task<GameProcessingResponse> ProcessMockUploadAsync(IFormFile image, string language = "English", bool autoCrop = false, int expectedColumns = 4)
+    public async Task<GameProcessingResponse> ProcessMockUploadAsync(IFormFile image, string language = "English", bool autoCrop = false)
     {
-        _logger.LogInformation("Processing mock upload with autoCrop: {AutoCrop}, expectedColumns: {ExpectedColumns}", autoCrop, expectedColumns);
+        _logger.LogInformation("Processing mock upload with autoCrop: {AutoCrop}", autoCrop);
 
         var fileName = $"{Guid.NewGuid()}{Path.GetExtension(image.FileName)}";
         var tempFilePath = Path.Combine(Path.GetTempPath(), fileName);
@@ -283,13 +281,12 @@ public class GameProcessingService : IGameProcessingService
             imagePathForProcessing = croppedFilePath;
         }
 
-        // For mock upload, default to column splitting (can be extended later if needed)
-        var result = await _imageExtractionService.ProcessImageAsync(imagePathForProcessing, language, expectedColumns, useWholeImageProcessing: false);
+        var result = await _imageExtractionService.ProcessImageAsync(imagePathForProcessing, language);
 
         // Generate image
         if (autoCrop)
         {
-            var imageWithBoundaries = await _imageManipulationService.CreateImageWithBoundariesAsync(imagePathForProcessing, expectedColumns);
+            var imageWithBoundaries = await _imageManipulationService.CreateImageWithBoundariesAsync(imagePathForProcessing, 6);
             processedImageBase64 = Convert.ToBase64String(imageWithBoundaries);
         }
         else
