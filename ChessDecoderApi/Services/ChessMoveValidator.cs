@@ -212,6 +212,9 @@ namespace ChessDecoderApi.Services
                         if (!string.IsNullOrWhiteSpace(whiteMove.NormalizedNotation))
                         {
                             var moveNotation = RemoveCheckAndCheckmate(whiteMove.NormalizedNotation);
+                            // Store original validation status to check if move had invalid syntax
+                            var hadInvalidSyntax = whiteMove.ValidationStatus == "error";
+                            
                             try
                             {
                                 // Move validates and executes the move, throws exception if invalid
@@ -232,45 +235,62 @@ namespace ChessDecoderApi.Services
                                     continue; // Skip to next move since we can't proceed from terminal state
                                 }
 
-                                // Move is invalid in game context - try to get best move from engine
-                                string? bestMove = null;
-                                try
+                                // Only try to replace moves that had invalid chess notation syntax
+                                // Moves with valid syntax but invalid in context should not be replaced
+                                if (hadInvalidSyntax)
                                 {
-                                    bestMove = GetBestMoveFromEngine(board, moveNotation);
-                                }
-                                catch (Exception engineEx)
-                                {
-                                    _logger.LogWarning(engineEx, "Error getting best move from engine for white move '{Move}' at move {MoveNumber}", moveNotation, i + 1);
-                                    // Continue to handle as if no move was found
-                                }
-
-                                if (!string.IsNullOrEmpty(bestMove))
-                                {
+                                    // Move had invalid syntax - try to get best move from engine
+                                    string? bestMove = null;
                                     try
                                     {
-                                        // Replace invalid move with best move
-                                        board.Move(bestMove);
-                                        whiteMove.NormalizedNotation = bestMove;
-                                        whiteMove.ValidationStatus = "warning";
-                                        whiteMove.ValidationText = string.IsNullOrEmpty(whiteMove.ValidationText) 
-                                            ? $"Invalid move '{moveNotation}' replaced with engine suggestion: '{bestMove}'" 
-                                            : whiteMove.ValidationText + $"; Invalid move '{moveNotation}' replaced with engine suggestion: '{bestMove}'";
-                                        _logger.LogInformation("Replaced invalid white move '{OriginalMove}' with engine suggestion '{BestMove}' at move {MoveNumber}", 
-                                            moveNotation, bestMove, i + 1);
+                                        bestMove = GetBestMoveFromEngine(board, moveNotation);
                                     }
-                                    catch (Exception bestMoveEx)
+                                    catch (Exception engineEx)
                                     {
-                                        // Even the best move failed, mark as error
+                                        _logger.LogWarning(engineEx, "Error getting best move from engine for white move '{Move}' at move {MoveNumber}", moveNotation, i + 1);
+                                        // Continue to handle as if no move was found
+                                    }
+
+                                    if (!string.IsNullOrEmpty(bestMove))
+                                    {
+                                        try
+                                        {
+                                            // Replace invalid move with best move
+                                            board.Move(bestMove);
+                                            whiteMove.NormalizedNotation = bestMove;
+                                            whiteMove.ValidationStatus = "warning";
+                                            whiteMove.ValidationText = string.IsNullOrEmpty(whiteMove.ValidationText) 
+                                                ? $"Invalid move '{moveNotation}' replaced with engine suggestion: '{bestMove}'" 
+                                                : whiteMove.ValidationText + $"; Invalid move '{moveNotation}' replaced with engine suggestion: '{bestMove}'";
+                                            _logger.LogInformation("Replaced invalid white move '{OriginalMove}' with engine suggestion '{BestMove}' at move {MoveNumber}", 
+                                                moveNotation, bestMove, i + 1);
+                                        }
+                                        catch (Exception bestMoveEx)
+                                        {
+                                            // Even the best move failed, mark as error
+                                            whiteMove.ValidationStatus = "error";
+                                            whiteMove.ValidationText = string.IsNullOrEmpty(whiteMove.ValidationText) 
+                                                ? $"Invalid move in game context: '{moveNotation}' is not a legal move ({ex.Message}). Engine suggestion '{bestMove}' also failed: {bestMoveEx.Message}" 
+                                                : whiteMove.ValidationText + $"; Invalid move in game context: {ex.Message}. Engine suggestion failed: {bestMoveEx.Message}";
+                                            whiteValidation.IsValid = false;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        // No legal moves available - check if it's due to terminal state
+                                        var finalTerminalState = GetTerminalState(board);
+                                        var errorMessage = finalTerminalState ?? "No legal moves available from this position.";
+                                        
                                         whiteMove.ValidationStatus = "error";
                                         whiteMove.ValidationText = string.IsNullOrEmpty(whiteMove.ValidationText) 
-                                            ? $"Invalid move in game context: '{moveNotation}' is not a legal move ({ex.Message}). Engine suggestion '{bestMove}' also failed: {bestMoveEx.Message}" 
-                                            : whiteMove.ValidationText + $"; Invalid move in game context: {ex.Message}. Engine suggestion failed: {bestMoveEx.Message}";
+                                            ? $"Invalid move in game context: '{moveNotation}' is not a legal move ({ex.Message}). {errorMessage}" 
+                                            : whiteMove.ValidationText + $"; Invalid move in game context: {ex.Message}. {errorMessage}";
                                         whiteValidation.IsValid = false;
                                     }
                                 }
                                 else
                                 {
-                                    // No legal moves available - check if it's due to terminal state
+                                    // Move has valid syntax but is invalid in game context - don't replace, just mark as error
                                     var finalTerminalState = GetTerminalState(board);
                                     var errorMessage = finalTerminalState ?? "No legal moves available from this position.";
                                     
@@ -291,6 +311,9 @@ namespace ChessDecoderApi.Services
                         if (!string.IsNullOrWhiteSpace(blackMove.NormalizedNotation))
                         {
                             var moveNotation = RemoveCheckAndCheckmate(blackMove.NormalizedNotation);
+                            // Store original validation status to check if move had invalid syntax
+                            var hadInvalidSyntax = blackMove.ValidationStatus == "error";
+                            
                             try
                             {
                                 // Move validates and executes the move, throws exception if invalid
@@ -311,45 +334,62 @@ namespace ChessDecoderApi.Services
                                     continue; // Skip to next move since we can't proceed from terminal state
                                 }
 
-                                // Move is invalid in game context - try to get best move from engine
-                                string? bestMove = null;
-                                try
+                                // Only try to replace moves that had invalid chess notation syntax
+                                // Moves with valid syntax but invalid in context should not be replaced
+                                if (hadInvalidSyntax)
                                 {
-                                    bestMove = GetBestMoveFromEngine(board, moveNotation);
-                                }
-                                catch (Exception engineEx)
-                                {
-                                    _logger.LogWarning(engineEx, "Error getting best move from engine for black move '{Move}' at move {MoveNumber}", moveNotation, i + 1);
-                                    // Continue to handle as if no move was found
-                                }
-
-                                if (!string.IsNullOrEmpty(bestMove))
-                                {
+                                    // Move had invalid syntax - try to get best move from engine
+                                    string? bestMove = null;
                                     try
                                     {
-                                        // Replace invalid move with best move
-                                        board.Move(bestMove);
-                                        blackMove.NormalizedNotation = bestMove;
-                                        blackMove.ValidationStatus = "warning";
-                                        blackMove.ValidationText = string.IsNullOrEmpty(blackMove.ValidationText) 
-                                            ? $"Invalid move '{moveNotation}' replaced with engine suggestion: '{bestMove}'" 
-                                            : blackMove.ValidationText + $"; Invalid move '{moveNotation}' replaced with engine suggestion: '{bestMove}'";
-                                        _logger.LogInformation("Replaced invalid black move '{OriginalMove}' with engine suggestion '{BestMove}' at move {MoveNumber}", 
-                                            moveNotation, bestMove, i + 1);
+                                        bestMove = GetBestMoveFromEngine(board, moveNotation);
                                     }
-                                    catch (Exception bestMoveEx)
+                                    catch (Exception engineEx)
                                     {
-                                        // Even the best move failed, mark as error
+                                        _logger.LogWarning(engineEx, "Error getting best move from engine for black move '{Move}' at move {MoveNumber}", moveNotation, i + 1);
+                                        // Continue to handle as if no move was found
+                                    }
+
+                                    if (!string.IsNullOrEmpty(bestMove))
+                                    {
+                                        try
+                                        {
+                                            // Replace invalid move with best move
+                                            board.Move(bestMove);
+                                            blackMove.NormalizedNotation = bestMove;
+                                            blackMove.ValidationStatus = "warning";
+                                            blackMove.ValidationText = string.IsNullOrEmpty(blackMove.ValidationText) 
+                                                ? $"Invalid move '{moveNotation}' replaced with engine suggestion: '{bestMove}'" 
+                                                : blackMove.ValidationText + $"; Invalid move '{moveNotation}' replaced with engine suggestion: '{bestMove}'";
+                                            _logger.LogInformation("Replaced invalid black move '{OriginalMove}' with engine suggestion '{BestMove}' at move {MoveNumber}", 
+                                                moveNotation, bestMove, i + 1);
+                                        }
+                                        catch (Exception bestMoveEx)
+                                        {
+                                            // Even the best move failed, mark as error
+                                            blackMove.ValidationStatus = "error";
+                                            blackMove.ValidationText = string.IsNullOrEmpty(blackMove.ValidationText) 
+                                                ? $"Invalid move in game context: '{moveNotation}' is not a legal move ({ex.Message}). Engine suggestion '{bestMove}' also failed: {bestMoveEx.Message}" 
+                                                : blackMove.ValidationText + $"; Invalid move in game context: {ex.Message}. Engine suggestion failed: {bestMoveEx.Message}";
+                                            blackValidation.IsValid = false;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        // No legal moves available - check if it's due to terminal state
+                                        var finalTerminalState = GetTerminalState(board);
+                                        var errorMessage = finalTerminalState ?? "No legal moves available from this position.";
+                                        
                                         blackMove.ValidationStatus = "error";
                                         blackMove.ValidationText = string.IsNullOrEmpty(blackMove.ValidationText) 
-                                            ? $"Invalid move in game context: '{moveNotation}' is not a legal move ({ex.Message}). Engine suggestion '{bestMove}' also failed: {bestMoveEx.Message}" 
-                                            : blackMove.ValidationText + $"; Invalid move in game context: {ex.Message}. Engine suggestion failed: {bestMoveEx.Message}";
+                                            ? $"Invalid move in game context: '{moveNotation}' is not a legal move ({ex.Message}). {errorMessage}" 
+                                            : blackMove.ValidationText + $"; Invalid move in game context: {ex.Message}. {errorMessage}";
                                         blackValidation.IsValid = false;
                                     }
                                 }
                                 else
                                 {
-                                    // No legal moves available - check if it's due to terminal state
+                                    // Move has valid syntax but is invalid in game context - don't replace, just mark as error
                                     var finalTerminalState = GetTerminalState(board);
                                     var errorMessage = finalTerminalState ?? "No legal moves available from this position.";
                                     

@@ -80,9 +80,11 @@ public class EvaluationController : ControllerBase
                 // Create evaluation service - this uses the legacy ImageProcessingService
                 // In a full refactor, this would be extracted to its own service
                 var imageProcessingService = HttpContext.RequestServices.GetRequiredService<IImageProcessingService>();
+                var chessMoveValidator = HttpContext.RequestServices.GetRequiredService<IChessMoveValidator>();
                 var evaluationLogger = _loggerFactory.CreateLogger<ImageProcessingEvaluationService>();
                 var evaluationService = new ImageProcessingEvaluationService(
                     imageProcessingService, 
+                    chessMoveValidator,
                     evaluationLogger, 
                     useRealApi: true);
 
@@ -104,15 +106,25 @@ public class EvaluationController : ControllerBase
                         LevenshteinDistance = result.LevenshteinDistance,
                         LongestCommonSubsequence = result.LongestCommonSubsequence
                     },
+                    NormalizedMetrics = new EvaluationMetricsDto
+                    {
+                        NormalizedScore = Math.Round(result.NormalizedNormalizedScore, 3),
+                        ExactMatchScore = Math.Round(result.NormalizedExactMatchScore, 3),
+                        PositionalAccuracy = Math.Round(result.NormalizedPositionalAccuracy, 3),
+                        LevenshteinDistance = result.NormalizedLevenshteinDistance,
+                        LongestCommonSubsequence = result.NormalizedLongestCommonSubsequence
+                    },
                     MoveCounts = new MoveCountsDto
                     {
                         GroundTruthMoves = result.GroundTruthMoves.Count,
-                        ExtractedMoves = result.ExtractedMoves.Count
+                        ExtractedMoves = result.ExtractedMoves.Count,
+                        NormalizedMoves = result.NormalizedMoves.Count
                     },
                     Moves = new MovesDto
                     {
                         GroundTruth = result.GroundTruthMoves,
-                        Extracted = result.ExtractedMoves
+                        Extracted = result.ExtractedMoves,
+                        Normalized = result.NormalizedMoves
                     },
                     GeneratedPgn = result.GeneratedPgn
                 });

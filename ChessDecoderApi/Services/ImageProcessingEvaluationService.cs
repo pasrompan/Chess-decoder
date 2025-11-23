@@ -15,6 +15,7 @@ namespace ChessDecoderApi.Services
     public class ImageProcessingEvaluationService
     {
         private readonly IImageProcessingService _imageProcessingService;
+        private readonly IChessMoveValidator? _chessMoveValidator;
         private readonly ILogger<ImageProcessingEvaluationService> _logger;
         private readonly bool _useRealApi;
 
@@ -24,6 +25,19 @@ namespace ChessDecoderApi.Services
             bool useRealApi = false)
         {
             _imageProcessingService = imageProcessingService ?? throw new ArgumentNullException(nameof(imageProcessingService));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _useRealApi = useRealApi;
+            _chessMoveValidator = null; // Will be null if not provided - normalized moves won't be calculated
+        }
+
+        public ImageProcessingEvaluationService(
+            IImageProcessingService imageProcessingService,
+            IChessMoveValidator chessMoveValidator,
+            ILogger<ImageProcessingEvaluationService> logger,
+            bool useRealApi = false)
+        {
+            _imageProcessingService = imageProcessingService ?? throw new ArgumentNullException(nameof(imageProcessingService));
+            _chessMoveValidator = chessMoveValidator ?? throw new ArgumentNullException(nameof(chessMoveValidator));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _useRealApi = useRealApi;
         }
@@ -101,7 +115,7 @@ namespace ChessDecoderApi.Services
                 _logger.LogInformation("Extracted {Count} moves directly from image", extractedMoves.Count);
                 result.GeneratedPgn = _imageProcessingService.GeneratePGNContentAsync(whiteMoves, blackMoves);
 
-                // Compute various distance metrics
+                // Compute various distance metrics for extracted moves
                 result.ExactMatchScore = ComputeExactMatchScore(groundTruthMoves, extractedMoves);
                 result.LevenshteinDistance = ComputeLevenshteinDistance(groundTruthMoves, extractedMoves);
                 result.PositionalAccuracy = ComputePositionalAccuracy(groundTruthMoves, extractedMoves);
@@ -109,6 +123,47 @@ namespace ChessDecoderApi.Services
 
                 // Compute normalized score (0 = perfect, 1 = worst)
                 result.NormalizedScore = ComputeNormalizedScore(result);
+
+                // Get normalized moves if validator is available
+                if (_chessMoveValidator != null)
+                {
+                    // Validate moves to get normalized versions
+                    var whiteValidation = _chessMoveValidator.ValidateMoves(whiteMoves.ToArray());
+                    var blackValidation = _chessMoveValidator.ValidateMoves(blackMoves.ToArray());
+                    _chessMoveValidator.ValidateMovesInGameContext(whiteValidation, blackValidation);
+
+                    // Build normalized moves list
+                    var normalizedMoves = new List<string>();
+                    int maxNormalizedMoves = Math.Max(whiteValidation.Moves.Count, blackValidation.Moves.Count);
+                    for (int i = 0; i < maxNormalizedMoves; i++)
+                    {
+                        if (i < whiteValidation.Moves.Count && !string.IsNullOrWhiteSpace(whiteValidation.Moves[i].NormalizedNotation))
+                        {
+                            normalizedMoves.Add(whiteValidation.Moves[i].NormalizedNotation!);
+                        }
+                        if (i < blackValidation.Moves.Count && !string.IsNullOrWhiteSpace(blackValidation.Moves[i].NormalizedNotation))
+                        {
+                            normalizedMoves.Add(blackValidation.Moves[i].NormalizedNotation!);
+                        }
+                    }
+                    result.NormalizedMoves = normalizedMoves;
+                    _logger.LogInformation("Normalized {Count} moves after validation", normalizedMoves.Count);
+
+                    // Compute metrics for normalized moves
+                    result.NormalizedExactMatchScore = ComputeExactMatchScore(groundTruthMoves, normalizedMoves);
+                    result.NormalizedLevenshteinDistance = ComputeLevenshteinDistance(groundTruthMoves, normalizedMoves);
+                    result.NormalizedPositionalAccuracy = ComputePositionalAccuracy(groundTruthMoves, normalizedMoves);
+                    result.NormalizedLongestCommonSubsequence = ComputeLongestCommonSubsequence(groundTruthMoves, normalizedMoves);
+
+                    // Compute normalized score for normalized moves
+                    result.NormalizedNormalizedScore = ComputeNormalizedScoreForMoves(
+                        groundTruthMoves, 
+                        normalizedMoves, 
+                        result.NormalizedExactMatchScore,
+                        result.NormalizedLevenshteinDistance,
+                        result.NormalizedPositionalAccuracy,
+                        result.NormalizedLongestCommonSubsequence);
+                }
 
                 result.IsSuccessful = true;
 
@@ -357,6 +412,43 @@ namespace ChessDecoderApi.Services
             // Invert the score so that 1 = perfect, 0 = worst
             return 1.0 - rawScore;
         }
+
+        private double ComputeNormalizedScoreForMoves(
+            List<string> groundTruth, 
+            List<string> moves, 
+            double exactMatchScore,
+            int levenshteinDistance,
+            double positionalAccuracy,
+            int longestCommonSubsequence)
+        {
+            // Weighted combination of different metrics
+            // Higher score is better (1 = perfect, 0 = worst)
+            
+            const double exactMatchWeight = 0.4;
+            const double positionalWeight = 0.3;
+            const double levenshteinWeight = 0.2;
+            const double lcsWeight = 0.1;
+            
+            // Normalize each metric to 0-1 range where 0 is worst
+            double exactMatchComponent = 1.0 - exactMatchScore;
+            double positionalComponent = 1.0 - positionalAccuracy;
+            
+            // Normalize Levenshtein distance
+            int maxPossibleDistance = Math.Max(groundTruth.Count, moves.Count);
+            double levenshteinComponent = maxPossibleDistance > 0 ? (double)levenshteinDistance / maxPossibleDistance : 0.0;
+            
+            // Normalize LCS (higher LCS is better, so we invert it)
+            int maxPossibleLcs = Math.Min(groundTruth.Count, moves.Count);
+            double lcsComponent = maxPossibleLcs > 0 ? 1.0 - ((double)longestCommonSubsequence / maxPossibleLcs) : 1.0;
+            
+            double rawScore = exactMatchWeight * exactMatchComponent +
+                             positionalWeight * positionalComponent +
+                             levenshteinWeight * levenshteinComponent +
+                             lcsWeight * lcsComponent;
+            
+            // Invert the score so that 1 = perfect, 0 = worst
+            return 1.0 - rawScore;
+        }
     }
 
     public class EvaluationResult
@@ -370,14 +462,22 @@ namespace ChessDecoderApi.Services
         
         public List<string> GroundTruthMoves { get; set; } = new();
         public List<string> ExtractedMoves { get; set; } = new();
+        public List<string> NormalizedMoves { get; set; } = new();
         public string GeneratedPgn { get; set; } = string.Empty;
         
-        // Metrics
+        // Metrics for extracted moves
         public double ExactMatchScore { get; set; }
         public int LevenshteinDistance { get; set; }
         public double PositionalAccuracy { get; set; }
         public int LongestCommonSubsequence { get; set; }
         public double NormalizedScore { get; set; }
+        
+        // Metrics for normalized moves
+        public double NormalizedExactMatchScore { get; set; }
+        public int NormalizedLevenshteinDistance { get; set; }
+        public double NormalizedPositionalAccuracy { get; set; }
+        public int NormalizedLongestCommonSubsequence { get; set; }
+        public double NormalizedNormalizedScore { get; set; }
         
         public void PrintSummary()
         {
