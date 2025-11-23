@@ -6,8 +6,8 @@ namespace ChessDecoderApi.Services
 {
     public interface IImageProcessingService
     {
-        Task<ChessGameResponse> ProcessImageAsync(string imagePath, string language = "English", bool useColumnDetection = true, int expectedColumns = 4);
-        Task<(List<string> whiteMoves, List<string> blackMoves)> ExtractMovesFromImageToStringAsync(string imagePath, string language = "English", bool useColumnDetection = true, int expectedColumns = 4);
+        Task<ChessGameResponse> ProcessImageAsync(string imagePath, string language = "English", int expectedColumns = 4);
+        Task<(List<string> whiteMoves, List<string> blackMoves)> ExtractMovesFromImageToStringAsync(string imagePath, string language = "English", int expectedColumns = 6);
         Task<string> ExtractTextFromImageAsync(byte[] imageBytes, string language, string provider = "gemini");
         string GeneratePGNContentAsync(IEnumerable<string> whiteMoves, IEnumerable<string> blackMoves);
         Task<string> DebugUploadAsync(string imagePath, string promptText);

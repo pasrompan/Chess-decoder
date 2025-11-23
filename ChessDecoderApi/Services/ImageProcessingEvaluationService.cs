@@ -89,10 +89,8 @@ namespace ChessDecoderApi.Services
                 }
 
                 // Extract moves directly from the image
-                // Always use column detection (original behavior), even when autoCrop is enabled
-                // autoCrop only affects whether we crop the image first, not whether we use column detection
                 var startTime = DateTime.UtcNow;
-                var (whiteMoves, blackMoves) = await _imageProcessingService.ExtractMovesFromImageToStringAsync(imagePathForProcessing, language, useColumnDetection: autoCrop, expectedColumns);
+                var (whiteMoves, blackMoves) = await _imageProcessingService.ExtractMovesFromImageToStringAsync(imagePathForProcessing, language, expectedColumns);
                 var extractedMoves = new List<string>();
                 int maxMoves = Math.Max(whiteMoves.Count, blackMoves.Count);
                 for (int i = 0; i < maxMoves; i++)

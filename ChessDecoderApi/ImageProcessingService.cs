@@ -69,9 +69,8 @@ namespace ChessDecoderApi.Services
         /// </summary>
         /// <param name="imagePath">Path to the chess image or URL</param>
         /// <param name="language">Language for chess notation (default: English)</param>
-        /// <param name="useColumnDetection">Whether to use heuristics for column detection or fall back to equal division</param>
         /// <returns>Tuple of two lists: whiteMoves and blackMoves</returns>
-        public virtual async Task<(List<string> whiteMoves, List<string> blackMoves)> ExtractMovesFromImageToStringAsync(string imagePath, string language = "English", bool useColumnDetection = true, int expectedColumns = 6)
+        public virtual async Task<(List<string> whiteMoves, List<string> blackMoves)> ExtractMovesFromImageToStringAsync(string imagePath, string language = "English", int expectedColumns = 6)
         {
             Image<Rgba32> image;
             
@@ -95,33 +94,13 @@ namespace ChessDecoderApi.Services
             int width = image.Width;
             int height = image.Height;
 
-            // Step 1: Determine search region based on useColumnDetection parameter
-            Rectangle searchRegion;
-            if (useColumnDetection)
-            {
-                // Find table boundaries for more accurate column detection
-                searchRegion = FindTableBoundaries(image);
-                _logger.LogInformation($"Auto-crop enabled - Found table boundaries: X={searchRegion.X}, Y={searchRegion.Y}, Width={searchRegion.Width}, Height={searchRegion.Height}");
-            }
-            else
-            {
-                // Use the entire image as the search region
-                searchRegion = new Rectangle(0, 0, width, height);
-                _logger.LogInformation($"Auto-crop disabled - Using full image dimensions: Width={width}, Height={height}");
-            }
+            // Use the entire image as the search region
+            Rectangle searchRegion = new Rectangle(0, 0, width, height);
+            _logger.LogInformation($"Using full image dimensions: Width={width}, Height={height}");
 
-            // Step 2: Detect or divide chess columns based on useColumnDetection parameter
-            List<int> boundaries;
-            if (useColumnDetection)
-            {
-                _logger.LogInformation("Using heuristics for automatic column detection with expectedColumns: {ExpectedColumns}", expectedColumns);
-                boundaries = DetectChessColumnsAutomatically(image, searchRegion, useHeuristics: true, expectedColumns);
-            }
-            else
-            {
-                _logger.LogInformation("Column detection disabled, using equal division fallback on full image with expectedColumns: {ExpectedColumns}", expectedColumns);
-                boundaries = DetectChessColumnsAutomatically(image, searchRegion, useHeuristics: false, expectedColumns);
-            }
+            // Divide chess columns using equal division
+            _logger.LogInformation("Using equal division on full image with expectedColumns: {ExpectedColumns}", expectedColumns);
+            List<int> boundaries = DetectChessColumnsAutomatically(image, searchRegion, useHeuristics: false, expectedColumns);
             var whiteMoves = new List<string>();
             var blackMoves = new List<string>();
 
@@ -186,12 +165,11 @@ namespace ChessDecoderApi.Services
         /// </summary>
         /// <param name="imagePath">Path to the chess image or URL</param>
         /// <param name="language">Language for chess notation (default: English)</param>
-        /// <param name="useColumnDetection">Whether to use heuristics for column detection or fall back to equal division</param>
         /// <returns>PGN formatted string containing the chess moves</returns>
-        public async Task<ChessGameResponse> ProcessImageAsync(string imagePath, string language = "English", bool useColumnDetection = true, int expectedColumns = 6)
+        public async Task<ChessGameResponse> ProcessImageAsync(string imagePath, string language = "English", int expectedColumns = 6)
         {
             // Extract moves from the image
-            var (whiteMoves, blackMoves) = await ExtractMovesFromImageToStringAsync(imagePath, language, useColumnDetection, expectedColumns);
+            var (whiteMoves, blackMoves) = await ExtractMovesFromImageToStringAsync(imagePath, language, expectedColumns);
 
             // Validate white and black moves separately
             var whiteValidation = _chessMoveValidator.ValidateMoves(whiteMoves.ToArray());

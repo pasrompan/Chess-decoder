@@ -142,7 +142,7 @@ public class GameProcessingService : IGameProcessingService
         }
 
         var startTime = DateTime.UtcNow;
-        var result = await _imageExtractionService.ProcessImageAsync(imagePathForProcessing, request.Language, request.AutoCrop, request.ExpectedColumns);
+        var result = await _imageExtractionService.ProcessImageAsync(imagePathForProcessing, request.Language, request.ExpectedColumns);
         var processingTime = DateTime.UtcNow - startTime;
 
         // Generate processed image with boundaries
@@ -281,7 +281,7 @@ public class GameProcessingService : IGameProcessingService
             imagePathForProcessing = croppedFilePath;
         }
 
-        var result = await _imageExtractionService.ProcessImageAsync(imagePathForProcessing, language, autoCrop, expectedColumns);
+        var result = await _imageExtractionService.ProcessImageAsync(imagePathForProcessing, language, expectedColumns);
 
         // Generate image
         if (autoCrop)
