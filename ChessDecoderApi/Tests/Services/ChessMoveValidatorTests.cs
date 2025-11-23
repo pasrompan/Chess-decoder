@@ -181,7 +181,7 @@ namespace ChessDecoderApi.Tests.Services
 
             // Assert
             Assert.True(result.IsValid);
-            var checkMoves = result.Moves.Where(m => m.Notation.EndsWith("+")).ToList();
+            var checkMoves = result.Moves.Where(m => m.Notation != null && m.Notation.EndsWith("+")).ToList();
             Assert.All(checkMoves, move => {
                 Assert.NotNull(move.ValidationStatus);
                 Assert.Equal("warning", move.ValidationStatus);

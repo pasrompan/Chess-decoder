@@ -16,12 +16,12 @@ public class SqliteChessGameRepositoryTests : IDisposable
         _dbFactory = new TestDbContextFactory();
     }
 
-    private async Task<(SqliteChessGameRepository gameRepo, SqliteUserRepository userRepo)> CreateRepositoriesAsync()
+    private Task<(SqliteChessGameRepository gameRepo, SqliteUserRepository userRepo)> CreateRepositoriesAsync()
     {
         var context = _dbFactory.CreateContext();
         var gameRepo = new SqliteChessGameRepository(context, Mock.Of<ILogger<SqliteChessGameRepository>>());
         var userRepo = new SqliteUserRepository(context, Mock.Of<ILogger<SqliteUserRepository>>());
-        return (gameRepo, userRepo);
+        return Task.FromResult((gameRepo, userRepo));
     }
 
     private async Task CreateTestUserAsync(SqliteUserRepository userRepo, string userId = "test-user-123")

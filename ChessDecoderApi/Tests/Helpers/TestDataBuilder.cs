@@ -42,7 +42,7 @@ public class TestDataBuilder
         return new ChessGame
         {
             Id = id ?? Guid.NewGuid(),
-            UserId = userId,
+            UserId = userId ?? "test-user-123",
             PgnContent = pgn,
             Title = title,
             Description = "Test chess game",
