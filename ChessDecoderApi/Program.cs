@@ -95,7 +95,12 @@ builder.Services.AddScoped<ChessDecoderApi.Services.GameProcessing.IGameProcessi
 builder.Services.AddScoped<ChessDecoderApi.Services.GameProcessing.IGameManagementService, ChessDecoderApi.Services.GameProcessing.GameManagementService>();
 
 // Register Firestore service (FREE database - no cost for typical usage!)
+// Note: FirestoreService is marked obsolete but still needed for:
+// - FirestoreTestController (testing endpoint)
+// - RepositoryFactory (to check Firestore availability)
+#pragma warning disable CS0618 // Type or member is obsolete
 builder.Services.AddSingleton<IFirestoreService, FirestoreService>();
+#pragma warning restore CS0618
 
 // Register FirestoreDb for repository pattern
 builder.Services.AddSingleton(sp =>

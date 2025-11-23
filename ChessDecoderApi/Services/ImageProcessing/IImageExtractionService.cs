@@ -10,15 +10,14 @@ public interface IImageExtractionService
     /// <summary>
     /// Process an image and extract chess game data
     /// </summary>
-    Task<ChessGameResponse> ProcessImageAsync(string imagePath, string language = "English", bool useColumnDetection = true, int expectedColumns = 6);
+    Task<ChessGameResponse> ProcessImageAsync(string imagePath, string language = "English");
 
     /// <summary>
     /// Extract chess moves from an image and return separate white and black move lists
     /// </summary>
     Task<(List<string> whiteMoves, List<string> blackMoves)> ExtractMovesFromImageToStringAsync(
         string imagePath, 
-        string language = "English", 
-        bool useColumnDetection = true);
+        string language = "English");
 
     /// <summary>
     /// Extract raw text from image bytes using OCR

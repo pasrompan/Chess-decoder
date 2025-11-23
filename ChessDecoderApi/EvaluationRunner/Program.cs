@@ -8,7 +8,6 @@ class Program
     private static readonly HttpClient HttpClient = new();
     private const string ApiBaseUrl = "http://localhost:5100";
     private const string EvaluationEndpoint = "/api/Evaluation/evaluate";
-    private const int NumberOfColumns = 6;
     private const bool AutoCrop = false;
     
     // Rate limiting: Delay between requests to avoid hitting RPM limits
@@ -153,7 +152,6 @@ class Program
 
             // Add other parameters
             content.Add(new StringContent(language), "Language");
-            content.Add(new StringContent(NumberOfColumns.ToString()), "NumberOfColumns");
             content.Add(new StringContent(AutoCrop.ToString().ToLowerInvariant()), "Autocrop");
 
             var response = await HttpClient.PostAsync($"{ApiBaseUrl}{EvaluationEndpoint}", content);

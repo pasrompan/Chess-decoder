@@ -82,9 +82,7 @@ public class DebugController : ControllerBase
     /// Debug endpoint to split columns and return boundary information
     /// </summary>
     [HttpPost("split-columns")]
-    public async Task<IActionResult> DebugSplitColumns(
-        IFormFile? image,
-        [FromForm] int expectedColumns = 6)
+    public async Task<IActionResult> DebugSplitColumns(IFormFile? image)
     {
         if (image == null || image.Length == 0)
         {
@@ -94,11 +92,6 @@ public class DebugController : ControllerBase
         if (!image.ContentType.StartsWith("image/"))
         {
             return BadRequest(new { message = "Uploaded file must be an image" });
-        }
-
-        if (expectedColumns < 1 || expectedColumns > 20)
-        {
-            return BadRequest(new { message = "Expected columns must be between 1 and 20" });
         }
 
         try
@@ -114,7 +107,8 @@ public class DebugController : ControllerBase
                 using var loadedImage = Image.Load<Rgba32>(tempFilePath);
                 
                 var tableBoundaries = _imageAnalysisService.FindTableBoundaries(loadedImage);
-                var columnBoundaries = _imageAnalysisService.DetectChessColumnsAutomatically(loadedImage, tableBoundaries);
+                // Use default 6 columns for auto-detection
+                var columnBoundaries = _imageAnalysisService.DetectChessColumnsAutomatically(loadedImage, tableBoundaries, useHeuristics: true, expectedColumns: 6);
                 
                 var columnWidths = new List<int>();
                 for (int i = 0; i < columnBoundaries.Count - 1; i++)
@@ -127,7 +121,7 @@ public class DebugController : ControllerBase
                     imageFileName = image.FileName,
                     imageWidth = columnBoundaries.Last(),
                     imageHeight = loadedImage.Height,
-                    expectedColumns = expectedColumns,
+                    actualColumns = columnBoundaries.Count - 1,
                     columnBoundaries = columnBoundaries,
                     columnData = columnBoundaries.Take(columnBoundaries.Count - 1).Select((start, index) => new
                     {
@@ -157,57 +151,6 @@ public class DebugController : ControllerBase
         {
             _logger.LogError(ex, "Error processing debug split columns");
             return StatusCode(500, new { message = "Failed to process image column splitting: " + ex.Message });
-        }
-    }
-
-    /// <summary>
-    /// Debug endpoint to visualize column boundaries on an image
-    /// </summary>
-    [HttpPost("image-with-boundaries")]
-    public async Task<IActionResult> DebugImageWithBoundaries(
-        IFormFile? image,
-        [FromForm] int expectedColumns = 6)
-    {
-        if (image == null || image.Length == 0)
-        {
-            return BadRequest(new { message = "No image file provided" });
-        }
-
-        if (!image.ContentType.StartsWith("image/"))
-        {
-            return BadRequest(new { message = "Uploaded file must be an image" });
-        }
-
-        if (expectedColumns < 1 || expectedColumns > 20)
-        {
-            return BadRequest(new { message = "Expected columns must be between 1 and 20" });
-        }
-
-        try
-        {
-            var tempFilePath = Path.GetTempFileName();
-            try
-            {
-                using (var stream = new FileStream(tempFilePath, FileMode.Create))
-                {
-                    await image.CopyToAsync(stream);
-                }
-
-                var imageWithBoundaries = await _imageManipulationService.CreateImageWithBoundariesAsync(tempFilePath, expectedColumns);
-                return File(imageWithBoundaries, "image/jpeg", $"boundaries_{image.FileName}");
-            }
-            finally
-            {
-                if (System.IO.File.Exists(tempFilePath))
-                {
-                    System.IO.File.Delete(tempFilePath);
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error processing debug image with boundaries");
-            return StatusCode(500, new { message = "Failed to process image with boundaries: " + ex.Message });
         }
     }
 

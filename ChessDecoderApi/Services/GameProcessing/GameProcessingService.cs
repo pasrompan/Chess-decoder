@@ -142,22 +142,14 @@ public class GameProcessingService : IGameProcessingService
         }
 
         var startTime = DateTime.UtcNow;
-        var result = await _imageExtractionService.ProcessImageAsync(imagePathForProcessing, request.Language, request.AutoCrop, request.ExpectedColumns);
+        var result = await _imageExtractionService.ProcessImageAsync(imagePathForProcessing, request.Language);
         var processingTime = DateTime.UtcNow - startTime;
 
-        // Generate processed image with boundaries
+        // Generate processed image
         try
         {
-            if (request.AutoCrop)
-            {
-                var imageWithBoundaries = await _imageManipulationService.CreateImageWithBoundariesAsync(imagePathForProcessing, request.ExpectedColumns);
-                processedImageBase64 = Convert.ToBase64String(imageWithBoundaries);
-            }
-            else
-            {
-                var imageBytes = await File.ReadAllBytesAsync(imagePathForProcessing);
-                processedImageBase64 = Convert.ToBase64String(imageBytes);
-            }
+            var imageBytes = await File.ReadAllBytesAsync(imagePathForProcessing);
+            processedImageBase64 = Convert.ToBase64String(imageBytes);
         }
         catch (Exception ex)
         {
@@ -247,9 +239,9 @@ public class GameProcessingService : IGameProcessingService
         };
     }
 
-    public async Task<GameProcessingResponse> ProcessMockUploadAsync(IFormFile image, string language = "English", bool autoCrop = false, int expectedColumns = 4)
+    public async Task<GameProcessingResponse> ProcessMockUploadAsync(IFormFile image, string language = "English", bool autoCrop = false)
     {
-        _logger.LogInformation("Processing mock upload with autoCrop: {AutoCrop}, expectedColumns: {ExpectedColumns}", autoCrop, expectedColumns);
+        _logger.LogInformation("Processing mock upload with autoCrop: {AutoCrop}", autoCrop);
 
         var fileName = $"{Guid.NewGuid()}{Path.GetExtension(image.FileName)}";
         var tempFilePath = Path.Combine(Path.GetTempPath(), fileName);
@@ -281,19 +273,11 @@ public class GameProcessingService : IGameProcessingService
             imagePathForProcessing = croppedFilePath;
         }
 
-        var result = await _imageExtractionService.ProcessImageAsync(imagePathForProcessing, language, autoCrop, expectedColumns);
+        var result = await _imageExtractionService.ProcessImageAsync(imagePathForProcessing, language);
 
         // Generate image
-        if (autoCrop)
-        {
-            var imageWithBoundaries = await _imageManipulationService.CreateImageWithBoundariesAsync(imagePathForProcessing, expectedColumns);
-            processedImageBase64 = Convert.ToBase64String(imageWithBoundaries);
-        }
-        else
-        {
-            var imageBytes = await File.ReadAllBytesAsync(imagePathForProcessing);
-            processedImageBase64 = Convert.ToBase64String(imageBytes);
-        }
+        var imageBytes = await File.ReadAllBytesAsync(imagePathForProcessing);
+        processedImageBase64 = Convert.ToBase64String(imageBytes);
 
         // Clean up
         try

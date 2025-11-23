@@ -85,7 +85,7 @@ namespace ChessDecoderApi.Tests.Services
                     _chessMoveValidator) { CallBase = true };
 
                 // Patch: Mock ExtractMovesFromImageToStringAsync for full isolation
-                mockService.Setup(x => x.ExtractMovesFromImageToStringAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<int>()))
+                mockService.Setup(x => x.ExtractMovesFromImageToStringAsync(It.IsAny<string>(), It.IsAny<string>()))
                     .ReturnsAsync((new List<string> { "e4", "Nf3" }, new List<string> { "e5", "Nc6" }));
 
                 var result = await mockService.Object.ProcessImageAsync(tempFile);
@@ -125,7 +125,7 @@ namespace ChessDecoderApi.Tests.Services
                     _chessMoveValidator) { CallBase = true };
 
                 // Patch: Mock ExtractMovesFromImageToStringAsync for full isolation
-                mockService.Setup(x => x.ExtractMovesFromImageToStringAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<int>()))
+                mockService.Setup(x => x.ExtractMovesFromImageToStringAsync(It.IsAny<string>(), It.IsAny<string>()))
                     .ReturnsAsync((new List<string> { "invalid", "Nf3" }, new List<string> { "e5", "Nc6" }));
 
                 var result = await mockService.Object.ProcessImageAsync(tempFile);
@@ -159,13 +159,14 @@ namespace ChessDecoderApi.Tests.Services
 
             // Simulate moves with consecutive checks to trigger warning
             mockService
-                .Setup(x => x.ExtractMovesFromImageToStringAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<int>()))
+                .Setup(x => x.ExtractMovesFromImageToStringAsync(It.IsAny<string>(), It.IsAny<string>()))
                 .ReturnsAsync((new List<string> { "e4", "Qh5+" }, new List<string> { "e5", "Ke7+" }));
 
             // Act
             var result = await mockService.Object.ProcessImageAsync("dummy-path", "English");
 
             // Assert
+            Assert.NotNull(result.Validation);
             Assert.NotNull(result.Validation.GameId);
             Assert.NotNull(result.Validation.Moves);
             Assert.NotEmpty(result.Validation.Moves);

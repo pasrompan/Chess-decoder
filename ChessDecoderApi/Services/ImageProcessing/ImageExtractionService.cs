@@ -19,17 +19,16 @@ public class ImageExtractionService : IImageExtractionService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task<ChessGameResponse> ProcessImageAsync(string imagePath, string language = "English", bool useColumnDetection = true, int expectedColumns = 6)
+    public async Task<ChessGameResponse> ProcessImageAsync(string imagePath, string language = "English")
     {
-        return await _imageProcessingService.ProcessImageAsync(imagePath, language, useColumnDetection, expectedColumns);
+        return await _imageProcessingService.ProcessImageAsync(imagePath, language);
     }
 
     public async Task<(List<string> whiteMoves, List<string> blackMoves)> ExtractMovesFromImageToStringAsync(
         string imagePath, 
-        string language = "English", 
-        bool useColumnDetection = true)
+        string language = "English")
     {
-        return await _imageProcessingService.ExtractMovesFromImageToStringAsync(imagePath, language, useColumnDetection);
+        return await _imageProcessingService.ExtractMovesFromImageToStringAsync(imagePath, language);
     }
 
     public async Task<string> ExtractTextFromImageAsync(byte[] imageBytes, string language, string provider = "gemini")

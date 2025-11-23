@@ -16,7 +16,5 @@ public class GameUploadRequest
     public string Language { get; set; } = "English";
 
     public bool AutoCrop { get; set; } = false;
-
-    public int ExpectedColumns { get; set; } = 4;
 }
 

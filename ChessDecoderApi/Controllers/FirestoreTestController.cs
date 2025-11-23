@@ -40,6 +40,15 @@ public class FirestoreTestController : ControllerBase
             };
 
             var createdUser = await _firestore.CreateUserAsync(testUser);
+            if (createdUser == null)
+            {
+                return Ok(new
+                {
+                    success = false,
+                    message = "Failed to create test user"
+                });
+            }
+
             _logger.LogInformation("[Firestore Test] Created user: {UserId}", createdUser.Id);
 
             // Test 3: Read the user back
@@ -58,8 +67,8 @@ public class FirestoreTestController : ControllerBase
                     created = createdUser != null,
                     read = readUser != null,
                     deleted = true,
-                    userId = createdUser.Id,
-                    userEmail = createdUser.Email
+                    userId = createdUser!.Id,
+                    userEmail = createdUser!.Email
                 }
             });
         }

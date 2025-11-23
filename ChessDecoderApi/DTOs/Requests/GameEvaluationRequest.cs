@@ -15,8 +15,6 @@ public class GameEvaluationRequest
 
     public string Language { get; set; } = "English";
 
-    public int NumberOfColumns { get; set; } = 4;
-
     public bool AutoCrop { get; set; } = false;
 }
 
