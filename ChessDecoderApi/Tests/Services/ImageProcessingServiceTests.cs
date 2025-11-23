@@ -166,6 +166,7 @@ namespace ChessDecoderApi.Tests.Services
             var result = await mockService.Object.ProcessImageAsync("dummy-path", "English");
 
             // Assert
+            Assert.NotNull(result.Validation);
             Assert.NotNull(result.Validation.GameId);
             Assert.NotNull(result.Validation.Moves);
             Assert.NotEmpty(result.Validation.Moves);

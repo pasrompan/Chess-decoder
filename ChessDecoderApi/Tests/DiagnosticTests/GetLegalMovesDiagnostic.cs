@@ -389,13 +389,19 @@ namespace ChessDecoderApi.Tests.DiagnosticTests
             }
             
             // If we got a board from FEN, test GetLegalMoves on it
-            if (fenBoard != null)
+            if (fenBoard != null && validatorGetLegalMovesMethod != null)
             {
                 Console.WriteLine();
                 Console.WriteLine("9. Testing GetLegalMoves with FEN board:");
                 try
                 {
-                    var legalMovesFromFen = (List<string>)validatorGetLegalMovesMethod.Invoke(validator, new object[] { fenBoard })!;
+                    var invokeResult = validatorGetLegalMovesMethod.Invoke(validator, new object[] { fenBoard });
+                    if (invokeResult == null)
+                    {
+                        Console.WriteLine("   ✗ GetLegalMoves returned null");
+                        return;
+                    }
+                    var legalMovesFromFen = (List<string>)invokeResult;
                     Console.WriteLine($"   Result count: {legalMovesFromFen.Count}");
                     if (legalMovesFromFen.Count > 0)
                     {
