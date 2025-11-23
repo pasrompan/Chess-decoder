@@ -19,9 +19,9 @@ public class ImageExtractionService : IImageExtractionService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task<ChessGameResponse> ProcessImageAsync(string imagePath, string language = "English", int expectedColumns = 6)
+    public async Task<ChessGameResponse> ProcessImageAsync(string imagePath, string language = "English", int expectedColumns = 6, bool useWholeImageProcessing = false)
     {
-        return await _imageProcessingService.ProcessImageAsync(imagePath, language, expectedColumns);
+        return await _imageProcessingService.ProcessImageAsync(imagePath, language, expectedColumns, useWholeImageProcessing);
     }
 
     public async Task<(List<string> whiteMoves, List<string> blackMoves)> ExtractMovesFromImageToStringAsync(

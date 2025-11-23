@@ -161,15 +161,216 @@ namespace ChessDecoderApi.Services
         }
 
         /// <summary>
+        /// Extracts chess moves from an image by sending the whole image to LLM (without splitting into columns).
+        /// The LLM is instructed to parse columns and return moves in JSON format.
+        /// </summary>
+        /// <param name="imagePath">Path to the chess image or URL</param>
+        /// <param name="language">Language for chess notation (default: English)</param>
+        /// <param name="expectedColumns">Expected number of columns in the chess notation table (default: 6)</param>
+        /// <returns>Tuple of two lists: whiteMoves and blackMoves</returns>
+        public virtual async Task<(List<string> whiteMoves, List<string> blackMoves)> ExtractMovesFromImageToStringAsyncWholeImage(string imagePath, string language = "English", int expectedColumns = 6)
+        {
+            Image<Rgba32> image;
+            
+            // Check if it's a URL or local file path
+            if (Uri.TryCreate(imagePath, UriKind.Absolute, out var uri) && (uri.Scheme == "http" || uri.Scheme == "https"))
+            {
+                // Download image from URL
+                using var httpClient = _httpClientFactory.CreateClient();
+                var downloadedBytes = await httpClient.GetByteArrayAsync(imagePath);
+                image = Image.Load<Rgba32>(downloadedBytes);
+            }
+            else
+            {
+                // Local file path
+                if (!File.Exists(imagePath))
+                {
+                    throw new FileNotFoundException("Image file not found", imagePath);
+                }
+                image = Image.Load<Rgba32>(imagePath);
+            }
+
+            // Convert whole image to bytes
+            byte[] imageBytes;
+            using (var ms = new MemoryStream())
+            {
+                image.SaveAsJpeg(ms);
+                imageBytes = ms.ToArray();
+            }
+
+            _logger.LogInformation($"Processing whole image (no column splitting) with expectedColumns: {expectedColumns}");
+
+            // Extract text from whole image with column-aware prompt
+            string jsonResponse = await ExtractTextFromImageAsyncWholeImage(imageBytes, language, expectedColumns);
+            
+            // Parse JSON response to extract moves from columns
+            var (whiteMoves, blackMoves) = await ParseMovesFromColumnJsonAsync(jsonResponse, language);
+
+            return (whiteMoves, blackMoves);
+        }
+
+        /// <summary>
+        /// Extracts text from image bytes using LLM with a prompt that instructs about columns.
+        /// </summary>
+        /// <param name="imageBytes">The image bytes to process</param>
+        /// <param name="language">The language of the chess notation</param>
+        /// <param name="expectedColumns">Expected number of columns</param>
+        /// <param name="provider">The OCR provider to use: "gemini" (default) or "openai"</param>
+        /// <returns>JSON string containing columns with moves</returns>
+        public virtual async Task<string> ExtractTextFromImageAsyncWholeImage(byte[] imageBytes, string language, int expectedColumns = 6, string provider = "gemini")
+        {
+            try
+            {
+                return provider switch
+                {
+                    "gemini" => await ExtractTextFromImageWithGeminiAsyncWholeImage(imageBytes, language, expectedColumns),
+                    "openai" => await ExtractTextFromImageWithOpenAIAsyncWholeImage(imageBytes, language, expectedColumns),
+                    _ => throw new ArgumentException($"Unsupported provider: {provider}. Supported providers are 'gemini' and 'openai'.", nameof(provider))
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error extracting text from whole image with provider {Provider}", provider);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Parses JSON response from LLM that contains columns with moves.
+        /// Expected JSON format:
+        /// {
+        ///   "columns": [
+        ///     { "columnIndex": 0, "moves": ["e4", "Nf3", ...] },
+        ///     { "columnIndex": 1, "moves": ["e5", "Nc6", ...] },
+        ///     ...
+        ///   ]
+        /// }
+        /// </summary>
+        private async Task<(List<string> whiteMoves, List<string> blackMoves)> ParseMovesFromColumnJsonAsync(string jsonResponse, string language)
+        {
+            var whiteMoves = new List<string>();
+            var blackMoves = new List<string>();
+
+            try
+            {
+                // Try to parse as JSON
+                using var jsonDoc = JsonDocument.Parse(jsonResponse);
+                var root = jsonDoc.RootElement;
+
+                // Check if it has a "columns" property
+                if (root.TryGetProperty("columns", out var columnsElement))
+                {
+                    foreach (var column in columnsElement.EnumerateArray())
+                    {
+                        if (!column.TryGetProperty("columnIndex", out var columnIndexElement) ||
+                            !column.TryGetProperty("moves", out var movesElement))
+                        {
+                            _logger.LogWarning("Column missing required properties (columnIndex or moves)");
+                            continue;
+                        }
+
+                        int columnIndex = columnIndexElement.GetInt32();
+                        var moves = new List<string>();
+
+                        foreach (var moveElement in movesElement.EnumerateArray())
+                        {
+                            var moveText = moveElement.GetString();
+                            if (!string.IsNullOrWhiteSpace(moveText))
+                            {
+                                moves.Add(moveText.Trim());
+                            }
+                        }
+
+                        // Process moves based on language
+                        string[] processedMoves;
+                        try
+                        {
+                            // Join moves into a JSON array string for processing
+                            string movesJson = JsonSerializer.Serialize(moves.ToArray());
+                            
+                            if (language == "Greek")
+                            {
+                                _logger.LogInformation($"Processing Greek chess notation for column {columnIndex}");
+                                string[] greekMoves = await _chessMoveProcessor.ProcessChessMovesAsync(movesJson);
+                                processedMoves = await ConvertGreekMovesToEnglishAsync(greekMoves);
+                            }
+                            else
+                            {
+                                _logger.LogInformation($"Processing standard chess notation for column {columnIndex}");
+                                processedMoves = await _chessMoveProcessor.ProcessChessMovesAsync(movesJson);
+                            }
+
+                            // Even columns (0, 2, 4...) are white moves, odd columns (1, 3, 5...) are black moves
+                            if (columnIndex % 2 == 0)
+                            {
+                                whiteMoves.AddRange(processedMoves);
+                            }
+                            else
+                            {
+                                blackMoves.AddRange(processedMoves);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, $"Error processing chess moves for column {columnIndex} and language: {language}");
+                            continue;
+                        }
+                    }
+                }
+                else
+                {
+                    // Fallback: try to parse as a simple array of moves
+                    _logger.LogWarning("JSON response does not contain 'columns' property, attempting fallback parsing");
+                    if (root.ValueKind == JsonValueKind.Array)
+                    {
+                        var allMoves = new List<string>();
+                        foreach (var moveElement in root.EnumerateArray())
+                        {
+                            var moveText = moveElement.GetString();
+                            if (!string.IsNullOrWhiteSpace(moveText))
+                            {
+                                allMoves.Add(moveText.Trim());
+                            }
+                        }
+                        // If we can't determine columns, alternate between white and black
+                        for (int i = 0; i < allMoves.Count; i++)
+                        {
+                            if (i % 2 == 0)
+                            {
+                                whiteMoves.Add(allMoves[i]);
+                            }
+                            else
+                            {
+                                blackMoves.Add(allMoves[i]);
+                            }
+                        }
+                    }
+                }
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogError(ex, "Failed to parse JSON response from LLM. Response: {Response}", jsonResponse);
+                throw new Exception("Failed to parse LLM response as JSON. The response may not be in the expected format.", ex);
+            }
+
+            _logger.LogInformation($"Extracted {whiteMoves.Count} white moves and {blackMoves.Count} black moves from whole image");
+            return (whiteMoves, blackMoves);
+        }
+
+        /// <summary>
         /// Processes a chess image and returns the moves as a PGN string
         /// </summary>
         /// <param name="imagePath">Path to the chess image or URL</param>
         /// <param name="language">Language for chess notation (default: English)</param>
+        /// <param name="expectedColumns">Expected number of columns (default: 6)</param>
+        /// <param name="useWholeImageProcessing">If true, sends whole image to LLM. If false, splits into columns (default: false)</param>
         /// <returns>PGN formatted string containing the chess moves</returns>
-        public async Task<ChessGameResponse> ProcessImageAsync(string imagePath, string language = "English", int expectedColumns = 6)
+        public async Task<ChessGameResponse> ProcessImageAsync(string imagePath, string language = "English", int expectedColumns = 6, bool useWholeImageProcessing = false)
         {
             // Extract moves from the image
-            var (whiteMoves, blackMoves) = await ExtractMovesFromImageToStringAsync(imagePath, language, expectedColumns);
+            var (whiteMoves, blackMoves) = useWholeImageProcessing
+                ? await ExtractMovesFromImageToStringAsyncWholeImage(imagePath, language, expectedColumns)
+                : await ExtractMovesFromImageToStringAsync(imagePath, language, expectedColumns);
 
             // Validate white and black moves separately
             var whiteValidation = _chessMoveValidator.ValidateMoves(whiteMoves.ToArray());
@@ -434,6 +635,277 @@ namespace ChessDecoderApi.Services
                 if (usageMetadata.TryGetProperty("totalTokenCount", out var totalTokens))
                 {
                     _logger.LogDebug("Gemini API usage: {TotalTokens} total tokens", totalTokens.GetInt32());
+                }
+            }
+            
+            return text ?? string.Empty;
+        }
+
+        private async Task<string> ExtractTextFromImageWithGeminiAsyncWholeImage(byte[] imageBytes, string language, int expectedColumns)
+        {
+            string apiKey = Environment.GetEnvironmentVariable("GEMINI_API_KEY") ?? 
+                _configuration["GEMINI_API_KEY"] ?? 
+                throw new UnauthorizedAccessException("GEMINI_API_KEY environment variable not set");
+
+            var client = _httpClientFactory.CreateClient();
+            client.DefaultRequestHeaders.Add("x-goog-api-key", apiKey);
+            
+            var base64Image = Convert.ToBase64String(imageBytes);
+
+            // Get valid characters for the specified language
+            var validChars = GetChessNotationCharacters(language);
+
+            // Build the prompt with column-aware instructions
+            var promptText = "You are an OCR engine specialized in chess notation. This image contains a chess game written in columns. ";
+            promptText += $"The image has approximately {expectedColumns} columns. ";
+            promptText += "Columns alternate between white moves (even-numbered columns: 0, 2, 4...) and black moves (odd-numbered columns: 1, 3, 5...). ";
+            promptText += "Each column contains multiple chess moves written vertically. ";
+            promptText += $"The characters are written in {language}, valid characters are: ";
+            
+            // Add each valid character to the prompt
+            for (int i = 0; i < validChars.Length; i++)
+            {
+                if (i > 0)
+                {
+                    promptText += ", ";
+                }
+                promptText += validChars[i];
+            }
+            
+            promptText += ". Do not include any other characters, and preserve any misspellings or punctuation errors.\n\n";
+            promptText += "Return the result as a JSON object with the following structure:\n";
+            promptText += "{\n";
+            promptText += "  \"columns\": [\n";
+            promptText += "    { \"columnIndex\": 0, \"moves\": [\"e4\", \"Nf3\", ...] },\n";
+            promptText += "    { \"columnIndex\": 1, \"moves\": [\"e5\", \"Nc6\", ...] },\n";
+            promptText += "    ...\n";
+            promptText += "  ]\n";
+            promptText += "}\n\n";
+            promptText += "Important: Extract moves from left to right, column by column. Even column indices (0, 2, 4...) contain white moves, odd column indices (1, 3, 5...) contain black moves.";
+
+            var requestData = new
+            {
+                contents = new[]
+                {
+                    new
+                    {
+                        parts = new object[]
+                        {
+                            new
+                            {
+                                text = promptText
+                            },
+                            new
+                            {
+                                inline_data = new
+                                {
+                                    mime_type = "image/jpeg",
+                                    data = base64Image
+                                }
+                            }
+                        }
+                    }
+                },
+                generationConfig = new
+                {
+                    maxOutputTokens = 8000,
+                    response_mime_type = "application/json",
+                    thinking_config = new
+                    {
+                        thinking_level = "low"
+                    },
+                }
+            };
+
+            var content = new StringContent(
+                JsonSerializer.Serialize(requestData),
+                Encoding.UTF8,
+                "application/json");
+
+            var response = await client.PostAsync("https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent", content);
+            
+            if (!response.IsSuccessStatusCode)
+            {
+                if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                {
+                    throw new UnauthorizedAccessException("Invalid API key");
+                }
+                
+                var errorContent = await response.Content.ReadAsStringAsync();
+                throw new Exception($"Gemini API error: {response.StatusCode} - {errorContent}");
+            }
+
+            var responseContent = await response.Content.ReadAsStringAsync();
+            using var jsonDoc = JsonDocument.Parse(responseContent);
+            
+            if (!jsonDoc.RootElement.TryGetProperty("candidates", out var candidates) || candidates.GetArrayLength() == 0)
+            {
+                throw new Exception("Gemini API returned no candidates in response");
+            }
+            
+            var firstCandidate = candidates[0];
+            
+            // Check for finish reason
+            if (firstCandidate.TryGetProperty("finishReason", out var finishReason))
+            {
+                var finishReasonValue = finishReason.GetString();
+                if (finishReasonValue == "MAX_TOKENS")
+                {
+                    _logger.LogWarning("Gemini API response was truncated due to MAX_TOKENS limit. Consider increasing maxOutputTokens.");
+                    throw new Exception("Gemini API response was truncated because it exceeded the maximum token limit. The response may be incomplete. Consider increasing maxOutputTokens in the request.");
+                }
+            }
+            
+            // Check if content exists and is not empty
+            if (!firstCandidate.TryGetProperty("content", out var contentElement) || contentElement.ValueKind == JsonValueKind.Null)
+            {
+                throw new Exception("Gemini API returned empty content in response");
+            }
+            
+            // Check if parts array exists
+            if (!contentElement.TryGetProperty("parts", out var parts) || parts.GetArrayLength() == 0)
+            {
+                throw new Exception("Gemini API returned no parts in response");
+            }
+            
+            // Extract text from the first part
+            var firstPart = parts[0];
+            if (!firstPart.TryGetProperty("text", out var textElement))
+            {
+                throw new Exception("Gemini API response part does not contain 'text' property");
+            }
+            
+            var text = textElement.GetString();
+            
+            // Optionally log usage metadata if available
+            if (jsonDoc.RootElement.TryGetProperty("usageMetadata", out var usageMetadata))
+            {
+                if (usageMetadata.TryGetProperty("totalTokenCount", out var totalTokens))
+                {
+                    _logger.LogDebug("Gemini API usage: {TotalTokens} total tokens", totalTokens.GetInt32());
+                }
+            }
+            
+            return text ?? string.Empty;
+        }
+
+        private async Task<string> ExtractTextFromImageWithOpenAIAsyncWholeImage(byte[] imageBytes, string language, int expectedColumns)
+        {
+            string apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY") ?? 
+                _configuration["OPENAI_API_KEY"] ?? 
+                throw new UnauthorizedAccessException("OPENAI_API_KEY environment variable not set");
+
+            var client = _httpClientFactory.CreateClient();
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+            
+            var base64Image = Convert.ToBase64String(imageBytes);
+
+            // Get valid characters for the specified language
+            var validChars = GetChessNotationCharacters(language);
+
+            // Build the prompt with column-aware instructions
+            var promptText = "You are an OCR engine specialized in chess notation. This image contains a chess game written in columns. ";
+            promptText += $"The image has approximately {expectedColumns} columns. ";
+            promptText += "Columns alternate between white moves (even-numbered columns: 0, 2, 4...) and black moves (odd-numbered columns: 1, 3, 5...). ";
+            promptText += "Each column contains multiple chess moves written vertically. ";
+            promptText += $"The characters are written in {language}, valid characters are: ";
+            
+            // Add each valid character to the prompt
+            for (int i = 0; i < validChars.Length; i++)
+            {
+                if (i > 0)
+                {
+                    promptText += ", ";
+                }
+                promptText += validChars[i];
+            }
+            
+            promptText += ". Do not include any other characters, and preserve any misspellings or punctuation errors.\n\n";
+            promptText += "Return the result as a JSON object with the following structure:\n";
+            promptText += "{\n";
+            promptText += "  \"columns\": [\n";
+            promptText += "    { \"columnIndex\": 0, \"moves\": [\"e4\", \"Nf3\", ...] },\n";
+            promptText += "    { \"columnIndex\": 1, \"moves\": [\"e5\", \"Nc6\", ...] },\n";
+            promptText += "    ...\n";
+            promptText += "  ]\n";
+            promptText += "}\n\n";
+            promptText += "Important: Extract moves from left to right, column by column. Even column indices (0, 2, 4...) contain white moves, odd column indices (1, 3, 5...) contain black moves.";
+
+            var requestData = new
+            {
+                model = "gpt-5-chat-latest",
+                messages = new[]
+                {
+                    new
+                    {
+                        role = "user",
+                        content = new object[]
+                        {
+                            new
+                            {
+                                type = "text",
+                                text = promptText
+                            },
+                            new
+                            {
+                                type = "image_url",
+                                image_url = new
+                                {
+                                    url = $"data:image/jpeg;base64,{base64Image}"
+                                }
+                            }
+                        }
+                    }
+                },
+                max_tokens = 4000,
+                response_format = new { type = "json_object" }
+            };
+
+            var content = new StringContent(
+                JsonSerializer.Serialize(requestData),
+                Encoding.UTF8,
+                "application/json");
+
+            var response = await client.PostAsync("https://api.openai.com/v1/chat/completions", content);
+            
+            if (!response.IsSuccessStatusCode)
+            {
+                if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                {
+                    throw new UnauthorizedAccessException("Invalid API key");
+                }
+                
+                var errorContent = await response.Content.ReadAsStringAsync();
+                throw new Exception($"OpenAI API error: {response.StatusCode} - {errorContent}");
+            }
+
+            var responseContent = await response.Content.ReadAsStringAsync();
+            using var jsonDoc = JsonDocument.Parse(responseContent);
+            
+            if (!jsonDoc.RootElement.TryGetProperty("choices", out var choices) || choices.GetArrayLength() == 0)
+            {
+                throw new Exception("OpenAI API returned no choices in response");
+            }
+            
+            var firstChoice = choices[0];
+            if (!firstChoice.TryGetProperty("message", out var message))
+            {
+                throw new Exception("OpenAI API response choice does not contain 'message' property");
+            }
+            
+            if (!message.TryGetProperty("content", out var contentElement))
+            {
+                throw new Exception("OpenAI API response message does not contain 'content' property");
+            }
+            
+            var text = contentElement.GetString();
+            
+            // Optionally log usage metadata if available
+            if (jsonDoc.RootElement.TryGetProperty("usage", out var usage))
+            {
+                if (usage.TryGetProperty("total_tokens", out var totalTokens))
+                {
+                    _logger.LogDebug("OpenAI API usage: {TotalTokens} total tokens", totalTokens.GetInt32());
                 }
             }
             

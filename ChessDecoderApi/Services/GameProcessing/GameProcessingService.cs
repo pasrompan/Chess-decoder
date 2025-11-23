@@ -142,8 +142,10 @@ public class GameProcessingService : IGameProcessingService
         }
 
         var startTime = DateTime.UtcNow;
-        var result = await _imageExtractionService.ProcessImageAsync(imagePathForProcessing, request.Language, request.ExpectedColumns);
+        var result = await _imageExtractionService.ProcessImageAsync(imagePathForProcessing, request.Language, request.ExpectedColumns, request.UseWholeImageProcessing);
         var processingTime = DateTime.UtcNow - startTime;
+        
+        _logger.LogInformation("Processed image using {Method} method", request.UseWholeImageProcessing ? "whole image" : "column splitting");
 
         // Generate processed image with boundaries
         try
@@ -281,7 +283,8 @@ public class GameProcessingService : IGameProcessingService
             imagePathForProcessing = croppedFilePath;
         }
 
-        var result = await _imageExtractionService.ProcessImageAsync(imagePathForProcessing, language, expectedColumns);
+        // For mock upload, default to column splitting (can be extended later if needed)
+        var result = await _imageExtractionService.ProcessImageAsync(imagePathForProcessing, language, expectedColumns, useWholeImageProcessing: false);
 
         // Generate image
         if (autoCrop)

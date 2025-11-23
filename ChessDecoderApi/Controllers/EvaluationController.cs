@@ -86,7 +86,7 @@ public class EvaluationController : ControllerBase
                     evaluationLogger, 
                     useRealApi: true);
 
-                var result = await evaluationService.EvaluateAsync(tempImagePath, tempGroundTruthPath, request.Language, request.NumberOfColumns, request.AutoCrop);
+                var result = await evaluationService.EvaluateAsync(tempImagePath, tempGroundTruthPath, request.Language, request.NumberOfColumns, request.AutoCrop, request.UseWholeImageProcessing);
 
                 return Ok(new EvaluationResultResponse
                 {

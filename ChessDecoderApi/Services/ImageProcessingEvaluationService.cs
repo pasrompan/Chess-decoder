@@ -36,8 +36,9 @@ namespace ChessDecoderApi.Services
         /// <param name="language">Language for chess notation (default: English)</param>
         /// <param name="expectedColumns">Expected number of columns in the chess notation table (default: 6)</param>
         /// <param name="autoCrop">Whether to automatically crop the image to table boundaries before processing (default: false)</param>
+        /// <param name="useWholeImageProcessing">If true, uses whole image processing. If false, uses column splitting (default: false)</param>
         /// <returns>Evaluation result with normalized score (0 = perfect)</returns>
-        public async Task<EvaluationResult> EvaluateAsync(string imagePath, string groundTruthPath, string language = "English", int expectedColumns = 6, bool autoCrop = false)
+        public async Task<EvaluationResult> EvaluateAsync(string imagePath, string groundTruthPath, string language = "English", int expectedColumns = 6, bool autoCrop = false, bool useWholeImageProcessing = false)
         {
             if (!_useRealApi)
             {
@@ -90,7 +91,11 @@ namespace ChessDecoderApi.Services
 
                 // Extract moves directly from the image
                 var startTime = DateTime.UtcNow;
-                var (whiteMoves, blackMoves) = await _imageProcessingService.ExtractMovesFromImageToStringAsync(imagePathForProcessing, language, expectedColumns);
+                var (whiteMoves, blackMoves) = useWholeImageProcessing
+                    ? await _imageProcessingService.ExtractMovesFromImageToStringAsyncWholeImage(imagePathForProcessing, language, expectedColumns)
+                    : await _imageProcessingService.ExtractMovesFromImageToStringAsync(imagePathForProcessing, language, expectedColumns);
+                
+                _logger.LogInformation("Extracted moves using {Method} method", useWholeImageProcessing ? "whole image" : "column splitting");
                 var extractedMoves = new List<string>();
                 int maxMoves = Math.Max(whiteMoves.Count, blackMoves.Count);
                 for (int i = 0; i < maxMoves; i++)

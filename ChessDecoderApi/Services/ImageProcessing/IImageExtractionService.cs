@@ -10,7 +10,7 @@ public interface IImageExtractionService
     /// <summary>
     /// Process an image and extract chess game data
     /// </summary>
-    Task<ChessGameResponse> ProcessImageAsync(string imagePath, string language = "English", int expectedColumns = 6);
+    Task<ChessGameResponse> ProcessImageAsync(string imagePath, string language = "English", int expectedColumns = 6, bool useWholeImageProcessing = false);
 
     /// <summary>
     /// Extract chess moves from an image and return separate white and black move lists
