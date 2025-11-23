@@ -1843,43 +1843,6 @@ namespace ChessDecoderApi.Services
 
 
         /// <summary>
-        /// Creates an image with table and column boundaries drawn on it for debugging visualization.
-        /// Uses automatic chess column detection for improved accuracy.
-        /// </summary>
-        /// <param name="imagePath">Path to the chess moves image</param>
-        /// <returns>Byte array of the image with table and column boundaries drawn</returns>
-        public async Task<byte[]> CreateImageWithBoundariesAsync(string imagePath)
-        {
-            using var image = Image.Load<Rgba32>(imagePath);
-            
-            // Step 1: Find table boundaries first
-            var tableBoundaries = FindTableBoundaries(image);
-            _logger.LogInformation($"Found table boundaries: X={tableBoundaries.X}, Y={tableBoundaries.Y}, Width={tableBoundaries.Width}, Height={tableBoundaries.Height}");
-            
-            // Step 2: Automatically detect chess columns within the table boundaries (using default 6 columns)
-            var columnBoundaries = DetectChessColumnsAutomatically(image, tableBoundaries, useHeuristics: true, expectedColumns: 6);
-            
-            // Clone the image to draw on
-            using var imageWithBoundaries = image.Clone();
-            
-            // Step 3: Gray out areas outside the table boundaries and between table edges and columns
-            GrayOutAreasOutsideTable(imageWithBoundaries, tableBoundaries, columnBoundaries);
-            
-            // Step 4: Draw table boundaries (blue, thicker) for debugging
-            DrawTableBoundariesOnImage(imageWithBoundaries, tableBoundaries);
-            
-            // Step 5: Draw ALL column boundaries including column 0 and last column (red, thinner)
-            DrawAllColumnBoundaries(imageWithBoundaries, columnBoundaries, tableBoundaries);
-            
-            _logger.LogInformation($"Drew table boundaries and {columnBoundaries.Count} chess column boundaries (including column 0) with grayed out areas outside table");
-            
-            // Convert to byte array
-            using var ms = new MemoryStream();
-            await imageWithBoundaries.SaveAsJpegAsync(ms);
-            return ms.ToArray();
-        }
-
-        /// <summary>
         /// Crops an image to the specified rectangle boundaries.
         /// </summary>
         /// <param name="imagePath">Path to the image to crop</param>

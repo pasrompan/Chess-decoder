@@ -21,10 +21,5 @@ public class ImageManipulationService : IImageManipulationService
     {
         return await _imageProcessingService.CropImageAsync(imagePath, x, y, width, height);
     }
-
-    public async Task<byte[]> CreateImageWithBoundariesAsync(string imagePath)
-    {
-        return await _imageProcessingService.CreateImageWithBoundariesAsync(imagePath);
-    }
 }
 

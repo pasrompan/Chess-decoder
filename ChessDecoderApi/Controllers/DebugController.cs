@@ -155,50 +155,6 @@ public class DebugController : ControllerBase
     }
 
     /// <summary>
-    /// Debug endpoint to visualize column boundaries on an image
-    /// </summary>
-    [HttpPost("image-with-boundaries")]
-    public async Task<IActionResult> DebugImageWithBoundaries(IFormFile? image)
-    {
-        if (image == null || image.Length == 0)
-        {
-            return BadRequest(new { message = "No image file provided" });
-        }
-
-        if (!image.ContentType.StartsWith("image/"))
-        {
-            return BadRequest(new { message = "Uploaded file must be an image" });
-        }
-
-        try
-        {
-            var tempFilePath = Path.GetTempFileName();
-            try
-            {
-                using (var stream = new FileStream(tempFilePath, FileMode.Create))
-                {
-                    await image.CopyToAsync(stream);
-                }
-
-                var imageWithBoundaries = await _imageManipulationService.CreateImageWithBoundariesAsync(tempFilePath);
-                return File(imageWithBoundaries, "image/jpeg", $"boundaries_{image.FileName}");
-            }
-            finally
-            {
-                if (System.IO.File.Exists(tempFilePath))
-                {
-                    System.IO.File.Delete(tempFilePath);
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error processing debug image with boundaries");
-            return StatusCode(500, new { message = "Failed to process image with boundaries: " + ex.Message });
-        }
-    }
-
-    /// <summary>
     /// Debug endpoint to visualize table boundaries
     /// </summary>
     [HttpPost("table-boundaries")]

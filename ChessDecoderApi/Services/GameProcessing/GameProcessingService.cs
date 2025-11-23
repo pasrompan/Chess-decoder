@@ -145,19 +145,11 @@ public class GameProcessingService : IGameProcessingService
         var result = await _imageExtractionService.ProcessImageAsync(imagePathForProcessing, request.Language);
         var processingTime = DateTime.UtcNow - startTime;
 
-        // Generate processed image with boundaries
+        // Generate processed image
         try
         {
-            if (request.AutoCrop)
-            {
-                var imageWithBoundaries = await _imageManipulationService.CreateImageWithBoundariesAsync(imagePathForProcessing);
-                processedImageBase64 = Convert.ToBase64String(imageWithBoundaries);
-            }
-            else
-            {
-                var imageBytes = await File.ReadAllBytesAsync(imagePathForProcessing);
-                processedImageBase64 = Convert.ToBase64String(imageBytes);
-            }
+            var imageBytes = await File.ReadAllBytesAsync(imagePathForProcessing);
+            processedImageBase64 = Convert.ToBase64String(imageBytes);
         }
         catch (Exception ex)
         {
@@ -284,16 +276,8 @@ public class GameProcessingService : IGameProcessingService
         var result = await _imageExtractionService.ProcessImageAsync(imagePathForProcessing, language);
 
         // Generate image
-        if (autoCrop)
-        {
-            var imageWithBoundaries = await _imageManipulationService.CreateImageWithBoundariesAsync(imagePathForProcessing);
-            processedImageBase64 = Convert.ToBase64String(imageWithBoundaries);
-        }
-        else
-        {
-            var imageBytes = await File.ReadAllBytesAsync(imagePathForProcessing);
-            processedImageBase64 = Convert.ToBase64String(imageBytes);
-        }
+        var imageBytes = await File.ReadAllBytesAsync(imagePathForProcessing);
+        processedImageBase64 = Convert.ToBase64String(imageBytes);
 
         // Clean up
         try
