@@ -10,7 +10,7 @@ namespace ChessDecoderApi.Services
         Task<(List<string> whiteMoves, List<string> blackMoves)> ExtractMovesFromImageToStringAsync(string imagePath, string language = "English", int expectedColumns = 6);
         Task<(List<string> whiteMoves, List<string> blackMoves)> ExtractMovesFromImageToStringAsyncWholeImage(string imagePath, string language = "English", int expectedColumns = 6);
         Task<string> ExtractTextFromImageAsync(byte[] imageBytes, string language, string provider = "gemini");
-        Task<string> ExtractTextFromImageAsyncWholeImage(byte[] imageBytes, string language, int expectedColumns = 6, string provider = "gemini");
+        Task<string> ExtractTextFromImageAsyncWholeImage(byte[] imageBytes, string language, string provider = "gemini");
         string GeneratePGNContentAsync(IEnumerable<string> whiteMoves, IEnumerable<string> blackMoves);
         Task<string> DebugUploadAsync(string imagePath, string promptText);
         List<int> SplitImageIntoColumns(Image<Rgba32> image, int expectedColumns = 6);

@@ -198,10 +198,10 @@ namespace ChessDecoderApi.Services
                 imageBytes = ms.ToArray();
             }
 
-            _logger.LogInformation($"Processing whole image (no column splitting) with expectedColumns: {expectedColumns}");
+            _logger.LogInformation($"Processing whole image (no column splitting)");
 
             // Extract text from whole image with column-aware prompt
-            string jsonResponse = await ExtractTextFromImageAsyncWholeImage(imageBytes, language, expectedColumns);
+            string jsonResponse = await ExtractTextFromImageAsyncWholeImage(imageBytes, language);
             
             // Parse JSON response to extract moves from columns
             var (whiteMoves, blackMoves) = await ParseMovesFromColumnJsonAsync(jsonResponse, language);
@@ -214,17 +214,16 @@ namespace ChessDecoderApi.Services
         /// </summary>
         /// <param name="imageBytes">The image bytes to process</param>
         /// <param name="language">The language of the chess notation</param>
-        /// <param name="expectedColumns">Expected number of columns</param>
         /// <param name="provider">The OCR provider to use: "gemini" (default) or "openai"</param>
         /// <returns>JSON string containing columns with moves</returns>
-        public virtual async Task<string> ExtractTextFromImageAsyncWholeImage(byte[] imageBytes, string language, int expectedColumns = 6, string provider = "gemini")
+        public virtual async Task<string> ExtractTextFromImageAsyncWholeImage(byte[] imageBytes, string language, string provider = "gemini")
         {
             try
             {
                 return provider switch
                 {
-                    "gemini" => await ExtractTextFromImageWithGeminiAsyncWholeImage(imageBytes, language, expectedColumns),
-                    "openai" => await ExtractTextFromImageWithOpenAIAsyncWholeImage(imageBytes, language, expectedColumns),
+                    "gemini" => await ExtractTextFromImageWithGeminiAsyncWholeImage(imageBytes, language),
+                    "openai" => await ExtractTextFromImageWithOpenAIAsyncWholeImage(imageBytes, language),
                     _ => throw new ArgumentException($"Unsupported provider: {provider}. Supported providers are 'gemini' and 'openai'.", nameof(provider))
                 };
             }
@@ -641,7 +640,7 @@ namespace ChessDecoderApi.Services
             return text ?? string.Empty;
         }
 
-        private async Task<string> ExtractTextFromImageWithGeminiAsyncWholeImage(byte[] imageBytes, string language, int expectedColumns)
+        private async Task<string> ExtractTextFromImageWithGeminiAsyncWholeImage(byte[] imageBytes, string language)
         {
             string apiKey = Environment.GetEnvironmentVariable("GEMINI_API_KEY") ?? 
                 _configuration["GEMINI_API_KEY"] ?? 
@@ -657,9 +656,10 @@ namespace ChessDecoderApi.Services
 
             // Build the prompt with column-aware instructions
             var promptText = "You are an OCR engine specialized in chess notation. This image contains a chess game written in columns. ";
-            promptText += $"The image has approximately {expectedColumns} columns. ";
+            promptText += "The image may have 2, 4, or 6 columns. ";
             promptText += "Columns alternate between white moves (even-numbered columns: 0, 2, 4...) and black moves (odd-numbered columns: 1, 3, 5...). ";
             promptText += "Each column contains multiple chess moves written vertically. ";
+            promptText += "Analyze the image to determine the number of columns automatically. ";
             promptText += $"The characters are written in {language}, valid characters are: ";
             
             // Add each valid character to the prompt
@@ -789,7 +789,7 @@ namespace ChessDecoderApi.Services
             return text ?? string.Empty;
         }
 
-        private async Task<string> ExtractTextFromImageWithOpenAIAsyncWholeImage(byte[] imageBytes, string language, int expectedColumns)
+        private async Task<string> ExtractTextFromImageWithOpenAIAsyncWholeImage(byte[] imageBytes, string language)
         {
             string apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY") ?? 
                 _configuration["OPENAI_API_KEY"] ?? 
@@ -805,9 +805,10 @@ namespace ChessDecoderApi.Services
 
             // Build the prompt with column-aware instructions
             var promptText = "You are an OCR engine specialized in chess notation. This image contains a chess game written in columns. ";
-            promptText += $"The image has approximately {expectedColumns} columns. ";
+            promptText += "The image may have 2, 4, or 6 columns. ";
             promptText += "Columns alternate between white moves (even-numbered columns: 0, 2, 4...) and black moves (odd-numbered columns: 1, 3, 5...). ";
             promptText += "Each column contains multiple chess moves written vertically. ";
+            promptText += "Analyze the image to determine the number of columns automatically. ";
             promptText += $"The characters are written in {language}, valid characters are: ";
             
             // Add each valid character to the prompt
