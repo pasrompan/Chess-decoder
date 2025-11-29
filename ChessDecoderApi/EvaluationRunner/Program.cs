@@ -176,6 +176,18 @@ class Program
                     result.GeneratedPgn = evaluationResult.GeneratedPgn;
                     result.GroundTruthMoveList = evaluationResult.Moves.GroundTruth;
                     result.ExtractedMoveList = evaluationResult.Moves.Extracted;
+                    
+                    // Normalized move metrics
+                    if (evaluationResult.NormalizedMetrics != null)
+                    {
+                        result.NormalizedNormalizedScore = evaluationResult.NormalizedMetrics.NormalizedScore;
+                        result.NormalizedExactMatchScore = evaluationResult.NormalizedMetrics.ExactMatchScore;
+                        result.NormalizedPositionalAccuracy = evaluationResult.NormalizedMetrics.PositionalAccuracy;
+                        result.NormalizedLevenshteinDistance = evaluationResult.NormalizedMetrics.LevenshteinDistance;
+                        result.NormalizedLongestCommonSubsequence = evaluationResult.NormalizedMetrics.LongestCommonSubsequence;
+                        result.NormalizedMoves = evaluationResult.MoveCounts.NormalizedMoves;
+                        result.NormalizedMoveList = evaluationResult.Moves.Normalized;
+                    }
                 }
                 else
                 {
@@ -250,7 +262,7 @@ class Program
         html.AppendLine($"        <h1>Chess Decoder Evaluation Report</h1>");
         html.AppendLine($"        <div class=\"timestamp\">Generated: {DateTime.Now:yyyy-MM-dd HH:mm:ss}</div>");
 
-        // Global Summary
+        // Global Summary for Extracted Moves
         var successfulResults = results.Where(r => r.IsSuccessful).ToList();
         var totalTests = results.Count;
         var successCount = successfulResults.Count;
@@ -259,80 +271,39 @@ class Program
         var avgPositionalAccuracy = successfulResults.Any() ? successfulResults.Average(r => r.PositionalAccuracy) : 0;
         var avgProcessingTime = successfulResults.Any() ? successfulResults.Average(r => r.ProcessingTimeSeconds) : 0;
 
-        html.AppendLine("        <div class=\"summary\">");
-        html.AppendLine("            <h2>Global Summary</h2>");
-        html.AppendLine("            <div class=\"summary-grid\">");
-        html.AppendLine($"                <div class=\"summary-item\"><h3>Total Tests</h3><div class=\"value\">{totalTests}</div></div>");
-        html.AppendLine($"                <div class=\"summary-item\"><h3>Successful</h3><div class=\"value\">{successCount}</div></div>");
-        html.AppendLine($"                <div class=\"summary-item\"><h3>Success Rate</h3><div class=\"value\">{(successCount * 100.0 / totalTests):F1}%</div></div>");
-        html.AppendLine($"                <div class=\"summary-item\"><h3>Avg Normalized Score</h3><div class=\"value\">{avgNormalizedScore:F3}</div></div>");
-        html.AppendLine($"                <div class=\"summary-item\"><h3>Avg Exact Match</h3><div class=\"value\">{avgExactMatch:F3}</div></div>");
-        html.AppendLine($"                <div class=\"summary-item\"><h3>Avg Positional Accuracy</h3><div class=\"value\">{avgPositionalAccuracy:F3}</div></div>");
-        html.AppendLine($"                <div class=\"summary-item\"><h3>Avg Processing Time</h3><div class=\"value\">{avgProcessingTime:F2}s</div></div>");
-        html.AppendLine("            </div>");
-        html.AppendLine("        </div>");
+        AppendGlobalSummary(html, "Extracted Moves", totalTests, successCount, avgNormalizedScore, avgExactMatch, avgPositionalAccuracy, avgProcessingTime);
 
-        // Results by Language
+        // Global Summary for Normalized Moves
+        var resultsWithNormalized = results.Where(r => r.IsSuccessful && r.NormalizedMoveList.Count > 0).ToList();
+        if (resultsWithNormalized.Any())
+        {
+            var avgNormalizedNormalizedScore = resultsWithNormalized.Average(r => r.NormalizedNormalizedScore);
+            var avgNormalizedExactMatch = resultsWithNormalized.Average(r => r.NormalizedExactMatchScore);
+            var avgNormalizedPositionalAccuracy = resultsWithNormalized.Average(r => r.NormalizedPositionalAccuracy);
+
+            AppendGlobalSummary(html, "Normalized Moves", resultsWithNormalized.Count, null, avgNormalizedNormalizedScore, avgNormalizedExactMatch, avgNormalizedPositionalAccuracy, null);
+        }
+
+        // Results by Language - Extracted Moves
         var resultsByLanguage = results.GroupBy(r => r.Language).OrderBy(g => g.Key);
         
         foreach (var languageGroup in resultsByLanguage)
         {
-            html.AppendLine($"        <div class=\"language-section\">");
-            html.AppendLine($"            <div class=\"language-header\"><h2>{languageGroup.Key} Language Results</h2></div>");
-            html.AppendLine("            <table>");
-            html.AppendLine("                <thead>");
-            html.AppendLine("                    <tr>");
-            html.AppendLine("                        <th>Game</th>");
-            html.AppendLine("                        <th>Status</th>");
-            html.AppendLine("                        <th>Normalized Score</th>");
-            html.AppendLine("                        <th>Exact Match</th>");
-            html.AppendLine("                        <th>Positional Accuracy</th>");
-            html.AppendLine("                        <th>Levenshtein Distance</th>");
-            html.AppendLine("                        <th>LCS</th>");
-            html.AppendLine("                        <th>Ground Truth Moves</th>");
-            html.AppendLine("                        <th>Extracted Moves</th>");
-            html.AppendLine("                        <th>Processing Time</th>");
-            html.AppendLine("                    </tr>");
-            html.AppendLine("                </thead>");
-            html.AppendLine("                <tbody>");
-
-            foreach (var result in languageGroup.OrderBy(r => r.GameName))
-            {
-                var scoreClass = result.IsSuccessful 
-                    ? (result.NormalizedScore >= 0.8 ? "score-high" : result.NormalizedScore >= 0.5 ? "score-medium" : "score-low")
-                    : "";
-                
-                html.AppendLine("                    <tr>");
-                html.AppendLine($"                        <td><strong>{result.GameName}</strong></td>");
-                html.AppendLine($"                        <td class=\"{(result.IsSuccessful ? "success" : "failure")}\">{(result.IsSuccessful ? "✓ Success" : "✗ Failed")}</td>");
-                
-                if (result.IsSuccessful)
-                {
-                    html.AppendLine($"                        <td class=\"score {scoreClass}\">{result.NormalizedScore:F3}</td>");
-                    html.AppendLine($"                        <td>{result.ExactMatchScore:F3}</td>");
-                    html.AppendLine($"                        <td>{result.PositionalAccuracy:F3}</td>");
-                    html.AppendLine($"                        <td>{result.LevenshteinDistance}</td>");
-                    html.AppendLine($"                        <td>{result.LongestCommonSubsequence}</td>");
-                    html.AppendLine($"                        <td>{result.GroundTruthMoves}</td>");
-                    html.AppendLine($"                        <td>{result.ExtractedMoves}</td>");
-                    html.AppendLine($"                        <td>{result.ProcessingTimeSeconds:F2}s</td>");
-                }
-                else
-                {
-                    html.AppendLine($"                        <td colspan=\"8\">{result.ErrorMessage}</td>");
-                }
-                
-                html.AppendLine("                    </tr>");
-            }
-
-            html.AppendLine("                </tbody>");
-            html.AppendLine("            </table>");
-            html.AppendLine("        </div>");
+            AppendLanguageResultsTable(html, languageGroup.Key, languageGroup, "Extracted Moves", isNormalized: false);
         }
 
-        // Detailed Results
+        // Results by Language - Normalized Moves
+        foreach (var languageGroup in resultsByLanguage)
+        {
+            var languageResultsWithNormalized = languageGroup.Where(r => r.IsSuccessful && r.NormalizedMoveList.Count > 0).ToList();
+            if (!languageResultsWithNormalized.Any()) continue;
+
+            AppendLanguageResultsTable(html, languageGroup.Key, languageResultsWithNormalized, "Normalized Moves", isNormalized: true);
+        }
+
+        // Detailed Results - Extracted Moves
         html.AppendLine("        <div class=\"details\">");
-        html.AppendLine("            <h2>Detailed Results</h2>");
+        html.AppendLine("            <h2>Detailed Results - Extracted Moves</h2>");
 
         foreach (var result in results.OrderBy(r => r.Language).ThenBy(r => r.GameName))
         {
@@ -381,11 +352,168 @@ class Program
         }
 
         html.AppendLine("        </div>");
+
+        // Detailed Results - Normalized Moves
+        var resultsWithNormalizedDetails = results.Where(r => r.IsSuccessful && r.NormalizedMoveList.Count > 0).ToList();
+        if (resultsWithNormalizedDetails.Any())
+        {
+            html.AppendLine("        <div class=\"details\">");
+            html.AppendLine("            <h2>Detailed Results - Normalized Moves</h2>");
+
+            foreach (var result in resultsWithNormalizedDetails.OrderBy(r => r.Language).ThenBy(r => r.GameName))
+            {
+                html.AppendLine($"            <div class=\"details-section\">");
+                html.AppendLine($"                <h3>{result.Language} - {result.GameName}</h3>");
+                
+                html.AppendLine("                <div class=\"moves-comparison\">");
+                html.AppendLine("                    <div>");
+                html.AppendLine("                        <h4>Ground Truth Moves</h4>");
+                html.AppendLine("                        <div class=\"moves-list\">");
+                foreach (var move in result.GroundTruthMoveList)
+                {
+                    var isMatch = result.NormalizedMoveList.Contains(move);
+                    html.AppendLine($"                            <div class=\"move-item {(isMatch ? "move-match" : "move-diff")}\">{move}</div>");
+                }
+                html.AppendLine("                        </div>");
+                html.AppendLine("                    </div>");
+                html.AppendLine("                    <div>");
+                html.AppendLine("                        <h4>Normalized Moves</h4>");
+                html.AppendLine("                        <div class=\"moves-list\">");
+                foreach (var move in result.NormalizedMoveList)
+                {
+                    var isMatch = result.GroundTruthMoveList.Contains(move);
+                    html.AppendLine($"                            <div class=\"move-item {(isMatch ? "move-match" : "move-diff")}\">{move}</div>");
+                }
+                html.AppendLine("                        </div>");
+                html.AppendLine("                    </div>");
+                html.AppendLine("                </div>");
+                
+                html.AppendLine("            </div>");
+            }
+
+            html.AppendLine("        </div>");
+        }
+
         html.AppendLine("    </div>");
         html.AppendLine("</body>");
         html.AppendLine("</html>");
 
         await File.WriteAllTextAsync(outputPath, html.ToString());
+    }
+
+    static void AppendGlobalSummary(StringBuilder html, string moveType, int totalTests, int? successCount, double avgNormalizedScore, double avgExactMatch, double avgPositionalAccuracy, double? avgProcessingTime)
+    {
+        html.AppendLine("        <div class=\"summary\">");
+        html.AppendLine($"            <h2>Global Summary - {moveType}</h2>");
+        html.AppendLine("            <div class=\"summary-grid\">");
+        html.AppendLine($"                <div class=\"summary-item\"><h3>Total Tests</h3><div class=\"value\">{totalTests}</div></div>");
+        
+        if (successCount.HasValue)
+        {
+            html.AppendLine($"                <div class=\"summary-item\"><h3>Successful</h3><div class=\"value\">{successCount.Value}</div></div>");
+            html.AppendLine($"                <div class=\"summary-item\"><h3>Success Rate</h3><div class=\"value\">{(successCount.Value * 100.0 / totalTests):F1}%</div></div>");
+        }
+        
+        html.AppendLine($"                <div class=\"summary-item\"><h3>Avg Normalized Score</h3><div class=\"value\">{avgNormalizedScore:F3}</div></div>");
+        html.AppendLine($"                <div class=\"summary-item\"><h3>Avg Exact Match</h3><div class=\"value\">{avgExactMatch:F3}</div></div>");
+        html.AppendLine($"                <div class=\"summary-item\"><h3>Avg Positional Accuracy</h3><div class=\"value\">{avgPositionalAccuracy:F3}</div></div>");
+        
+        if (avgProcessingTime.HasValue)
+        {
+            html.AppendLine($"                <div class=\"summary-item\"><h3>Avg Processing Time</h3><div class=\"value\">{avgProcessingTime.Value:F2}s</div></div>");
+        }
+        
+        html.AppendLine("            </div>");
+        html.AppendLine("        </div>");
+    }
+
+    static void AppendLanguageResultsTable(StringBuilder html, string language, IEnumerable<EvaluationRunResult> results, string moveType, bool isNormalized)
+    {
+        html.AppendLine($"        <div class=\"language-section\">");
+        html.AppendLine($"            <div class=\"language-header\"><h2>{language} Language Results - {moveType}</h2></div>");
+        html.AppendLine("            <table>");
+        html.AppendLine("                <thead>");
+        html.AppendLine("                    <tr>");
+        html.AppendLine("                        <th>Game</th>");
+        html.AppendLine("                        <th>Status</th>");
+        html.AppendLine("                        <th>Normalized Score</th>");
+        html.AppendLine("                        <th>Exact Match</th>");
+        html.AppendLine("                        <th>Positional Accuracy</th>");
+        html.AppendLine("                        <th>Levenshtein Distance</th>");
+        html.AppendLine("                        <th>LCS</th>");
+        html.AppendLine("                        <th>Ground Truth Moves</th>");
+        html.AppendLine($"                        <th>{moveType}</th>");
+        html.AppendLine("                        <th>Processing Time</th>");
+        html.AppendLine("                    </tr>");
+        html.AppendLine("                </thead>");
+        html.AppendLine("                <tbody>");
+
+        foreach (var result in results.OrderBy(r => r.GameName))
+        {
+            double score;
+            string scoreClass;
+            
+            if (isNormalized)
+            {
+                score = result.NormalizedNormalizedScore;
+                scoreClass = score >= 0.8 ? "score-high" : score >= 0.5 ? "score-medium" : "score-low";
+            }
+            else
+            {
+                score = result.NormalizedScore;
+                scoreClass = result.IsSuccessful 
+                    ? (score >= 0.8 ? "score-high" : score >= 0.5 ? "score-medium" : "score-low")
+                    : "";
+            }
+
+            html.AppendLine("                    <tr>");
+            html.AppendLine($"                        <td><strong>{result.GameName}</strong></td>");
+            
+            if (isNormalized)
+            {
+                html.AppendLine($"                        <td class=\"success\">✓ Success</td>");
+            }
+            else
+            {
+                html.AppendLine($"                        <td class=\"{(result.IsSuccessful ? "success" : "failure")}\">{(result.IsSuccessful ? "✓ Success" : "✗ Failed")}</td>");
+            }
+
+            if (result.IsSuccessful)
+            {
+                html.AppendLine($"                        <td class=\"score {scoreClass}\">{score:F3}</td>");
+                
+                if (isNormalized)
+                {
+                    html.AppendLine($"                        <td>{result.NormalizedExactMatchScore:F3}</td>");
+                    html.AppendLine($"                        <td>{result.NormalizedPositionalAccuracy:F3}</td>");
+                    html.AppendLine($"                        <td>{result.NormalizedLevenshteinDistance}</td>");
+                    html.AppendLine($"                        <td>{result.NormalizedLongestCommonSubsequence}</td>");
+                    html.AppendLine($"                        <td>{result.GroundTruthMoves}</td>");
+                    html.AppendLine($"                        <td>{result.NormalizedMoves}</td>");
+                }
+                else
+                {
+                    html.AppendLine($"                        <td>{result.ExactMatchScore:F3}</td>");
+                    html.AppendLine($"                        <td>{result.PositionalAccuracy:F3}</td>");
+                    html.AppendLine($"                        <td>{result.LevenshteinDistance}</td>");
+                    html.AppendLine($"                        <td>{result.LongestCommonSubsequence}</td>");
+                    html.AppendLine($"                        <td>{result.GroundTruthMoves}</td>");
+                    html.AppendLine($"                        <td>{result.ExtractedMoves}</td>");
+                }
+                
+                html.AppendLine($"                        <td>{result.ProcessingTimeSeconds:F2}s</td>");
+            }
+            else
+            {
+                html.AppendLine($"                        <td colspan=\"8\">{result.ErrorMessage}</td>");
+            }
+
+            html.AppendLine("                    </tr>");
+        }
+
+        html.AppendLine("                </tbody>");
+        html.AppendLine("            </table>");
+        html.AppendLine("        </div>");
     }
 
     static void PrintSummary(List<EvaluationRunResult> results)
@@ -430,6 +558,15 @@ class EvaluationRunResult
     public string? GeneratedPgn { get; set; }
     public List<string> GroundTruthMoveList { get; set; } = new();
     public List<string> ExtractedMoveList { get; set; } = new();
+    
+    // Normalized move metrics
+    public double NormalizedNormalizedScore { get; set; }
+    public double NormalizedExactMatchScore { get; set; }
+    public double NormalizedPositionalAccuracy { get; set; }
+    public int NormalizedLevenshteinDistance { get; set; }
+    public int NormalizedLongestCommonSubsequence { get; set; }
+    public int NormalizedMoves { get; set; }
+    public List<string> NormalizedMoveList { get; set; } = new();
 }
 
 // DTOs matching the API response
@@ -442,6 +579,7 @@ class EvaluationResultResponse
     public string? ErrorMessage { get; set; }
     public double ProcessingTimeSeconds { get; set; }
     public EvaluationMetricsDto Metrics { get; set; } = new();
+    public EvaluationMetricsDto? NormalizedMetrics { get; set; }
     public MoveCountsDto MoveCounts { get; set; } = new();
     public MovesDto Moves { get; set; } = new();
     public string? GeneratedPgn { get; set; }
@@ -460,11 +598,13 @@ class MoveCountsDto
 {
     public int GroundTruthMoves { get; set; }
     public int ExtractedMoves { get; set; }
+    public int NormalizedMoves { get; set; }
 }
 
 class MovesDto
 {
     public List<string> GroundTruth { get; set; } = new();
     public List<string> Extracted { get; set; } = new();
+    public List<string> Normalized { get; set; } = new();
 }
 
