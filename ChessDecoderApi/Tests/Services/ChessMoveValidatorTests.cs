@@ -398,7 +398,7 @@ namespace ChessDecoderApi.Tests.Services
                 Moves = new List<ValidatedMove>
                 {
                     new ValidatedMove { MoveNumber = 1, Notation = "e4", NormalizedNotation = "e4", ValidationStatus = "valid" },
-                    new ValidatedMove { MoveNumber = 2, Notation = "invalid", NormalizedNotation = "invalid", ValidationStatus = "valid" }
+                    new ValidatedMove { MoveNumber = 2, Notation = "invalid", NormalizedNotation = "invalid", ValidationStatus = "error" }
                 }
             };
 
