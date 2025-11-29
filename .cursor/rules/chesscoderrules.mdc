@@ -1,3 +1,13 @@
 ---
+description: Use it if you are going to utilise Atlasian MCP server
+globs: 
 alwaysApply: false
 ---
+
+When using the Atlassian MCP tool in this project, always connect to the Atlassian/Jira instance at `https://paschalis-rompanos.atlassian.net/` for all Atlassian-related operations.
+
+
+---
+Atlassian MCP (Jira & Confluence)
+	•	Always use the Jira project PG, unless specified otherwise.
+	•	Always use Epic ChessScriber, unless specified otherwise.
