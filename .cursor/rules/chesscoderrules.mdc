@@ -1,9 +1,7 @@
 ---
 description: AI PM Issue Management and Implementation Rules
-globs: 
-alwaysApply: true
+alwaysApply: false
 ---
-
 # Chess Decoder AI PM Rules
 
 ## Rule 1: Creating New Tasks (PG-XXX Issues)

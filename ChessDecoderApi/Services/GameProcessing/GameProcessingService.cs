@@ -142,7 +142,7 @@ public class GameProcessingService : IGameProcessingService
             imagePathForProcessing = croppedFilePath;
         }
 
-        // Create PGN metadata from request if provided
+        // Create PGN metadata from request if any field is provided
         PgnMetadata? pgnMetadata = null;
         if (!string.IsNullOrWhiteSpace(request.WhitePlayer) || 
             !string.IsNullOrWhiteSpace(request.BlackPlayer) || 
@@ -151,10 +151,11 @@ public class GameProcessingService : IGameProcessingService
         {
             pgnMetadata = new PgnMetadata
             {
-                WhitePlayer = request.WhitePlayer,
-                BlackPlayer = request.BlackPlayer,
+                // Only set fields that are actually provided (non-null/non-empty)
+                WhitePlayer = string.IsNullOrWhiteSpace(request.WhitePlayer) ? null : request.WhitePlayer,
+                BlackPlayer = string.IsNullOrWhiteSpace(request.BlackPlayer) ? null : request.BlackPlayer,
                 GameDate = request.GameDate,
-                Round = request.Round
+                Round = string.IsNullOrWhiteSpace(request.Round) ? null : request.Round
             };
         }
 
