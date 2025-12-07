@@ -128,6 +128,104 @@ public class GameControllerTests
         Assert.IsType<NotFoundObjectResult>(result);
     }
 
+    [Fact]
+    public async Task UpdateGameMetadata_Success_ReturnsOk()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+        var request = new UpdateGameMetadataRequest
+        {
+            WhitePlayer = "John Doe",
+            BlackPlayer = "Jane Smith",
+            GameDate = new DateTime(2025, 12, 7),
+            Round = "1"
+        };
+        _gameManagementServiceMock
+            .Setup(x => x.UpdateGameMetadataAsync(gameId, request))
+            .ReturnsAsync(true);
+
+        // Act
+        var result = await _controller.UpdateGameMetadata(gameId, request);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        Assert.NotNull(okResult.Value);
+    }
+
+    [Fact]
+    public async Task UpdateGameMetadata_GameNotFound_ReturnsNotFound()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+        var request = new UpdateGameMetadataRequest
+        {
+            WhitePlayer = "John Doe"
+        };
+        _gameManagementServiceMock
+            .Setup(x => x.UpdateGameMetadataAsync(gameId, request))
+            .ReturnsAsync(false);
+
+        // Act
+        var result = await _controller.UpdateGameMetadata(gameId, request);
+
+        // Assert
+        var notFoundResult = Assert.IsType<NotFoundObjectResult>(result);
+        Assert.NotNull(notFoundResult.Value);
+    }
+
+    [Fact]
+    public async Task UpdateGameMetadata_Exception_ReturnsInternalServerError()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+        var request = new UpdateGameMetadataRequest
+        {
+            WhitePlayer = "John Doe"
+        };
+        _gameManagementServiceMock
+            .Setup(x => x.UpdateGameMetadataAsync(gameId, request))
+            .ThrowsAsync(new Exception("Database error"));
+
+        // Act
+        var result = await _controller.UpdateGameMetadata(gameId, request);
+
+        // Assert
+        var statusCodeResult = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(500, statusCodeResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetGame_WithMetadata_ReturnsGameWithMetadata()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+        var gameDetails = new GameDetailsResponse
+        {
+            GameId = gameId,
+            UserId = "test-user",
+            Title = "Test Game",
+            PgnContent = "[Date \"2025.12.07\"]\n[White \"John Doe\"]\n[Black \"Jane Smith\"]\n\n1. e4 e5 *",
+            WhitePlayer = "John Doe",
+            BlackPlayer = "Jane Smith",
+            GameDate = new DateTime(2025, 12, 7),
+            Round = "1"
+        };
+        _gameManagementServiceMock
+            .Setup(x => x.GetGameByIdAsync(gameId))
+            .ReturnsAsync(gameDetails);
+
+        // Act
+        var result = await _controller.GetGame(gameId);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        var response = Assert.IsType<GameDetailsResponse>(okResult.Value);
+        Assert.Equal("John Doe", response.WhitePlayer);
+        Assert.Equal("Jane Smith", response.BlackPlayer);
+        Assert.Equal(new DateTime(2025, 12, 7), response.GameDate);
+        Assert.Equal("1", response.Round);
+    }
+
     private GameUploadRequest CreateMockGameUploadRequest()
     {
         var fileMock = new Mock<IFormFile>();

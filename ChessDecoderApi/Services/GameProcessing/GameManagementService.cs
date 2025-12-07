@@ -154,11 +154,23 @@ public class GameManagementService : IGameManagementService
                 return false;
             }
 
-            // Update metadata fields
-            game.WhitePlayer = request.WhitePlayer;
-            game.BlackPlayer = request.BlackPlayer;
-            game.GameDate = request.GameDate;
-            game.Round = request.Round;
+            // Update metadata fields (only if provided)
+            if (request.WhitePlayer != null)
+            {
+                game.WhitePlayer = string.IsNullOrWhiteSpace(request.WhitePlayer) ? null : request.WhitePlayer;
+            }
+            if (request.BlackPlayer != null)
+            {
+                game.BlackPlayer = string.IsNullOrWhiteSpace(request.BlackPlayer) ? null : request.BlackPlayer;
+            }
+            if (request.GameDate.HasValue)
+            {
+                game.GameDate = request.GameDate;
+            }
+            if (request.Round != null)
+            {
+                game.Round = string.IsNullOrWhiteSpace(request.Round) ? null : request.Round;
+            }
 
             // Extract moves from existing PGN and regenerate with new metadata
             var (whiteMoves, blackMoves) = ExtractMovesFromPgn(game.PgnContent);

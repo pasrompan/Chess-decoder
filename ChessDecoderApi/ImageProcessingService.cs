@@ -993,10 +993,12 @@ namespace ChessDecoderApi.Services
             }
             
             // White player
-            sb.AppendLine($"[White \"{metadata?.WhitePlayer ?? "?"}\"]");
+            var whitePlayer = string.IsNullOrWhiteSpace(metadata?.WhitePlayer) ? "?" : metadata.WhitePlayer;
+            sb.AppendLine($"[White \"{whitePlayer}\"]");
             
             // Black player
-            sb.AppendLine($"[Black \"{metadata?.BlackPlayer ?? "?"}\"]");
+            var blackPlayer = string.IsNullOrWhiteSpace(metadata?.BlackPlayer) ? "?" : metadata.BlackPlayer;
+            sb.AppendLine($"[Black \"{blackPlayer}\"]");
             
             sb.AppendLine("[Result \"*\"]");
             sb.AppendLine();
