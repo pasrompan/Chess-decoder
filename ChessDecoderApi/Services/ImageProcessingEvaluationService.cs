@@ -101,9 +101,9 @@ namespace ChessDecoderApi.Services
                     imagePathForProcessing = croppedImagePath;
                 }
 
-                // Extract moves directly from the image
+                // Extract moves directly from the image (language is auto-detected)
                 var startTime = DateTime.UtcNow;
-                var (whiteMoves, blackMoves) = await _imageProcessingService.ExtractMovesFromImageToStringAsync(imagePathForProcessing, language);
+                var (whiteMoves, blackMoves) = await _imageProcessingService.ExtractMovesFromImageToStringAsync(imagePathForProcessing);
                 var extractedMoves = new List<string>();
                 int maxMoves = Math.Max(whiteMoves.Count, blackMoves.Count);
                 for (int i = 0; i < maxMoves; i++)

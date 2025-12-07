@@ -66,14 +66,197 @@ namespace ChessDecoderApi.Services
         }
 
         /// <summary>
+        /// Automatically detects the language of chess notation in an image
+        /// </summary>
+        /// <param name="imagePath">Path to the image file</param>
+        /// <returns>Detected language ("Greek" or "English", defaults to "English")</returns>
+        private async Task<string> DetectLanguageAsync(string imagePath)
+        {
+            try
+            {
+                Image<Rgba32> image;
+                
+                // Check if it's a URL or local file path
+                if (Uri.TryCreate(imagePath, UriKind.Absolute, out var uri) && (uri.Scheme == "http" || uri.Scheme == "https"))
+                {
+                    // Download image from URL
+                    using var httpClient = _httpClientFactory.CreateClient();
+                    var downloadedBytes = await httpClient.GetByteArrayAsync(imagePath);
+                    image = Image.Load<Rgba32>(downloadedBytes);
+                }
+                else
+                {
+                    // Local file path
+                    if (!File.Exists(imagePath))
+                    {
+                        _logger.LogWarning("Image file not found for language detection, defaulting to English: {ImagePath}", imagePath);
+                        return "English";
+                    }
+                    image = Image.Load<Rgba32>(imagePath);
+                }
+
+                // Convert image to bytes for OCR
+                byte[] imageBytes;
+                using (var ms = new MemoryStream())
+                {
+                    image.SaveAsJpeg(ms);
+                    imageBytes = ms.ToArray();
+                }
+
+                // Perform a quick OCR pass to extract sample text
+                // Use a smaller, faster prompt for detection
+                string sampleText = await ExtractTextFromImageForDetectionAsync(imageBytes);
+
+                // Analyze the extracted characters to identify language-specific patterns
+                int greekCharCount = 0;
+                int englishCharCount = 0;
+
+                // Greek characters: α, β, γ, δ, ε, ζ, η, θ, Π, Α, Β, Ι, Ρ
+                var greekChars = new[] { "α", "β", "γ", "δ", "ε", "ζ", "η", "θ", "Π", "Α", "Β", "Ι", "Ρ", "A", "B", "I", "P" };
+                // English notation: R, N, B, Q, K, a-h
+                var englishChars = new[] { "R", "N", "B", "Q", "K", "a", "b", "c", "d", "e", "f", "g", "h" };
+
+                foreach (var greekChar in greekChars)
+                {
+                    if (sampleText.Contains(greekChar, StringComparison.OrdinalIgnoreCase))
+                    {
+                        greekCharCount++;
+                    }
+                }
+
+                foreach (var englishChar in englishChars)
+                {
+                    if (sampleText.Contains(englishChar, StringComparison.OrdinalIgnoreCase))
+                    {
+                        englishCharCount++;
+                    }
+                }
+
+                // Determine language based on character presence
+                // If we find Greek characters, it's likely Greek notation
+                if (greekCharCount > 0 && greekCharCount >= englishCharCount)
+                {
+                    _logger.LogInformation("Detected Greek notation in image");
+                    return "Greek";
+                }
+
+                // Default to English if uncertain or if English characters are found
+                _logger.LogInformation("Detected English notation in image (or defaulting to English)");
+                return "English";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error during language detection, defaulting to English");
+                return "English";
+            }
+        }
+
+        /// <summary>
+        /// Performs a quick OCR pass on the image to extract sample text for language detection
+        /// </summary>
+        private async Task<string> ExtractTextFromImageForDetectionAsync(byte[] imageBytes)
+        {
+            try
+            {
+                // Use Gemini for quick detection (faster than full extraction)
+                string apiKey = Environment.GetEnvironmentVariable("GEMINI_API_KEY") ?? 
+                    _configuration["GEMINI_API_KEY"] ?? 
+                    throw new UnauthorizedAccessException("GEMINI_API_KEY environment variable not set");
+
+                var client = _httpClientFactory.CreateClient();
+                client.DefaultRequestHeaders.Add("x-goog-api-key", apiKey);
+                
+                var base64Image = Convert.ToBase64String(imageBytes);
+
+                // Simple prompt for quick detection - just ask for any text found
+                var promptText = "Extract any text you see in this chess notation image. Return only the raw text, no formatting. Focus on piece names and file letters.";
+
+                var requestData = new
+                {
+                    contents = new[]
+                    {
+                        new
+                        {
+                            parts = new object[]
+                            {
+                                new { text = promptText },
+                                new
+                                {
+                                    inline_data = new
+                                    {
+                                        mime_type = "image/jpeg",
+                                        data = base64Image
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    generationConfig = new
+                    {
+                        maxOutputTokens = 500, // Small token limit for quick detection
+                        response_mime_type = "text/plain"
+                    }
+                };
+
+                var content = new StringContent(
+                    JsonSerializer.Serialize(requestData),
+                    Encoding.UTF8,
+                    "application/json");
+
+                var response = await client.PostAsync("https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent", content);
+                
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning("Language detection OCR failed, defaulting to English");
+                    return "";
+                }
+
+                var responseContent = await response.Content.ReadAsStringAsync();
+                using var jsonDoc = JsonDocument.Parse(responseContent);
+                
+                if (!jsonDoc.RootElement.TryGetProperty("candidates", out var candidates) || candidates.GetArrayLength() == 0)
+                {
+                    return "";
+                }
+
+                var firstCandidate = candidates[0];
+                if (!firstCandidate.TryGetProperty("content", out var contentElement) || contentElement.ValueKind == JsonValueKind.Null)
+                {
+                    return "";
+                }
+
+                if (!contentElement.TryGetProperty("parts", out var parts) || parts.GetArrayLength() == 0)
+                {
+                    return "";
+                }
+
+                var firstPart = parts[0];
+                if (!firstPart.TryGetProperty("text", out var textElement))
+                {
+                    return "";
+                }
+
+                return textElement.GetString() ?? "";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error in quick OCR for language detection");
+                return "";
+            }
+        }
+
+        /// <summary>
         /// Extracts chess moves from an image by sending the whole image to LLM.
         /// The LLM is instructed to parse columns and return moves in JSON format.
         /// </summary>
         /// <param name="imagePath">Path to the chess image or URL</param>
-        /// <param name="language">Language for chess notation (default: English)</param>
         /// <returns>Tuple of two lists: whiteMoves and blackMoves</returns>
-        public virtual async Task<(List<string> whiteMoves, List<string> blackMoves)> ExtractMovesFromImageToStringAsync(string imagePath, string language = "English")
+        public virtual async Task<(List<string> whiteMoves, List<string> blackMoves)> ExtractMovesFromImageToStringAsync(string imagePath)
         {
+            // Auto-detect language before processing
+            string language = await DetectLanguageAsync(imagePath);
+            _logger.LogInformation($"Auto-detected language: {language} for image: {imagePath}");
+
             Image<Rgba32> image;
             
             // Check if it's a URL or local file path
@@ -264,13 +447,12 @@ namespace ChessDecoderApi.Services
         /// Processes a chess image and returns the moves as a PGN string
         /// </summary>
         /// <param name="imagePath">Path to the chess image or URL</param>
-        /// <param name="language">Language for chess notation (default: English)</param>
         /// <param name="metadata">Optional metadata for PGN generation (player names, date, round)</param>
         /// <returns>PGN formatted string containing the chess moves</returns>
-        public async Task<ChessGameResponse> ProcessImageAsync(string imagePath, string language = "English", PgnMetadata? metadata = null)
+        public async Task<ChessGameResponse> ProcessImageAsync(string imagePath, PgnMetadata? metadata = null)
         {
-            // Extract moves from the image using whole image processing
-            var (whiteMoves, blackMoves) = await ExtractMovesFromImageToStringAsync(imagePath, language);
+            // Extract moves from the image using whole image processing (language is auto-detected)
+            var (whiteMoves, blackMoves) = await ExtractMovesFromImageToStringAsync(imagePath);
 
             // Validate white and black moves separately
             var whiteValidation = _chessMoveValidator.ValidateMoves(whiteMoves.ToArray());

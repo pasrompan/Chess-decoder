@@ -96,7 +96,7 @@ public class GameProcessingMetadataTests
         };
 
         _imageExtractionServiceMock
-            .Setup(x => x.ProcessImageAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<PgnMetadata>()))
+            .Setup(x => x.ProcessImageAsync(It.IsAny<string>(), It.IsAny<PgnMetadata>()))
             .ReturnsAsync(chessGameResponse);
 
         _gameRepositoryMock.Setup(x => x.CreateAsync(It.IsAny<ChessGame>())).ReturnsAsync((ChessGame g) => g);
@@ -144,7 +144,7 @@ public class GameProcessingMetadataTests
         };
 
         _imageExtractionServiceMock
-            .Setup(x => x.ProcessImageAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<PgnMetadata>()))
+            .Setup(x => x.ProcessImageAsync(It.IsAny<string>(), It.IsAny<PgnMetadata>()))
             .ReturnsAsync(chessGameResponse);
 
         _gameRepositoryMock.Setup(x => x.CreateAsync(It.IsAny<ChessGame>())).ReturnsAsync((ChessGame g) => g);
@@ -191,7 +191,7 @@ public class GameProcessingMetadataTests
         };
 
         _imageExtractionServiceMock
-            .Setup(x => x.ProcessImageAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<PgnMetadata>()))
+            .Setup(x => x.ProcessImageAsync(It.IsAny<string>(), It.IsAny<PgnMetadata>()))
             .ReturnsAsync(chessGameResponse);
 
         _gameRepositoryMock.Setup(x => x.CreateAsync(It.IsAny<ChessGame>())).ReturnsAsync((ChessGame g) => g);
@@ -238,7 +238,7 @@ public class GameProcessingMetadataTests
         };
 
         _imageExtractionServiceMock
-            .Setup(x => x.ProcessImageAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<PgnMetadata>()))
+            .Setup(x => x.ProcessImageAsync(It.IsAny<string>(), It.IsAny<PgnMetadata>()))
             .ReturnsAsync(chessGameResponse);
 
         _gameRepositoryMock.Setup(x => x.CreateAsync(It.IsAny<ChessGame>())).ReturnsAsync((ChessGame g) => g);
@@ -250,7 +250,6 @@ public class GameProcessingMetadataTests
 
         // Assert
         _imageExtractionServiceMock.Verify(x => x.ProcessImageAsync(
-            It.IsAny<string>(),
             It.IsAny<string>(),
             It.Is<PgnMetadata>(m =>
                 m.WhitePlayer == "John Doe" &&
@@ -279,7 +278,6 @@ public class GameProcessingMetadataTests
         {
             Image = fileMock.Object,
             UserId = "test-user",
-            Language = "English",
             AutoCrop = false,
             WhitePlayer = "John Doe",
             BlackPlayer = "Jane Smith",
@@ -305,7 +303,6 @@ public class GameProcessingMetadataTests
         {
             Image = fileMock.Object,
             UserId = "test-user",
-            Language = "English",
             AutoCrop = false,
             WhitePlayer = "John Doe",
             BlackPlayer = null,
@@ -331,7 +328,6 @@ public class GameProcessingMetadataTests
         {
             Image = fileMock.Object,
             UserId = "test-user",
-            Language = "English",
             AutoCrop = false,
             WhitePlayer = null,
             BlackPlayer = null,
