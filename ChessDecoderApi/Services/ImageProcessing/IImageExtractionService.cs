@@ -1,3 +1,4 @@
+using ChessDecoderApi.DTOs;
 using ChessDecoderApi.Models;
 
 namespace ChessDecoderApi.Services.ImageProcessing;
