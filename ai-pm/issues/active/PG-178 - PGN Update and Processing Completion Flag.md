@@ -188,6 +188,11 @@ The system should:
   - Badge or icon showing "Processing Complete"
   - Display completion timestamp if available
   - Visual feedback when completion flag is set
+- **GTM Analytics Integration** (for completion rate tracking):
+  - Track event when completion flag is set (on export to Lichess/Chess.com)
+  - Track event when PGN is auto-saved
+  - Track completion timestamp for analytics
+  - Enable backend to query completion rate for GTM metrics
 
 **Key Integration Points:**
 - Integrate with existing `NotationDisplay` component
@@ -410,6 +415,17 @@ src/
 
 **Impact Description**: 
 This feature improves data persistence and user experience by ensuring that user edits to PGN content are saved to the database, preventing data loss. The processing completion flag provides a clear indicator that the user has completed the processing cycle with at least one acceptable PGN value, which can be useful for analytics, user progress tracking, and future features like game history or export workflows. This feature enhances the reliability of the system and provides better user feedback about the state of their processed games.
+
+**GTM Alignment**:
+- **Critical KPI Tracking**: Enables tracking of "Processing Completion Rate" - a key Phase 1 metric (target: ≥40%)
+- **Activation Measurement**: Completion flag indicates users successfully completed full workflow (upload → edit → export)
+- **Retention Indicator**: Users who complete games are more likely to return
+- **Phase 2 Readiness**: Completion rate is a trigger metric for moving to monetization phase
+- **Key Metrics to Track**:
+  - Processing completion rate: % of users who export at least one game (target: ≥40%)
+  - Average time to completion (from upload to export)
+  - Edit frequency (how many edits before completion)
+  - Completion rate by user segment (first-time vs. returning users)
 
 ## Effort Estimation
 
