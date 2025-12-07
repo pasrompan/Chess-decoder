@@ -54,6 +54,15 @@ public class ChessGame
     [FirestoreProperty]
     public string? Round { get; set; }
     
+    [FirestoreProperty]
+    public bool ProcessingCompleted { get; set; } = false;
+    
+    [FirestoreProperty]
+    public DateTime? LastEditedAt { get; set; }
+    
+    [FirestoreProperty]
+    public int EditCount { get; set; } = 0;
+    
     // Navigation properties - NOT stored in Firestore
     [ForeignKey("UserId")]
     [NotMapped]

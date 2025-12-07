@@ -159,5 +159,92 @@ public class GameController : ControllerBase
             return StatusCode(500, new { message = "Failed to delete game" });
         }
     }
+
+    /// <summary>
+    /// Update PGN content for a game
+    /// </summary>
+    [HttpPut("{gameId}/pgn")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> UpdatePgn(Guid gameId, [FromBody] UpdatePgnRequest request)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(request.UserId))
+            {
+                return BadRequest(new { message = "UserId is required" });
+            }
+
+            if (string.IsNullOrWhiteSpace(request.PgnContent))
+            {
+                return BadRequest(new { message = "PGN content cannot be empty" });
+            }
+
+            var result = await _gameManagementService.UpdatePgnContentAsync(gameId, request.UserId, request.PgnContent);
+            
+            if (result == null)
+            {
+                return NotFound(new { message = "Game not found" });
+            }
+            
+            return Ok(result);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogWarning(ex, "Unauthorized access attempt to update game {GameId}", gameId);
+            return Unauthorized(new { message = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogWarning(ex, "Invalid argument for game {GameId}: {Message}", gameId, ex.Message);
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating PGN for game {GameId}", gameId);
+            return StatusCode(500, new { message = "Failed to update PGN content" });
+        }
+    }
+
+    /// <summary>
+    /// Mark processing as completed for a game
+    /// </summary>
+    [HttpPut("{gameId}/complete")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> MarkProcessingComplete(Guid gameId, [FromBody] CompleteProcessingRequest request)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(request.UserId))
+            {
+                return BadRequest(new { message = "UserId is required" });
+            }
+
+            var result = await _gameManagementService.MarkProcessingCompleteAsync(gameId, request.UserId);
+            
+            if (result == null)
+            {
+                return NotFound(new { message = "Game not found" });
+            }
+            
+            return Ok(result);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogWarning(ex, "Unauthorized access attempt to mark game {GameId} as complete", gameId);
+            return Unauthorized(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error marking game {GameId} as complete", gameId);
+            return StatusCode(500, new { message = "Failed to mark processing as complete" });
+        }
+    }
 }
 

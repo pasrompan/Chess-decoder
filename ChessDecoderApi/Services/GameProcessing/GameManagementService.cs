@@ -56,6 +56,9 @@ public class GameManagementService : IGameManagementService
             BlackPlayer = game.BlackPlayer,
             GameDate = game.GameDate,
             Round = game.Round,
+            ProcessingCompleted = game.ProcessingCompleted,
+            LastEditedAt = game.LastEditedAt,
+            EditCount = game.EditCount,
             Statistics = statistics != null ? new GameStatisticsDto
             {
                 TotalMoves = statistics.TotalMoves,
@@ -239,6 +242,102 @@ public class GameManagementService : IGameManagementService
         }
         
         return (whiteMoves, blackMoves);
+    }
+
+    public async Task<GameDetailsResponse?> UpdatePgnContentAsync(Guid gameId, string userId, string pgnContent)
+    {
+        try
+        {
+            var gameRepo = await _repositoryFactory.CreateChessGameRepositoryAsync();
+            var game = await gameRepo.GetByIdAsync(gameId);
+            
+            if (game == null)
+            {
+                _logger.LogWarning("Game {GameId} not found for PGN update", gameId);
+                return null;
+            }
+
+            // Verify user owns the game
+            if (game.UserId != userId)
+            {
+                _logger.LogWarning("User {UserId} attempted to update game {GameId} owned by {OwnerId}", userId, gameId, game.UserId);
+                throw new UnauthorizedAccessException("You do not have permission to update this game");
+            }
+
+            // Validate PGN content is not empty
+            if (string.IsNullOrWhiteSpace(pgnContent))
+            {
+                throw new ArgumentException("PGN content cannot be empty", nameof(pgnContent));
+            }
+
+            // Update PGN content
+            game.PgnContent = pgnContent;
+            game.LastEditedAt = DateTime.UtcNow;
+            game.EditCount++;
+
+            // Save updated game
+            await gameRepo.UpdateAsync(game);
+            
+            _logger.LogInformation("Successfully updated PGN content for game {GameId} by user {UserId}", gameId, userId);
+
+            // Return updated game details
+            return await GetGameByIdAsync(gameId);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            throw;
+        }
+        catch (ArgumentException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating PGN content for game {GameId}", gameId);
+            throw;
+        }
+    }
+
+    public async Task<GameDetailsResponse?> MarkProcessingCompleteAsync(Guid gameId, string userId)
+    {
+        try
+        {
+            var gameRepo = await _repositoryFactory.CreateChessGameRepositoryAsync();
+            var game = await gameRepo.GetByIdAsync(gameId);
+            
+            if (game == null)
+            {
+                _logger.LogWarning("Game {GameId} not found for completion marking", gameId);
+                return null;
+            }
+
+            // Verify user owns the game
+            if (game.UserId != userId)
+            {
+                _logger.LogWarning("User {UserId} attempted to mark game {GameId} as complete, owned by {OwnerId}", userId, gameId, game.UserId);
+                throw new UnauthorizedAccessException("You do not have permission to update this game");
+            }
+
+            // Set completion flag (idempotent - can be called multiple times)
+            game.ProcessingCompleted = true;
+
+            // Save updated game
+            await gameRepo.UpdateAsync(game);
+            
+            _logger.LogInformation("Successfully marked game {GameId} as processing complete by user {UserId}", gameId, userId);
+
+            // Return updated game details
+            return await GetGameByIdAsync(gameId);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error marking game {GameId} as complete", gameId);
+            throw;
+        }
     }
 }
 
