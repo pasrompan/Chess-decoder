@@ -1,14 +1,14 @@
 ---
 id: PG-177
 status: active
-priority_score: 0.0
-effort: 0
-impact: 0
+priority_score: 1.2500
+effort: 4
+impact: 5
 dependencies: []
 jira_key: "PG-177"
 jira_url: "https://paschalis-rompanos.atlassian.net/browse/PG-177"
 created_date: "2025-11-29"
-updated_date: "2025-11-29"
+updated_date: 2025-12-07
 plan_type: agent_plan
 executable: false
 ---

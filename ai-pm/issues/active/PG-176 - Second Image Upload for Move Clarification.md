@@ -1,14 +1,14 @@
 ---
 id: PG-176
 status: active
-priority_score: 0.0
-effort: 0
-impact: 0
-dependencies: []
+priority_score: .6428
+effort: 7
+impact: 8
+dependencies: ["ai-pm/issues/active/PG-156 - Project and History File System for Image Uploads.md"]
 jira_key: "PG-176"
 jira_url: "https://paschalis-rompanos.atlassian.net/browse/PG-176"
 created_date: "2025-11-29"
-updated_date: "2025-11-29"
+updated_date: 2025-12-07
 plan_type: agent_plan
 executable: false
 ---

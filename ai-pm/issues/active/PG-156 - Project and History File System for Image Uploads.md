@@ -1,14 +1,14 @@
 ---
 id: PG-156
 status: active
-priority_score: 0.0
-effort: 0
-impact: 0
+priority_score: .8333
+effort: 6
+impact: 5
 dependencies: []
 jira_key: "PG-156"
 jira_url: "https://paschalis-rompanos.atlassian.net/browse/PG-156"
 created_date: "2025-11-29"
-updated_date: "2025-11-29"
+updated_date: 2025-12-07
 plan_type: agent_plan
 executable: false
 ---

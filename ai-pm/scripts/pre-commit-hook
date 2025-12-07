@@ -1,0 +1,25 @@
+#!/bin/bash
+
+# Git pre-commit hook for AI PM prioritization
+# Runs the update-prioritization.sh script if issue files are modified.
+
+# Define the path to the prioritization script relative to the .git/hooks directory
+# Assuming this hook is in .git/hooks/ and the script is in ai-pm/scripts/
+PRIORITIZATION_SCRIPT="../../ai-pm/scripts/update-prioritization.sh"
+ISSUES_DIR="../../ai-pm/issues/active/"
+
+# Check if any files in the issues directory are staged for commit
+# git diff --cached --name-only checks staged files
+if git diff --cached --name-only | grep -q "^ai-pm/issues/active/"; then
+    echo "Detected changes in AI PM issue files. Running prioritization update..."
+    # Execute the prioritization script
+    "$PRIORITIZATION_SCRIPT"
+    
+    # Add the updated prioritized-issues.md and any modified issue files back to the staging area
+    git add "$ISSUES_DIR"*.md 2>/dev/null || true
+    git add "../../ai-pm/documentation/prioritized-issues.md" 2>/dev/null || true
+fi
+
+# Always allow the commit to proceed (non-blocking)
+exit 0
+

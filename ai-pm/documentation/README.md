@@ -1,18 +1,18 @@
 # AI PM Issue Tracking System
 
-This directory contains the AI Product Manager (PM) issue tracking system for the Chess-decoder project. The system provides automated issue prioritization, Jira integration, and dynamic updates on every commit.
+This directory contains the AI Product Manager (PM) issue tracking system for the Chess-decoder project. The system provides automated issue prioritization and dynamic updates on every commit.
 
 ## Overview
 
-The AI PM system manages project issues using markdown files with structured metadata. It automatically calculates priority scores based on dependencies, effort estimation, and impact, and can sync with Jira for centralized project management.
+The AI PM system manages project issues using markdown files with structured metadata. All issues are stored locally in the repository under the `ai-pm/` folder. The system automatically calculates priority scores based on dependencies, effort estimation, and impact.
 
 ## Features
 
 - **Markdown-based Issue Tracking**: Human-readable issue files with structured metadata
 - **Dynamic Prioritization**: Automatic priority calculation on every commit
-- **Jira Integration**: Bidirectional sync with Jira project PG (Epic ChessScriber)
 - **Dependency Tracking**: Automatic detection of blocked issues
 - **Archive System**: Organized storage for completed and deprioritized issues
+- **Repository-based**: All issues stored in git for version control and collaboration
 
 ## Folder Structure
 
@@ -55,19 +55,13 @@ Install the pre-commit hook to automatically update priorities:
 
 ### 3. View Prioritized Issues
 
-After committing, view the prioritized list:
+After committing, view the automatically generated prioritized list:
 
 ```bash
 cat ai-pm/documentation/prioritized-issues.md
 ```
 
-### 4. Sync with Jira
-
-Sync issues with Jira (requires MCP server):
-
-```bash
-./ai-pm/scripts/sync-jira.sh
-```
+The prioritized list shows all active issues sorted by their calculated priority scores, helping you identify which issues to tackle first.
 
 ## Issue Format
 
@@ -81,8 +75,6 @@ priority_score: 2.5
 effort: 3
 impact: 8
 dependencies: []
-jira_key: "PG-123"
-jira_url: "https://paschalis-rompanos.atlassian.net/browse/PG-123"
 created_date: "2025-01-20"
 updated_date: "2025-01-20"
 ---
@@ -112,23 +104,9 @@ See [Prioritization Framework](./prioritization-framework.md) for details.
 ./ai-pm/scripts/update-prioritization.sh
 ```
 
-### Sync with Jira
-
-```bash
-# Sync both directions
-./ai-pm/scripts/sync-jira.sh
-
-# Sync to Jira only
-./ai-pm/scripts/sync-jira.sh to-jira
-
-# Sync from Jira only
-./ai-pm/scripts/sync-jira.sh from-jira
-```
-
 ## Documentation
 
 - [Prioritization Framework](./prioritization-framework.md) - How priority scores are calculated
-- [Jira Integration](./jira-integration.md) - How to sync with Jira
 
 ## Workflow
 
@@ -139,10 +117,6 @@ See [Prioritization Framework](./prioritization-framework.md) for details.
 5. **Work on Issue**: Update status and progress
 6. **Complete**: Move to `archive/completed/` when done
 
-## Integration with Jira
-
-The system integrates with Jira project **PG** under Epic **ChessScriber**. See [Jira Integration Guide](./jira-integration.md) for setup and usage.
-
 ## Troubleshooting
 
 ### Priority scores not updating
@@ -150,19 +124,15 @@ The system integrates with Jira project **PG** under Epic **ChessScriber**. See 
 - Ensure the git hook is installed: `./ai-pm/scripts/install-hook.sh`
 - Check that issues have valid impact and effort values
 - Verify the script is executable: `chmod +x ai-pm/scripts/update-prioritization.sh`
-
-### Jira sync not working
-
-- Verify MCP server is configured
-- Check Jira Cloud ID is set
-- Ensure you have access to project PG
+- Run the prioritization script manually to see any error messages
 
 ## Contributing
 
 When adding new issues:
 1. Use the template from `issues/templates/`
-2. Follow the naming convention: `ISSUE-XXX.md`
-3. Fill in all required metadata
+2. Follow the naming convention: `ISSUE-XXX.md` or use descriptive names
+3. Fill in all required metadata (impact, effort, dependencies)
 4. Set realistic impact and effort estimates
 5. Link dependencies if applicable
+6. Commit changes to trigger automatic prioritization updates
 
