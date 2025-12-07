@@ -1,16 +1,43 @@
 #!/bin/bash
 
 # Git pre-commit hook for AI PM prioritization
-# Runs the update-prioritization.sh script if issue files are modified.
+# Runs the update-prioritization.sh script if issue files are modified, moved, or deleted.
 
 # Define the path to the prioritization script relative to the .git/hooks directory
 # Assuming this hook is in .git/hooks/ and the script is in ai-pm/scripts/
 PRIORITIZATION_SCRIPT="../../ai-pm/scripts/update-prioritization.sh"
 ISSUES_DIR="../../ai-pm/issues/active/"
 
-# Check if any files in the issues directory are staged for commit
-# git diff --cached --name-only checks staged files
-if git diff --cached --name-only | grep -q "^ai-pm/issues/active/"; then
+# Check if any files in the active issues directory are staged for commit
+# This includes: modifications, additions, deletions, and moves
+SHOULD_RUN=false
+
+# Get all staged file changes
+STAGED_CHANGES=$(git diff --cached --name-status 2>/dev/null)
+
+# Check for files in active/ directory (any status: added, modified, deleted)
+if echo "$STAGED_CHANGES" | grep -q "^[AMD].*ai-pm/issues/active/"; then
+    SHOULD_RUN=true
+fi
+
+# Check for files being renamed/moved FROM active/ directory
+# git diff --cached --name-status shows: R<similarity> old_path -> new_path
+# Example: "R100    ai-pm/issues/active/file.md    ai-pm/issues/archive/completed/file.md"
+if echo "$STAGED_CHANGES" | grep -E "^R" | grep -q "ai-pm/issues/active/"; then
+    SHOULD_RUN=true
+fi
+
+# Check for files being moved TO active/ directory (from archive or elsewhere)
+if echo "$STAGED_CHANGES" | grep -E "^R" | grep -q "-> ai-pm/issues/active/"; then
+    SHOULD_RUN=true
+fi
+
+# Also check --name-only for any paths matching active/ (catches edge cases)
+if git diff --cached --name-only 2>/dev/null | grep -q "^ai-pm/issues/active/"; then
+    SHOULD_RUN=true
+fi
+
+if [ "$SHOULD_RUN" = true ]; then
     echo "Detected changes in AI PM issue files. Running prioritization update..."
     # Execute the prioritization script
     "$PRIORITIZATION_SCRIPT"
