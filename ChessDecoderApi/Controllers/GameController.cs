@@ -108,6 +108,33 @@ public class GameController : ControllerBase
     }
 
     /// <summary>
+    /// Update game metadata (player details, date, round)
+    /// </summary>
+    [HttpPut("{gameId}/metadata")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> UpdateGameMetadata(Guid gameId, [FromBody] UpdateGameMetadataRequest request)
+    {
+        try
+        {
+            var result = await _gameManagementService.UpdateGameMetadataAsync(gameId, request);
+            
+            if (!result)
+            {
+                return NotFound(new { message = "Game not found" });
+            }
+            
+            return Ok(new { message = "Game metadata updated successfully" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating metadata for game {GameId}", gameId);
+            return StatusCode(500, new { message = "Failed to update game metadata" });
+        }
+    }
+
+    /// <summary>
     /// Delete a chess game
     /// </summary>
     [HttpDelete("{gameId}")]

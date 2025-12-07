@@ -1,3 +1,4 @@
+using ChessDecoderApi.DTOs;
 using ChessDecoderApi.Models;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
@@ -6,11 +7,11 @@ namespace ChessDecoderApi.Services
 {
     public interface IImageProcessingService
     {
-        Task<ChessGameResponse> ProcessImageAsync(string imagePath, string language = "English");
+        Task<ChessGameResponse> ProcessImageAsync(string imagePath, string language = "English", PgnMetadata? metadata = null);
         Task<(List<string> whiteMoves, List<string> blackMoves)> ExtractMovesFromImageToStringAsync(string imagePath, string language = "English");
         Task<string> ExtractTextFromImageAsync(byte[] imageBytes, string language, string provider = "gemini");
         Task<string> ExtractTextFromImageAsyncWholeImage(byte[] imageBytes, string language, string provider = "gemini");
-        string GeneratePGNContentAsync(IEnumerable<string> whiteMoves, IEnumerable<string> blackMoves);
+        string GeneratePGNContentAsync(IEnumerable<string> whiteMoves, IEnumerable<string> blackMoves, PgnMetadata? metadata = null);
         Task<string> DebugUploadAsync(string imagePath, string promptText);
         List<int> SplitImageIntoColumns(Image<Rgba32> image, int expectedColumns = 6);
         List<int> SplitImageIntoColumns(Image<Rgba32> image, int expectedColumns, Rectangle? searchRegion);

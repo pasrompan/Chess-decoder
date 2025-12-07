@@ -41,7 +41,7 @@ namespace ChessDecoderApi.Tests.Services
                 .ReturnsAsync((new List<string> { "e4", "Nf3", "Bb5" }, new List<string> { "e5", "Nc6" }));
 
             mockImageService
-                .Setup(x => x.GeneratePGNContentAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<IEnumerable<string>>()))
+                .Setup(x => x.GeneratePGNContentAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<IEnumerable<string>>(), It.IsAny<ChessDecoderApi.DTOs.PgnMetadata>()))
                 .Returns("[Event \"Test Game\"]\n\n1. e4 e5 2. Nf3 Nc6 3. Bb5 *");
 
             var evaluationService = new ImageProcessingEvaluationService(
@@ -124,7 +124,7 @@ namespace ChessDecoderApi.Tests.Services
                 .ReturnsAsync((whiteMoves, blackMoves));
 
             mockImageService
-                .Setup(x => x.GeneratePGNContentAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<IEnumerable<string>>()))
+                .Setup(x => x.GeneratePGNContentAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<IEnumerable<string>>(), It.IsAny<ChessDecoderApi.DTOs.PgnMetadata>()))
                 .Returns("[Event \"Test Game\"]\n\n1. e4 c5 2. Nf3 Nc6 *");
 
             var evaluationService = new ImageProcessingEvaluationService(
@@ -165,7 +165,7 @@ namespace ChessDecoderApi.Tests.Services
                     $"LCS {result.LongestCommonSubsequence} should be between 20 and 30");
 
                 mockImageService.Verify(x => x.ExtractMovesFromImageToStringAsync(tempImagePath, "English"), Times.Once);
-                mockImageService.Verify(x => x.GeneratePGNContentAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<IEnumerable<string>>()), Times.Once);
+                mockImageService.Verify(x => x.GeneratePGNContentAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<IEnumerable<string>>(), It.IsAny<ChessDecoderApi.DTOs.PgnMetadata>()), Times.Once);
 
                 _output.WriteLine($"=== Realistic Game Evaluation Results ===");
                 _output.WriteLine($"Normalized Score: {result.NormalizedScore:F3}");

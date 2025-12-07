@@ -1,3 +1,4 @@
+using ChessDecoderApi.DTOs;
 using ChessDecoderApi.DTOs.Requests;
 using ChessDecoderApi.DTOs.Responses;
 using ChessDecoderApi.Models;
@@ -141,8 +142,25 @@ public class GameProcessingService : IGameProcessingService
             imagePathForProcessing = croppedFilePath;
         }
 
+        // Create PGN metadata from request if any field is provided
+        PgnMetadata? pgnMetadata = null;
+        if (!string.IsNullOrWhiteSpace(request.WhitePlayer) || 
+            !string.IsNullOrWhiteSpace(request.BlackPlayer) || 
+            request.GameDate.HasValue || 
+            !string.IsNullOrWhiteSpace(request.Round))
+        {
+            pgnMetadata = new PgnMetadata
+            {
+                // Only set fields that are actually provided (non-null/non-empty)
+                WhitePlayer = string.IsNullOrWhiteSpace(request.WhitePlayer) ? null : request.WhitePlayer,
+                BlackPlayer = string.IsNullOrWhiteSpace(request.BlackPlayer) ? null : request.BlackPlayer,
+                GameDate = request.GameDate,
+                Round = string.IsNullOrWhiteSpace(request.Round) ? null : request.Round
+            };
+        }
+
         var startTime = DateTime.UtcNow;
-        var result = await _imageExtractionService.ProcessImageAsync(imagePathForProcessing, request.Language);
+        var result = await _imageExtractionService.ProcessImageAsync(imagePathForProcessing, request.Language, pgnMetadata);
         var processingTime = DateTime.UtcNow - startTime;
 
         // Generate processed image
@@ -168,7 +186,11 @@ public class GameProcessingService : IGameProcessingService
             ProcessingTimeMs = (int)processingTime.TotalMilliseconds,
             IsValid = result.Validation?.Moves?.All(m => 
                 (m.WhiteMove?.ValidationStatus == "valid" || m.WhiteMove?.ValidationStatus == "warning") &&
-                (m.BlackMove?.ValidationStatus == "valid" || m.BlackMove?.ValidationStatus == "warning")) ?? false
+                (m.BlackMove?.ValidationStatus == "valid" || m.BlackMove?.ValidationStatus == "warning")) ?? false,
+            WhitePlayer = request.WhitePlayer,
+            BlackPlayer = request.BlackPlayer,
+            GameDate = request.GameDate,
+            Round = request.Round
         };
 
         var gameImage = new GameImage

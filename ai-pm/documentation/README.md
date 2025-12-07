@@ -25,6 +25,7 @@ ai-pm/
 │   │   └── deprioritized/ # Deprioritized issues
 │   └── templates/       # Issue templates
 ├── documentation/       # This documentation
+├── strategy/            # Strategic planning documents (GTM, product strategy)
 └── scripts/             # Automation scripts
 ```
 
@@ -107,6 +108,8 @@ See [Prioritization Framework](./prioritization-framework.md) for details.
 ## Documentation
 
 - [Prioritization Framework](./prioritization-framework.md) - How priority scores are calculated
+- [GTM Strategy](../strategy/GTM-Strategy.md) - Go-to-market strategy and user activation plan
+- [GTM Implementation Status](../strategy/GTM-Implementation-Status.md) - Issue alignment with GTM strategy and outreach readiness
 
 ## Workflow
 

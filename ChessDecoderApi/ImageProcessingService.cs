@@ -1,3 +1,4 @@
+using ChessDecoderApi.DTOs;
 using ChessDecoderApi.Models;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Processing;
@@ -264,8 +265,9 @@ namespace ChessDecoderApi.Services
         /// </summary>
         /// <param name="imagePath">Path to the chess image or URL</param>
         /// <param name="language">Language for chess notation (default: English)</param>
+        /// <param name="metadata">Optional metadata for PGN generation (player names, date, round)</param>
         /// <returns>PGN formatted string containing the chess moves</returns>
-        public async Task<ChessGameResponse> ProcessImageAsync(string imagePath, string language = "English")
+        public async Task<ChessGameResponse> ProcessImageAsync(string imagePath, string language = "English", PgnMetadata? metadata = null)
         {
             // Extract moves from the image using whole image processing
             var (whiteMoves, blackMoves) = await ExtractMovesFromImageToStringAsync(imagePath, language);
@@ -353,7 +355,7 @@ namespace ChessDecoderApi.Services
             }
 
             // Generate the PGN content using validated moves (with corrections applied)
-            var pgnContent = GeneratePGNContentAsync(validatedWhiteMoves, validatedBlackMoves);
+            var pgnContent = GeneratePGNContentAsync(validatedWhiteMoves, validatedBlackMoves, metadata);
 
             return new ChessGameResponse
             {
@@ -967,16 +969,37 @@ namespace ChessDecoderApi.Services
             };
         }
 
-        public string GeneratePGNContentAsync(IEnumerable<string> whiteMoves, IEnumerable<string> blackMoves)
+        public string GeneratePGNContentAsync(IEnumerable<string> whiteMoves, IEnumerable<string> blackMoves, PgnMetadata? metadata = null)
         {
             // Basic PGN structure
             var sb = new StringBuilder();
             //sb.AppendLine("[Event \"??\"]");
             //sb.AppendLine("[Site \"??\"]");
-            sb.AppendLine($"[Date \"{DateTime.Now:yyyy.MM.dd}\"]");
-            //sb.AppendLine("[Round \"??\"]");
-            sb.AppendLine("[White \"??\"]");
-            sb.AppendLine("[Black \"??\"]");
+            
+            // Date
+            if (metadata?.GameDate.HasValue == true)
+            {
+                sb.AppendLine($"[Date \"{metadata.GameDate.Value:yyyy.MM.dd}\"]");
+            }
+            else
+            {
+                sb.AppendLine("[Date \"????.??.??\"]");
+            }
+            
+            // Round (optional)
+            if (!string.IsNullOrWhiteSpace(metadata?.Round))
+            {
+                sb.AppendLine($"[Round \"{metadata.Round}\"]");
+            }
+            
+            // White player
+            var whitePlayer = string.IsNullOrWhiteSpace(metadata?.WhitePlayer) ? "?" : metadata.WhitePlayer;
+            sb.AppendLine($"[White \"{whitePlayer}\"]");
+            
+            // Black player
+            var blackPlayer = string.IsNullOrWhiteSpace(metadata?.BlackPlayer) ? "?" : metadata.BlackPlayer;
+            sb.AppendLine($"[Black \"{blackPlayer}\"]");
+            
             sb.AppendLine("[Result \"*\"]");
             sb.AppendLine();
 

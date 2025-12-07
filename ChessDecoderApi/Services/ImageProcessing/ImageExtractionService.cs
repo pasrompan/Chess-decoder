@@ -1,3 +1,4 @@
+using ChessDecoderApi.DTOs;
 using ChessDecoderApi.Models;
 
 namespace ChessDecoderApi.Services.ImageProcessing;
@@ -19,9 +20,9 @@ public class ImageExtractionService : IImageExtractionService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task<ChessGameResponse> ProcessImageAsync(string imagePath, string language = "English")
+    public async Task<ChessGameResponse> ProcessImageAsync(string imagePath, string language = "English", PgnMetadata? metadata = null)
     {
-        return await _imageProcessingService.ProcessImageAsync(imagePath, language);
+        return await _imageProcessingService.ProcessImageAsync(imagePath, language, metadata);
     }
 
     public async Task<(List<string> whiteMoves, List<string> blackMoves)> ExtractMovesFromImageToStringAsync(

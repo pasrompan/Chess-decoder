@@ -372,6 +372,15 @@ src/
 **Impact Description**: 
 This feature provides the foundation for version history and project management capabilities. It enables users to track changes over time and organize their chess game uploads into distinct projects. This is a foundational feature that will support future enhancements like version comparison, rollback functionality, and project-based organization of multiple games.
 
+**GTM Alignment**:
+- **Retention Feature**: Critical for Phase 1 retention rate (target: ≥30% users upload second game within 30 days)
+- **User Value**: Allows users to return and complete games later, reducing abandonment
+- **Activation Support**: Users can save work-in-progress and return, increasing likelihood of completing first game
+- **Key Metrics to Track**:
+  - % of users who return to complete a saved project (target: ≥40%)
+  - Average time between first upload and completion
+  - Projects per user (indicator of engagement)
+
 ## Effort Estimation
 
 **Effort Level**: 6

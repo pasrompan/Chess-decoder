@@ -1,13 +1,100 @@
 ---
-description: Use it if you are going to utilise Atlasian MCP server
-globs: 
-alwaysApply: false
+alwaysApply: true
 ---
+# Chess Decoder AI PM Rules
 
-When using the Atlassian MCP tool in this project, always connect to the Atlassian/Jira instance at `https://paschalis-rompanos.atlassian.net/` for all Atlassian-related operations.
+## Rule 1: Creating New Tasks (PG-XXX Issues)
 
+When asked to create a new task or issue, the agent MUST:
 
----
-Atlassian MCP (Jira & Confluence)
-	•	Always use the Jira project PG, unless specified otherwise.
-	•	Always use Epic ChessScriber, unless specified otherwise.
+1. **Find the highest PG number**:
+   - Search for all PG-XXX files in:
+     - `ai-pm/issues/active/`
+     - `ai-pm/issues/archive/completed/`
+     - `ai-pm/issues/archive/deprioritized/`
+   - Extract the highest number (e.g., if PG-179 exists, use PG-180)
+   - Use the next sequential number for the new issue
+
+2. **Use the template**:
+   - Copy `ai-pm/issues/templates/issue-template.md` as the base structure
+   - Fill in all required sections following the agent plan format
+   - Ensure frontmatter includes: `id`, `status: active`, `priority_score: 0.0`, `effort: 0`, `impact: 0`, `dependencies: []`, `created_date`, `updated_date`, `plan_type: agent_plan`, `executable: false`
+
+3. **Position the file**:
+   - Save the new issue file in `ai-pm/issues/active/` directory
+   - Use naming format: `PG-XXX - [Issue Title].md`
+
+4. **Run prioritization**:
+   - After creating the issue file, ALWAYS run: `./ai-pm/scripts/update-prioritization.sh`
+   - This will calculate the priority score and update the prioritized issues list
+   - Update the issue file's `priority_score` and `updated_date` in frontmatter if needed
+
+## Rule 2: Implementing Tasks
+
+When asked to implement a task or feature, the agent MUST:
+
+1. **Run prioritization script**:
+   - Execute `./ai-pm/scripts/update-prioritization.sh` to ensure priorities are up-to-date
+
+2. **Get the highest priority task**:
+   - Read `ai-pm/documentation/prioritized-issues.md`
+   - Identify the issue with the highest priority score
+   - If the user specifies a different issue, use that instead
+   - Load the issue file from `ai-pm/issues/active/` to understand requirements
+
+3. **Ensure build passes**:
+   - After implementation completion, verify the build passes:
+     - For backend: Run build command (e.g., `dotnet build`)
+     - For frontend: Run build command (e.g., `npm run build`)
+   - Fix any build errors before considering implementation complete
+
+4. **Ensure unit tests for backend**:
+   - If implementing backend features, create or update unit tests
+   - Ensure all unit tests pass: `dotnet test` (or equivalent)
+   - Maintain or improve test coverage
+
+5. **Ensure tests pass**:
+   - Run all relevant tests (unit tests, integration tests, etc.)
+   - Verify all tests pass before marking implementation as complete
+   - Fix any failing tests
+
+## Rule 3: Updating Issue Prioritization and GTM Strategy Alignment
+
+When asked to update prioritization of issues or when running the prioritization script, the agent MUST:
+
+1. **Run prioritization script**:
+   - Execute `./ai-pm/scripts/update-prioritization.sh` to calculate and update priority scores
+   - This updates all active issues with new priority scores based on impact, effort, and dependencies
+
+2. **Review GTM Strategy Documents**:
+   - Read `ai-pm/strategy/GTM-Strategy.md` to understand current GTM goals and metrics
+   - Read `ai-pm/strategy/GTM-Implementation-Status.md` to see issue alignment and readiness checklists
+   - Identify which issues are critical for GTM Phase 1 (Activation & Value Proof) and Phase 2 (Monetization)
+
+3. **Update GTM Implementation Status**:
+   - Review all active issues and their current status
+   - Update `ai-pm/strategy/GTM-Implementation-Status.md` with:
+     - Current completion status of GTM-critical issues (PG-181, PG-178, PG-156)
+     - Updated readiness checklists based on issue completion
+     - Progress on key metrics if available
+     - Any changes to issue priorities that affect GTM timeline
+   - Mark completed items in readiness checklists
+   - Update "Next Steps" section based on current progress
+
+4. **Update GTM Strategy if needed**:
+   - If issue priorities change significantly, review if GTM strategy needs adjustment
+   - Update outreach timing if critical issues are delayed or completed early
+   - Update success criteria if metrics or targets need revision
+   - Document any blockers or dependencies affecting GTM timeline
+
+5. **Maintain alignment**:
+   - Ensure issue priorities align with GTM strategy priorities
+   - Verify that critical GTM features (especially PG-181) maintain highest priority
+   - Flag any issues that may impact outreach readiness dates
+
+## General Guidelines
+
+- Always follow the agent plan structure when creating issues
+- Update issue status to `completed` and move to `ai-pm/issues/archive/completed/` when a task is finished
+- Update dependencies in issue frontmatter if tasks depend on other issues
+- Keep impact and effort estimates realistic and update them as needed
