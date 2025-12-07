@@ -1,3 +1,4 @@
+using ChessDecoderApi.DTOs.Requests;
 using ChessDecoderApi.DTOs.Responses;
 
 namespace ChessDecoderApi.Services.GameProcessing;
@@ -21,5 +22,10 @@ public interface IGameManagementService
     /// Delete a game
     /// </summary>
     Task<bool> DeleteGameAsync(Guid gameId);
+
+    /// <summary>
+    /// Update game metadata (player details, date, round)
+    /// </summary>
+    Task<bool> UpdateGameMetadataAsync(Guid gameId, UpdateGameMetadataRequest request);
 }
 

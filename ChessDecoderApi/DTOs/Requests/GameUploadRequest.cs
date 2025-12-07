@@ -16,5 +16,11 @@ public class GameUploadRequest
     public string Language { get; set; } = "English";
 
     public bool AutoCrop { get; set; } = false;
+
+    // Optional player metadata for PGN format
+    public string? WhitePlayer { get; set; }
+    public string? BlackPlayer { get; set; }
+    public DateTime? GameDate { get; set; }
+    public string? Round { get; set; }
 }
 

@@ -16,6 +16,10 @@ public class GameDetailsResponse
     public int ProcessingTimeMs { get; set; }
     public bool IsValid { get; set; }
     public string? ValidationMessage { get; set; }
+    public string? WhitePlayer { get; set; }
+    public string? BlackPlayer { get; set; }
+    public DateTime? GameDate { get; set; }
+    public string? Round { get; set; }
     public GameStatisticsDto? Statistics { get; set; }
     public List<GameImageDto> Images { get; set; } = new();
 }

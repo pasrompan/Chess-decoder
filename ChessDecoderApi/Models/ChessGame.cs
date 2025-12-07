@@ -41,6 +41,19 @@ public class ChessGame
     [FirestoreProperty]
     public string? ValidationMessage { get; set; }
     
+    // Player metadata fields for PGN format
+    [FirestoreProperty]
+    public string? WhitePlayer { get; set; }
+    
+    [FirestoreProperty]
+    public string? BlackPlayer { get; set; }
+    
+    [FirestoreProperty]
+    public DateTime? GameDate { get; set; }
+    
+    [FirestoreProperty]
+    public string? Round { get; set; }
+    
     // Navigation properties - NOT stored in Firestore
     [ForeignKey("UserId")]
     [NotMapped]
