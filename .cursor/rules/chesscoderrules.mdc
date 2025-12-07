@@ -58,6 +58,13 @@ When asked to implement a task or feature, the agent MUST:
    - Verify all tests pass before marking implementation as complete
    - Fix any failing tests
 
+6. **Mark issue as completed and archive**:
+   - Update the issue file's frontmatter:
+     - Change `status` from `active` to `completed`
+     - Update `updated_date` to the current date (YYYY-MM-DD format)
+   - Move the issue file from `ai-pm/issues/active/` to `ai-pm/issues/archive/completed/`
+   - Keep the same filename when moving (e.g., `PG-XXX - [Issue Title].md`)
+
 ## Rule 3: Updating Issue Prioritization and GTM Strategy Alignment
 
 When asked to update prioritization of issues or when running the prioritization script, the agent MUST:
