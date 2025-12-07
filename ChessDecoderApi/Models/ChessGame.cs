@@ -54,6 +54,9 @@ public class ChessGame
     [FirestoreProperty]
     public string? Round { get; set; }
     
+    [FirestoreProperty]
+    public string? Result { get; set; }
+    
     // Navigation properties - NOT stored in Firestore
     [ForeignKey("UserId")]
     [NotMapped]

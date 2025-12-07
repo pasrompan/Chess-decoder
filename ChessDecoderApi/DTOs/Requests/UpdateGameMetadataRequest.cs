@@ -9,5 +9,6 @@ public class UpdateGameMetadataRequest
     public string? BlackPlayer { get; set; }
     public DateTime? GameDate { get; set; }
     public string? Round { get; set; }
+    public string? Result { get; set; }
 }
 
