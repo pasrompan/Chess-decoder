@@ -58,7 +58,8 @@ namespace ChessDecoderApi.Tests.Services
 
                 // Extract moves directly from the image
                 var startTime = DateTime.UtcNow;
-                var (whiteMoves, blackMoves) = await _imageProcessingService.ExtractMovesFromImageToStringAsync(imagePath, language);
+                // Language is now auto-detected, but we log it for evaluation tracking
+                var (whiteMoves, blackMoves) = await _imageProcessingService.ExtractMovesFromImageToStringAsync(imagePath);
                 var extractedMoves = new List<string>();
                 int maxMoves = Math.Max(whiteMoves.Count, blackMoves.Count);
                 for (int i = 0; i < maxMoves; i++)

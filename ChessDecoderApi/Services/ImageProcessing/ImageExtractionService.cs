@@ -20,16 +20,14 @@ public class ImageExtractionService : IImageExtractionService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task<ChessGameResponse> ProcessImageAsync(string imagePath, string language = "English", PgnMetadata? metadata = null)
+    public async Task<ChessGameResponse> ProcessImageAsync(string imagePath, PgnMetadata? metadata = null)
     {
-        return await _imageProcessingService.ProcessImageAsync(imagePath, language, metadata);
+        return await _imageProcessingService.ProcessImageAsync(imagePath, metadata);
     }
 
-    public async Task<(List<string> whiteMoves, List<string> blackMoves)> ExtractMovesFromImageToStringAsync(
-        string imagePath, 
-        string language = "English")
+    public async Task<(List<string> whiteMoves, List<string> blackMoves)> ExtractMovesFromImageToStringAsync(string imagePath)
     {
-        return await _imageProcessingService.ExtractMovesFromImageToStringAsync(imagePath, language);
+        return await _imageProcessingService.ExtractMovesFromImageToStringAsync(imagePath);
     }
 
     public async Task<string> ExtractTextFromImageAsync(byte[] imageBytes, string language, string provider = "gemini")

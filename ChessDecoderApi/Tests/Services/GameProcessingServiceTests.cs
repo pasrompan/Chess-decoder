@@ -105,7 +105,6 @@ public class GameProcessingServiceTests
         {
             Image = fileMock.Object,
             UserId = "test-user",
-            Language = "English",
             AutoCrop = false
         };
     }

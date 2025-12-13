@@ -64,6 +64,20 @@ namespace ChessDecoderApi.Services
                 Language = language
             };
 
+            // Detect language from the image
+            string detectedLanguage = "English";
+            try
+            {
+                detectedLanguage = await _imageProcessingService.DetectLanguageAsync(imagePath);
+                result.DetectedLanguage = detectedLanguage;
+                _logger.LogInformation("Detected language: {DetectedLanguage} (Expected: {ExpectedLanguage})", detectedLanguage, language);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to detect language, defaulting to English");
+                result.DetectedLanguage = "English";
+            }
+
             // Declare croppedImagePath outside try block so it's accessible in catch block for cleanup
             string? croppedImagePath = null;
 
@@ -101,9 +115,9 @@ namespace ChessDecoderApi.Services
                     imagePathForProcessing = croppedImagePath;
                 }
 
-                // Extract moves directly from the image
+                // Extract moves directly from the image (language is auto-detected)
                 var startTime = DateTime.UtcNow;
-                var (whiteMoves, blackMoves) = await _imageProcessingService.ExtractMovesFromImageToStringAsync(imagePathForProcessing, language);
+                var (whiteMoves, blackMoves) = await _imageProcessingService.ExtractMovesFromImageToStringAsync(imagePathForProcessing);
                 var extractedMoves = new List<string>();
                 int maxMoves = Math.Max(whiteMoves.Count, blackMoves.Count);
                 for (int i = 0; i < maxMoves; i++)
@@ -456,6 +470,7 @@ namespace ChessDecoderApi.Services
         public string ImagePath { get; set; } = string.Empty;
         public string GroundTruthPath { get; set; } = string.Empty;
         public string Language { get; set; } = "English";
+        public string DetectedLanguage { get; set; } = "English";
         public bool IsSuccessful { get; set; }
         public string ErrorMessage { get; set; } = string.Empty;
         public TimeSpan ProcessingTime { get; set; }

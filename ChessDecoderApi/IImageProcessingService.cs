@@ -7,8 +7,9 @@ namespace ChessDecoderApi.Services
 {
     public interface IImageProcessingService
     {
-        Task<ChessGameResponse> ProcessImageAsync(string imagePath, string language = "English", PgnMetadata? metadata = null);
-        Task<(List<string> whiteMoves, List<string> blackMoves)> ExtractMovesFromImageToStringAsync(string imagePath, string language = "English");
+        Task<ChessGameResponse> ProcessImageAsync(string imagePath, PgnMetadata? metadata = null);
+        Task<(List<string> whiteMoves, List<string> blackMoves)> ExtractMovesFromImageToStringAsync(string imagePath);
+        Task<string> DetectLanguageAsync(string imagePath);
         Task<string> ExtractTextFromImageAsync(byte[] imageBytes, string language, string provider = "gemini");
         Task<string> ExtractTextFromImageAsyncWholeImage(byte[] imageBytes, string language, string provider = "gemini");
         string GeneratePGNContentAsync(IEnumerable<string> whiteMoves, IEnumerable<string> blackMoves, PgnMetadata? metadata = null);

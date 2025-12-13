@@ -9,16 +9,14 @@ namespace ChessDecoderApi.Services.ImageProcessing;
 public interface IImageExtractionService
 {
     /// <summary>
-    /// Process an image and extract chess game data
+    /// Process an image and extract chess game data (language is auto-detected)
     /// </summary>
-    Task<ChessGameResponse> ProcessImageAsync(string imagePath, string language = "English", PgnMetadata? metadata = null);
+    Task<ChessGameResponse> ProcessImageAsync(string imagePath, PgnMetadata? metadata = null);
 
     /// <summary>
-    /// Extract chess moves from an image and return separate white and black move lists
+    /// Extract chess moves from an image and return separate white and black move lists (language is auto-detected)
     /// </summary>
-    Task<(List<string> whiteMoves, List<string> blackMoves)> ExtractMovesFromImageToStringAsync(
-        string imagePath, 
-        string language = "English");
+    Task<(List<string> whiteMoves, List<string> blackMoves)> ExtractMovesFromImageToStringAsync(string imagePath);
 
     /// <summary>
     /// Extract raw text from image bytes using OCR

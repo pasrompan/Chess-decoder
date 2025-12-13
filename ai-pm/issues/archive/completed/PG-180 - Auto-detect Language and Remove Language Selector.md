@@ -1,6 +1,6 @@
 ---
 id: PG-180
-status: active
+status: completed
 priority_score: 1.4000
 effort: 5
 impact: 7

@@ -8,6 +8,7 @@ public class EvaluationResultResponse
     public string ImageFileName { get; set; } = string.Empty;
     public string GroundTruthFileName { get; set; } = string.Empty;
     public string Language { get; set; } = string.Empty;
+    public string DetectedLanguage { get; set; } = string.Empty;
     public bool IsSuccessful { get; set; }
     public string? ErrorMessage { get; set; }
     public double ProcessingTimeSeconds { get; set; }

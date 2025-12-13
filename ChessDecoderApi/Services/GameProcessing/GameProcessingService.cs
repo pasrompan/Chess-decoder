@@ -160,7 +160,7 @@ public class GameProcessingService : IGameProcessingService
         }
 
         var startTime = DateTime.UtcNow;
-        var result = await _imageExtractionService.ProcessImageAsync(imagePathForProcessing, request.Language, pgnMetadata);
+        var result = await _imageExtractionService.ProcessImageAsync(imagePathForProcessing, pgnMetadata);
         var processingTime = DateTime.UtcNow - startTime;
 
         // Generate processed image
@@ -180,7 +180,7 @@ public class GameProcessingService : IGameProcessingService
             Id = Guid.NewGuid(),
             UserId = request.UserId,
             Title = $"Chess Game - {DateTime.UtcNow:yyyy-MM-dd HH:mm}",
-            Description = $"Processed chess game from image upload. Language: {request.Language}",
+            Description = $"Processed chess game from image upload (language auto-detected)",
             PgnContent = result.PgnContent ?? "",
             ProcessedAt = DateTime.UtcNow,
             ProcessingTimeMs = (int)processingTime.TotalMilliseconds,
@@ -261,7 +261,7 @@ public class GameProcessingService : IGameProcessingService
         };
     }
 
-    public async Task<GameProcessingResponse> ProcessMockUploadAsync(IFormFile image, string language = "English", bool autoCrop = false)
+    public async Task<GameProcessingResponse> ProcessMockUploadAsync(IFormFile image, bool autoCrop = false)
     {
         _logger.LogInformation("Processing mock upload with autoCrop: {AutoCrop}", autoCrop);
 
@@ -295,7 +295,7 @@ public class GameProcessingService : IGameProcessingService
             imagePathForProcessing = croppedFilePath;
         }
 
-        var result = await _imageExtractionService.ProcessImageAsync(imagePathForProcessing, language);
+        var result = await _imageExtractionService.ProcessImageAsync(imagePathForProcessing);
 
         // Generate image
         var imageBytes = await File.ReadAllBytesAsync(imagePathForProcessing);
