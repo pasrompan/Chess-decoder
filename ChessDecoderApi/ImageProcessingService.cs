@@ -70,7 +70,7 @@ namespace ChessDecoderApi.Services
         /// </summary>
         /// <param name="imagePath">Path to the image file</param>
         /// <returns>Detected language ("Greek" or "English", defaults to "English")</returns>
-        private async Task<string> DetectLanguageAsync(string imagePath)
+        public async Task<string> DetectLanguageAsync(string imagePath)
         {
             try
             {
@@ -159,9 +159,9 @@ namespace ChessDecoderApi.Services
                 var base64Image = Convert.ToBase64String(imageBytes);
 
                 // Prompt for language detection with JSON response
-                var promptText = @"I am uploading a chess game notation detect in which language this is written.
+                var promptText = @"I am uploading a chess game notation file detect in which language the CHESS MOVES are written
 
-return the result in the following json format:
+return the result in the following json format::
 
 {
   ""language"": ""English"",
