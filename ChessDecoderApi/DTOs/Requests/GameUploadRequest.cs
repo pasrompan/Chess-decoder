@@ -13,8 +13,6 @@ public class GameUploadRequest
     [Required]
     public string UserId { get; set; } = string.Empty;
 
-    public string Language { get; set; } = "English";
-
     public bool AutoCrop { get; set; } = false;
 
     // Optional player metadata for PGN format

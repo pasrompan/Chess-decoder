@@ -95,6 +95,7 @@ public class EvaluationController : ControllerBase
                     ImageFileName = request.Image.FileName,
                     GroundTruthFileName = request.GroundTruth.FileName,
                     Language = request.Language,
+                    DetectedLanguage = result.DetectedLanguage,
                     IsSuccessful = result.IsSuccessful,
                     ErrorMessage = result.ErrorMessage,
                     ProcessingTimeSeconds = result.ProcessingTime.TotalSeconds,
