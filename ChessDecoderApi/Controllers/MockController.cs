@@ -30,7 +30,6 @@ public class MockController : ControllerBase
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> MockUpload(
         IFormFile? image, 
-        [FromForm] string language = "English",
         [FromForm] bool autoCrop = false)
     {
         _logger.LogInformation("Processing mock upload request with autoCrop: {AutoCrop}", autoCrop);
@@ -47,7 +46,7 @@ public class MockController : ControllerBase
 
         try
         {
-            var response = await _gameProcessingService.ProcessMockUploadAsync(image, language, autoCrop);
+            var response = await _gameProcessingService.ProcessMockUploadAsync(image, autoCrop);
             return Ok(response);
         }
         catch (Exception ex)

@@ -176,6 +176,7 @@ class Program
                     result.GeneratedPgn = evaluationResult.GeneratedPgn;
                     result.GroundTruthMoveList = evaluationResult.Moves.GroundTruth;
                     result.ExtractedMoveList = evaluationResult.Moves.Extracted;
+                    result.DetectedLanguage = evaluationResult.DetectedLanguage ?? language;
                     
                     // Normalized move metrics
                     if (evaluationResult.NormalizedMetrics != null)
@@ -283,6 +284,9 @@ class Program
 
             AppendGlobalSummary(html, "Normalized Moves", resultsWithNormalized.Count, null, avgNormalizedNormalizedScore, avgNormalizedExactMatch, avgNormalizedPositionalAccuracy, null);
         }
+
+        // Language Detection Accuracy Summary
+        AppendLanguageDetectionSummary(html, results);
 
         // Results by Language - Extracted Moves
         var resultsByLanguage = results.GroupBy(r => r.Language).OrderBy(g => g.Key);
@@ -427,6 +431,65 @@ class Program
         html.AppendLine("        </div>");
     }
 
+    static void AppendLanguageDetectionSummary(StringBuilder html, List<EvaluationRunResult> results)
+    {
+        var successfulResults = results.Where(r => r.IsSuccessful && !string.IsNullOrEmpty(r.DetectedLanguage)).ToList();
+        var totalTests = successfulResults.Count;
+        
+        if (totalTests == 0)
+        {
+            return;
+        }
+
+        // Calculate accuracy
+        var correctDetections = successfulResults.Count(r => 
+            string.Equals(r.DetectedLanguage, r.Language, StringComparison.OrdinalIgnoreCase));
+        var accuracy = totalTests > 0 ? (double)correctDetections / totalTests : 0.0;
+
+        html.AppendLine("        <div class=\"summary\">");
+        html.AppendLine("            <h2>Language Detection Accuracy</h2>");
+        html.AppendLine("            <div class=\"summary-grid\">");
+        html.AppendLine($"                <div class=\"summary-item\"><h3>Total Tests</h3><div class=\"value\">{totalTests}</div></div>");
+        html.AppendLine($"                <div class=\"summary-item\"><h3>Correct Detections</h3><div class=\"value\">{correctDetections}</div></div>");
+        html.AppendLine($"                <div class=\"summary-item\"><h3>Accuracy</h3><div class=\"value\">{(accuracy * 100.0):F1}%</div></div>");
+        html.AppendLine("            </div>");
+        html.AppendLine("        </div>");
+
+        // Language Detection Table
+        html.AppendLine("        <div class=\"language-section\">");
+        html.AppendLine("            <div class=\"language-header\"><h2>Language Detection Results</h2></div>");
+        html.AppendLine("            <table>");
+        html.AppendLine("                <thead>");
+        html.AppendLine("                    <tr>");
+        html.AppendLine("                        <th>Language</th>");
+        html.AppendLine("                        <th>Game</th>");
+        html.AppendLine("                        <th>Expected Language</th>");
+        html.AppendLine("                        <th>Detected Language</th>");
+        html.AppendLine("                        <th>Status</th>");
+        html.AppendLine("                    </tr>");
+        html.AppendLine("                </thead>");
+        html.AppendLine("                <tbody>");
+
+        foreach (var result in successfulResults.OrderBy(r => r.Language).ThenBy(r => r.GameName))
+        {
+            var isCorrect = string.Equals(result.DetectedLanguage, result.Language, StringComparison.OrdinalIgnoreCase);
+            var statusClass = isCorrect ? "success" : "failure";
+            var statusText = isCorrect ? "✓ Correct" : "✗ Incorrect";
+
+            html.AppendLine("                    <tr>");
+            html.AppendLine($"                        <td><strong>{result.Language}</strong></td>");
+            html.AppendLine($"                        <td>{result.GameName}</td>");
+            html.AppendLine($"                        <td>{result.Language}</td>");
+            html.AppendLine($"                        <td>{result.DetectedLanguage}</td>");
+            html.AppendLine($"                        <td class=\"{statusClass}\">{statusText}</td>");
+            html.AppendLine("                    </tr>");
+        }
+
+        html.AppendLine("                </tbody>");
+        html.AppendLine("            </table>");
+        html.AppendLine("        </div>");
+    }
+
     static void AppendLanguageResultsTable(StringBuilder html, string language, IEnumerable<EvaluationRunResult> results, string moveType, bool isNormalized)
     {
         html.AppendLine($"        <div class=\"language-section\">");
@@ -441,9 +504,10 @@ class Program
         html.AppendLine("                        <th>Positional Accuracy</th>");
         html.AppendLine("                        <th>Levenshtein Distance</th>");
         html.AppendLine("                        <th>LCS</th>");
-        html.AppendLine("                        <th>Ground Truth Moves</th>");
-        html.AppendLine($"                        <th>{moveType}</th>");
-        html.AppendLine("                        <th>Processing Time</th>");
+                    html.AppendLine("                        <th>Ground Truth Moves</th>");
+                    html.AppendLine($"                        <th>{moveType}</th>");
+                    html.AppendLine("                        <th>Detected Language</th>");
+                    html.AppendLine("                        <th>Processing Time</th>");
         html.AppendLine("                    </tr>");
         html.AppendLine("                </thead>");
         html.AppendLine("                <tbody>");
@@ -501,11 +565,15 @@ class Program
                     html.AppendLine($"                        <td>{result.ExtractedMoves}</td>");
                 }
                 
+                var detectedLangStatus = string.Equals(result.DetectedLanguage, result.Language, StringComparison.OrdinalIgnoreCase) 
+                    ? $"<span class=\"success\">{result.DetectedLanguage}</span>" 
+                    : $"<span class=\"failure\">{result.DetectedLanguage}</span>";
+                html.AppendLine($"                        <td>{detectedLangStatus}</td>");
                 html.AppendLine($"                        <td>{result.ProcessingTimeSeconds:F2}s</td>");
             }
             else
             {
-                html.AppendLine($"                        <td colspan=\"8\">{result.ErrorMessage}</td>");
+                html.AppendLine($"                        <td colspan=\"9\">{result.ErrorMessage}</td>");
             }
 
             html.AppendLine("                    </tr>");
@@ -541,6 +609,7 @@ class Program
 class EvaluationRunResult
 {
     public string Language { get; set; } = string.Empty;
+    public string DetectedLanguage { get; set; } = string.Empty;
     public string GameName { get; set; } = string.Empty;
     public string GameFolder { get; set; } = string.Empty;
     public bool IsSuccessful { get; set; }
@@ -575,6 +644,7 @@ class EvaluationResultResponse
     public string ImageFileName { get; set; } = string.Empty;
     public string GroundTruthFileName { get; set; } = string.Empty;
     public string Language { get; set; } = string.Empty;
+    public string? DetectedLanguage { get; set; }
     public bool IsSuccessful { get; set; }
     public string? ErrorMessage { get; set; }
     public double ProcessingTimeSeconds { get; set; }
