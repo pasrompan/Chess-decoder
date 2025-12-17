@@ -171,6 +171,10 @@ public class GameManagementService : IGameManagementService
             {
                 game.Round = string.IsNullOrWhiteSpace(request.Round) ? null : request.Round;
             }
+            if (request.Result != null)
+            {
+                game.Result = string.IsNullOrWhiteSpace(request.Result) ? null : request.Result;
+            }
 
             // Extract moves from existing PGN and regenerate with new metadata
             var (whiteMoves, blackMoves) = ExtractMovesFromPgn(game.PgnContent);

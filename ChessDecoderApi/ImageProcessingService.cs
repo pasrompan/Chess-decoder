@@ -70,7 +70,7 @@ namespace ChessDecoderApi.Services
         /// </summary>
         /// <param name="imagePath">Path to the image file</param>
         /// <returns>Detected language ("Greek" or "English", defaults to "English")</returns>
-        private async Task<string> DetectLanguageAsync(string imagePath)
+        public async Task<string> DetectLanguageAsync(string imagePath)
         {
             try
             {
@@ -103,46 +103,36 @@ namespace ChessDecoderApi.Services
                     imageBytes = ms.ToArray();
                 }
 
-                // Perform a quick OCR pass to extract sample text
-                // Use a smaller, faster prompt for detection
-                string sampleText = await ExtractTextFromImageForDetectionAsync(imageBytes);
+                // Perform language detection using Gemini API with JSON response
+                string jsonResponse = await ExtractTextFromImageForDetectionAsync(imageBytes);
 
-                // Analyze the extracted characters to identify language-specific patterns
-                int greekCharCount = 0;
-                int englishCharCount = 0;
-
-                // Greek characters: α, β, γ, δ, ε, ζ, η, θ, Π, Α, Β, Ι, Ρ
-                var greekChars = new[] { "α", "β", "γ", "δ", "ε", "ζ", "η", "θ", "Π", "Α", "Β", "Ι", "Ρ", "A", "B", "I", "P" };
-                // English notation: R, N, B, Q, K, a-h
-                var englishChars = new[] { "R", "N", "B", "Q", "K", "a", "b", "c", "d", "e", "f", "g", "h" };
-
-                foreach (var greekChar in greekChars)
+                // Parse the JSON response to extract language
+                if (string.IsNullOrWhiteSpace(jsonResponse))
                 {
-                    if (sampleText.Contains(greekChar, StringComparison.OrdinalIgnoreCase))
+                    _logger.LogWarning("Empty response from language detection, defaulting to English");
+                    return "English";
+                }
+
+                try
+                {
+                    using var jsonDoc = JsonDocument.Parse(jsonResponse);
+                    if (jsonDoc.RootElement.TryGetProperty("language", out var languageElement))
                     {
-                        greekCharCount++;
+                        string detectedLanguage = languageElement.GetString() ?? "English";
+                        _logger.LogInformation("Detected language: {Language}", detectedLanguage);
+                        return detectedLanguage;
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Language property not found in JSON response, defaulting to English");
+                        return "English";
                     }
                 }
-
-                foreach (var englishChar in englishChars)
+                catch (JsonException ex)
                 {
-                    if (sampleText.Contains(englishChar, StringComparison.OrdinalIgnoreCase))
-                    {
-                        englishCharCount++;
-                    }
+                    _logger.LogWarning(ex, "Failed to parse JSON response from language detection, defaulting to English");
+                    return "English";
                 }
-
-                // Determine language based on character presence
-                // If we find Greek characters, it's likely Greek notation
-                if (greekCharCount > 0 && greekCharCount >= englishCharCount)
-                {
-                    _logger.LogInformation("Detected Greek notation in image");
-                    return "Greek";
-                }
-
-                // Default to English if uncertain or if English characters are found
-                _logger.LogInformation("Detected English notation in image (or defaulting to English)");
-                return "English";
             }
             catch (Exception ex)
             {
@@ -168,8 +158,15 @@ namespace ChessDecoderApi.Services
                 
                 var base64Image = Convert.ToBase64String(imageBytes);
 
-                // Simple prompt for quick detection - just ask for any text found
-                var promptText = "Extract any text you see in this chess notation image. Return only the raw text, no formatting. Focus on piece names and file letters.";
+                // Prompt for language detection with JSON response
+                var promptText = @"I am uploading a chess game notation file detect in which language the CHESS MOVES are written
+
+return the result in the following json format::
+
+{
+  ""language"": ""English"",
+  ""notation_system"": ""Standard Algebraic Notation""
+}";
 
                 var requestData = new
                 {
@@ -194,7 +191,11 @@ namespace ChessDecoderApi.Services
                     generationConfig = new
                     {
                         maxOutputTokens = 500, // Small token limit for quick detection
-                        response_mime_type = "text/plain"
+                        response_mime_type = "application/json",
+                        thinkingConfig = new
+                        {
+                            thinkingLevel = "low"
+                        }
                     }
                 };
 

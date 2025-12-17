@@ -64,6 +64,20 @@ namespace ChessDecoderApi.Services
                 Language = language
             };
 
+            // Detect language from the image
+            string detectedLanguage = "English";
+            try
+            {
+                detectedLanguage = await _imageProcessingService.DetectLanguageAsync(imagePath);
+                result.DetectedLanguage = detectedLanguage;
+                _logger.LogInformation("Detected language: {DetectedLanguage} (Expected: {ExpectedLanguage})", detectedLanguage, language);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to detect language, defaulting to English");
+                result.DetectedLanguage = "English";
+            }
+
             // Declare croppedImagePath outside try block so it's accessible in catch block for cleanup
             string? croppedImagePath = null;
 
@@ -456,6 +470,7 @@ namespace ChessDecoderApi.Services
         public string ImagePath { get; set; } = string.Empty;
         public string GroundTruthPath { get; set; } = string.Empty;
         public string Language { get; set; } = "English";
+        public string DetectedLanguage { get; set; } = "English";
         public bool IsSuccessful { get; set; }
         public string ErrorMessage { get; set; } = string.Empty;
         public TimeSpan ProcessingTime { get; set; }
