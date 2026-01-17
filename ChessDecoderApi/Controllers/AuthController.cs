@@ -10,11 +10,13 @@ public class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
     private readonly ILogger<AuthController> _logger;
+    private readonly IConfiguration _configuration;
 
-    public AuthController(IAuthService authService, ILogger<AuthController> logger)
+    public AuthController(IAuthService authService, ILogger<AuthController> logger, IConfiguration configuration)
     {
         _authService = authService;
         _logger = logger;
+        _configuration = configuration;
     }
 
     /// <summary>
@@ -56,6 +58,59 @@ public class AuthController : ControllerBase
             {
                 Valid = false,
                 Message = "Internal server error during authentication"
+            });
+        }
+    }
+
+    /// <summary>
+    /// Test login endpoint for E2E testing (only available when ENABLE_TEST_AUTH=true)
+    /// </summary>
+    /// <param name="request">Contains email and password for test authentication</param>
+    /// <returns>Authentication result with user information</returns>
+    [HttpPost("test-login")]
+    public async Task<ActionResult<AuthResponse>> TestLogin([FromBody] TestLoginRequest request)
+    {
+        // Check if test auth is enabled - return 404 to hide endpoint existence in production
+        var testAuthEnabled = _configuration.GetValue<bool>("ENABLE_TEST_AUTH", false) ||
+                              Environment.GetEnvironmentVariable("ENABLE_TEST_AUTH")?.ToLower() == "true";
+
+        if (!testAuthEnabled)
+        {
+            _logger.LogWarning("Test login endpoint accessed but ENABLE_TEST_AUTH is not enabled");
+            return NotFound();
+        }
+
+        try
+        {
+            if (string.IsNullOrEmpty(request.Email) || string.IsNullOrEmpty(request.Password))
+            {
+                return BadRequest(new AuthResponse
+                {
+                    Valid = false,
+                    Message = "Email and password are required"
+                });
+            }
+
+            var result = await _authService.VerifyTestCredentialsAsync(request.Email, request.Password);
+
+            if (result.Valid)
+            {
+                _logger.LogInformation("Test user authenticated successfully: {Email}", request.Email);
+                return Ok(result);
+            }
+            else
+            {
+                _logger.LogWarning("Test authentication failed: {Message}", result.Message);
+                return Unauthorized(result);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during test login");
+            return StatusCode(500, new AuthResponse
+            {
+                Valid = false,
+                Message = "Internal server error during test authentication"
             });
         }
     }

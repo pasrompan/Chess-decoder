@@ -120,6 +120,85 @@ public class AuthService : IAuthService
         return Task.FromResult(true);
     }
 
+    public async Task<AuthResponse> VerifyTestCredentialsAsync(string email, string password)
+    {
+        // Check if test auth is enabled
+        var testAuthEnabled = _configuration.GetValue<bool>("ENABLE_TEST_AUTH", false) ||
+                              Environment.GetEnvironmentVariable("ENABLE_TEST_AUTH")?.ToLower() == "true";
+
+        if (!testAuthEnabled)
+        {
+            _logger.LogWarning("Test authentication attempted but ENABLE_TEST_AUTH is not enabled");
+            return new AuthResponse
+            {
+                Valid = false,
+                Message = "Test authentication is not available"
+            };
+        }
+
+        // Validate test credentials
+        const string testEmail = "test@chessscribe.local";
+        const string testPassword = "testpassword123";
+
+        if (email != testEmail || password != testPassword)
+        {
+            _logger.LogWarning("Invalid test credentials provided for email: {Email}", email);
+            return new AuthResponse
+            {
+                Valid = false,
+                Message = "Invalid credentials"
+            };
+        }
+
+        // Create a deterministic user ID for test user
+        var testUserId = "test-user-e2e-" + email.GetHashCode().ToString("X");
+        
+        // Get or create the test user
+        var user = await GetOrCreateTestUserAsync(testUserId, email, "Test User");
+
+        _logger.LogInformation("Test user authenticated successfully: {Email}", email);
+
+        return new AuthResponse
+        {
+            Valid = true,
+            User = user,
+            Message = "Test authentication successful"
+        };
+    }
+
+    private async Task<User> GetOrCreateTestUserAsync(string userId, string email, string name)
+    {
+        var userRepo = await _repositoryFactory.CreateUserRepositoryAsync();
+        
+        // Check if user exists
+        var existingUser = await userRepo.GetByIdAsync(userId);
+        
+        if (existingUser != null)
+        {
+            // Update last login time
+            existingUser.LastLoginAt = DateTime.UtcNow;
+            await userRepo.UpdateAsync(existingUser);
+            return existingUser;
+        }
+
+        // Create new test user
+        var newUser = new User
+        {
+            Id = userId,
+            Email = email,
+            Name = name,
+            Picture = null,
+            Provider = "test",
+            CreatedAt = DateTime.UtcNow,
+            LastLoginAt = DateTime.UtcNow,
+            Credits = 1000 // Give test user plenty of credits for testing
+        };
+
+        await userRepo.CreateAsync(newUser);
+        _logger.LogInformation("Created new test user: {Email}", email);
+        return newUser;
+    }
+
     private async Task<User> GetOrCreateUserAsync(string userId, string email, string name, string? picture)
     {
         var userRepo = await _repositoryFactory.CreateUserRepositoryAsync();
