@@ -70,7 +70,18 @@ public class AuthController : ControllerBase
     [HttpPost("test-login")]
     public async Task<ActionResult<AuthResponse>> TestLogin([FromBody] TestLoginRequest request)
     {
-        // Check if test auth is enabled - return 404 to hide endpoint existence in production
+        // SECURITY: Test auth is ONLY available in Development environment
+        // This is a safeguard even if ENABLE_TEST_AUTH is accidentally set in production
+        var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production";
+        var isDevelopment = environment.Equals("Development", StringComparison.OrdinalIgnoreCase);
+        
+        if (!isDevelopment)
+        {
+            _logger.LogWarning("Test login endpoint rejected: Not in Development environment (current: {Environment})", environment);
+            return NotFound();
+        }
+
+        // Check if test auth is explicitly enabled - return 404 to hide endpoint existence
         var testAuthEnabled = _configuration.GetValue<bool>("ENABLE_TEST_AUTH", false) ||
                               Environment.GetEnvironmentVariable("ENABLE_TEST_AUTH")?.ToLower() == "true";
 

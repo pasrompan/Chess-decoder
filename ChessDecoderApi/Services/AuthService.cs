@@ -122,7 +122,22 @@ public class AuthService : IAuthService
 
     public async Task<AuthResponse> VerifyTestCredentialsAsync(string email, string password)
     {
-        // Check if test auth is enabled
+        // SECURITY: Test auth is ONLY available in Development environment
+        // This is a safeguard even if ENABLE_TEST_AUTH is accidentally set in production
+        var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production";
+        var isDevelopment = environment.Equals("Development", StringComparison.OrdinalIgnoreCase);
+        
+        if (!isDevelopment)
+        {
+            _logger.LogWarning("Test authentication rejected: Not in Development environment (current: {Environment})", environment);
+            return new AuthResponse
+            {
+                Valid = false,
+                Message = "Test authentication is not available"
+            };
+        }
+
+        // Check if test auth is explicitly enabled
         var testAuthEnabled = _configuration.GetValue<bool>("ENABLE_TEST_AUTH", false) ||
                               Environment.GetEnvironmentVariable("ENABLE_TEST_AUTH")?.ToLower() == "true";
 
@@ -136,9 +151,14 @@ public class AuthService : IAuthService
             };
         }
 
-        // Validate test credentials
-        const string testEmail = "test@chessscribe.local";
-        const string testPassword = "testpassword123";
+        // Test credentials are read from configuration with fallback to hardcoded values
+        // In a team environment, these should be set via environment variables
+        var testEmail = _configuration.GetValue<string>("TestAuth:Email") 
+                       ?? Environment.GetEnvironmentVariable("TEST_AUTH_EMAIL")
+                       ?? "test@chessscribe.local";
+        var testPassword = _configuration.GetValue<string>("TestAuth:Password") 
+                          ?? Environment.GetEnvironmentVariable("TEST_AUTH_PASSWORD")
+                          ?? "testpassword123";
 
         if (email != testEmail || password != testPassword)
         {
