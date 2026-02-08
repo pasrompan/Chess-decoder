@@ -2,6 +2,8 @@ using ChessDecoderApi.Models;
 using ChessDecoderApi.Repositories;
 using Google.Apis.Auth;
 using Microsoft.Extensions.Configuration;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 
@@ -170,8 +172,11 @@ public class AuthService : IAuthService
             };
         }
 
-        // Create a deterministic user ID for test user
-        var testUserId = "test-user-e2e-" + email.GetHashCode().ToString("X");
+        // Create a deterministic user ID for test user using SHA256
+        // Note: GetHashCode() is NOT deterministic across .NET versions/restarts
+        var emailBytes = Encoding.UTF8.GetBytes(email.ToLowerInvariant());
+        var hashBytes = SHA256.HashData(emailBytes);
+        var testUserId = "test-user-e2e-" + Convert.ToHexString(hashBytes)[..16];
         
         // Get or create the test user
         var user = await GetOrCreateTestUserAsync(testUserId, email, "Test User");
