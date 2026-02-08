@@ -45,6 +45,23 @@ public class AuthControllerTests
             .Build();
         return new AuthController(_authServiceMock.Object, _loggerMock.Object, config);
     }
+    
+    private void SetDevelopmentEnvironment()
+    {
+        Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Development");
+    }
+    
+    private void RestoreEnvironment(string? originalValue)
+    {
+        if (originalValue == null)
+        {
+            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", null);
+        }
+        else
+        {
+            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", originalValue);
+        }
+    }
 
     [Fact]
     public async Task VerifyToken_ValidToken_ReturnsOk()
@@ -183,81 +200,108 @@ public class AuthControllerTests
     public async Task TestLogin_WhenEnabled_ValidCredentials_ReturnsOk()
     {
         // Arrange
-        var controller = CreateControllerWithTestAuthEnabled();
-        
-        var request = new TestLoginRequest 
-        { 
-            Email = "test@chessscribe.local", 
-            Password = "testpassword123" 
-        };
-        var user = TestDataBuilder.CreateUser();
-        user.Provider = "test";
-        var authResponse = new AuthResponse
+        var originalEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+        SetDevelopmentEnvironment();
+        try
         {
-            Valid = true,
-            User = user,
-            Message = "Test authentication successful"
-        };
-        _authServiceMock.Setup(x => x.VerifyTestCredentialsAsync(request.Email, request.Password))
-            .ReturnsAsync(authResponse);
+            var controller = CreateControllerWithTestAuthEnabled();
+            
+            var request = new TestLoginRequest 
+            { 
+                Email = "test@chessscribe.local", 
+                Password = "testpassword123" 
+            };
+            var user = TestDataBuilder.CreateUser();
+            user.Provider = "test";
+            var authResponse = new AuthResponse
+            {
+                Valid = true,
+                User = user,
+                Message = "Test authentication successful"
+            };
+            _authServiceMock.Setup(x => x.VerifyTestCredentialsAsync(request.Email, request.Password))
+                .ReturnsAsync(authResponse);
 
-        // Act
-        var result = await controller.TestLogin(request);
+            // Act
+            var result = await controller.TestLogin(request);
 
-        // Assert
-        var okResult = Assert.IsType<OkObjectResult>(result.Result);
-        var response = Assert.IsType<AuthResponse>(okResult.Value);
-        Assert.True(response.Valid);
-        Assert.NotNull(response.User);
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result.Result);
+            var response = Assert.IsType<AuthResponse>(okResult.Value);
+            Assert.True(response.Valid);
+            Assert.NotNull(response.User);
+        }
+        finally
+        {
+            RestoreEnvironment(originalEnv);
+        }
     }
 
     [Fact]
     public async Task TestLogin_WhenEnabled_InvalidCredentials_ReturnsUnauthorized()
     {
         // Arrange
-        var controller = CreateControllerWithTestAuthEnabled();
-        
-        var request = new TestLoginRequest 
-        { 
-            Email = "wrong@email.com", 
-            Password = "wrongpassword" 
-        };
-        var authResponse = new AuthResponse
+        var originalEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+        SetDevelopmentEnvironment();
+        try
         {
-            Valid = false,
-            Message = "Invalid credentials"
-        };
-        _authServiceMock.Setup(x => x.VerifyTestCredentialsAsync(request.Email, request.Password))
-            .ReturnsAsync(authResponse);
+            var controller = CreateControllerWithTestAuthEnabled();
+            
+            var request = new TestLoginRequest 
+            { 
+                Email = "wrong@email.com", 
+                Password = "wrongpassword" 
+            };
+            var authResponse = new AuthResponse
+            {
+                Valid = false,
+                Message = "Invalid credentials"
+            };
+            _authServiceMock.Setup(x => x.VerifyTestCredentialsAsync(request.Email, request.Password))
+                .ReturnsAsync(authResponse);
 
-        // Act
-        var result = await controller.TestLogin(request);
+            // Act
+            var result = await controller.TestLogin(request);
 
-        // Assert
-        var unauthorizedResult = Assert.IsType<UnauthorizedObjectResult>(result.Result);
-        var response = Assert.IsType<AuthResponse>(unauthorizedResult.Value);
-        Assert.False(response.Valid);
+            // Assert
+            var unauthorizedResult = Assert.IsType<UnauthorizedObjectResult>(result.Result);
+            var response = Assert.IsType<AuthResponse>(unauthorizedResult.Value);
+            Assert.False(response.Valid);
+        }
+        finally
+        {
+            RestoreEnvironment(originalEnv);
+        }
     }
 
     [Fact]
     public async Task TestLogin_WhenEnabled_EmptyCredentials_ReturnsBadRequest()
     {
         // Arrange
-        var controller = CreateControllerWithTestAuthEnabled();
-        
-        var request = new TestLoginRequest 
-        { 
-            Email = "", 
-            Password = "" 
-        };
+        var originalEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+        SetDevelopmentEnvironment();
+        try
+        {
+            var controller = CreateControllerWithTestAuthEnabled();
+            
+            var request = new TestLoginRequest 
+            { 
+                Email = "", 
+                Password = "" 
+            };
 
-        // Act
-        var result = await controller.TestLogin(request);
+            // Act
+            var result = await controller.TestLogin(request);
 
-        // Assert
-        var badRequestResult = Assert.IsType<BadRequestObjectResult>(result.Result);
-        var response = Assert.IsType<AuthResponse>(badRequestResult.Value);
-        Assert.False(response.Valid);
+            // Assert
+            var badRequestResult = Assert.IsType<BadRequestObjectResult>(result.Result);
+            var response = Assert.IsType<AuthResponse>(badRequestResult.Value);
+            Assert.False(response.Valid);
+        }
+        finally
+        {
+            RestoreEnvironment(originalEnv);
+        }
     }
 }
 
