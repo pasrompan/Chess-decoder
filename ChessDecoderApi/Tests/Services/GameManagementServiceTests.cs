@@ -123,5 +123,154 @@ public class GameManagementServiceTests
         // Assert
         Assert.False(result);
     }
+
+    [Fact]
+    public async Task UpdatePgnContentAsync_ExistingGameWithCorrectUser_UpdatesPgnAndReturnsDetails()
+    {
+        // Arrange
+        var game = TestDataBuilder.CreateChessGame();
+        var newPgnContent = "1. d4 d5 2. c4 e6";
+        
+        _gameRepositoryMock.Setup(x => x.GetByIdAsync(game.Id)).ReturnsAsync(game);
+        _gameRepositoryMock.Setup(x => x.UpdateAsync(It.IsAny<ChessGame>())).ReturnsAsync((ChessGame g) => g);
+        _imageRepositoryMock.Setup(x => x.GetByChessGameIdAsync(game.Id)).ReturnsAsync(new List<GameImage>());
+        _statsRepositoryMock.Setup(x => x.GetByChessGameIdAsync(game.Id)).ReturnsAsync((GameStatistics?)null);
+
+        // Act
+        var result = await _service.UpdatePgnContentAsync(game.Id, game.UserId, newPgnContent);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(newPgnContent, result.PgnContent);
+        Assert.Equal(1, result.EditCount);
+        Assert.NotNull(result.LastEditedAt);
+        _gameRepositoryMock.Verify(x => x.UpdateAsync(It.Is<ChessGame>(g => 
+            g.PgnContent == newPgnContent && 
+            g.EditCount == 1 &&
+            g.LastEditedAt != null)), Times.Once);
+    }
+
+    [Fact]
+    public async Task UpdatePgnContentAsync_NonExistingGame_ReturnsNull()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+        var userId = "test-user";
+        var pgnContent = "1. e4 e5";
+        
+        _gameRepositoryMock.Setup(x => x.GetByIdAsync(gameId)).ReturnsAsync((ChessGame?)null);
+
+        // Act
+        var result = await _service.UpdatePgnContentAsync(gameId, userId, pgnContent);
+
+        // Assert
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task UpdatePgnContentAsync_WrongUser_ReturnsNull()
+    {
+        // Arrange
+        var game = TestDataBuilder.CreateChessGame();
+        var wrongUserId = "wrong-user";
+        var pgnContent = "1. e4 e5";
+        
+        _gameRepositoryMock.Setup(x => x.GetByIdAsync(game.Id)).ReturnsAsync(game);
+
+        // Act
+        var result = await _service.UpdatePgnContentAsync(game.Id, wrongUserId, pgnContent);
+
+        // Assert
+        Assert.Null(result);
+        _gameRepositoryMock.Verify(x => x.UpdateAsync(It.IsAny<ChessGame>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdatePgnContentAsync_EmptyPgn_ThrowsArgumentException()
+    {
+        // Arrange
+        var game = TestDataBuilder.CreateChessGame();
+        
+        _gameRepositoryMock.Setup(x => x.GetByIdAsync(game.Id)).ReturnsAsync(game);
+
+        // Act & Assert
+        await Assert.ThrowsAsync<ArgumentException>(() => 
+            _service.UpdatePgnContentAsync(game.Id, game.UserId, ""));
+    }
+
+    [Fact]
+    public async Task MarkProcessingCompleteAsync_ExistingGameWithCorrectUser_SetsFlag()
+    {
+        // Arrange
+        var game = TestDataBuilder.CreateChessGame();
+        game.ProcessingCompleted = false;
+        
+        _gameRepositoryMock.Setup(x => x.GetByIdAsync(game.Id)).ReturnsAsync(game);
+        _gameRepositoryMock.Setup(x => x.UpdateAsync(It.IsAny<ChessGame>())).ReturnsAsync((ChessGame g) => g);
+        _imageRepositoryMock.Setup(x => x.GetByChessGameIdAsync(game.Id)).ReturnsAsync(new List<GameImage>());
+        _statsRepositoryMock.Setup(x => x.GetByChessGameIdAsync(game.Id)).ReturnsAsync((GameStatistics?)null);
+
+        // Act
+        var result = await _service.MarkProcessingCompleteAsync(game.Id, game.UserId);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.ProcessingCompleted);
+        _gameRepositoryMock.Verify(x => x.UpdateAsync(It.Is<ChessGame>(g => g.ProcessingCompleted)), Times.Once);
+    }
+
+    [Fact]
+    public async Task MarkProcessingCompleteAsync_AlreadyCompleted_IsIdempotent()
+    {
+        // Arrange
+        var game = TestDataBuilder.CreateChessGame();
+        game.ProcessingCompleted = true; // Already completed
+        
+        _gameRepositoryMock.Setup(x => x.GetByIdAsync(game.Id)).ReturnsAsync(game);
+        _imageRepositoryMock.Setup(x => x.GetByChessGameIdAsync(game.Id)).ReturnsAsync(new List<GameImage>());
+        _statsRepositoryMock.Setup(x => x.GetByChessGameIdAsync(game.Id)).ReturnsAsync((GameStatistics?)null);
+
+        // Act
+        var result = await _service.MarkProcessingCompleteAsync(game.Id, game.UserId);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.ProcessingCompleted);
+        // Should NOT call Update since already completed
+        _gameRepositoryMock.Verify(x => x.UpdateAsync(It.IsAny<ChessGame>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task MarkProcessingCompleteAsync_NonExistingGame_ReturnsNull()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+        var userId = "test-user";
+        
+        _gameRepositoryMock.Setup(x => x.GetByIdAsync(gameId)).ReturnsAsync((ChessGame?)null);
+
+        // Act
+        var result = await _service.MarkProcessingCompleteAsync(gameId, userId);
+
+        // Assert
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task MarkProcessingCompleteAsync_WrongUser_ReturnsNull()
+    {
+        // Arrange
+        var game = TestDataBuilder.CreateChessGame();
+        var wrongUserId = "wrong-user";
+        
+        _gameRepositoryMock.Setup(x => x.GetByIdAsync(game.Id)).ReturnsAsync(game);
+
+        // Act
+        var result = await _service.MarkProcessingCompleteAsync(game.Id, wrongUserId);
+
+        // Assert
+        Assert.Null(result);
+        _gameRepositoryMock.Verify(x => x.UpdateAsync(It.IsAny<ChessGame>()), Times.Never);
+    }
 }
 

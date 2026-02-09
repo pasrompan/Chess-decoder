@@ -1,12 +1,12 @@
 ---
 id: PG-197
-status: active
+status: completed
 priority_score: .6250
 effort: 8
 impact: 5
 dependencies: []
 created_date: "2025-12-31"
-updated_date: 2026-02-08
+updated_date: "2026-02-09"
 plan_type: agent_plan
 executable: false
 ---

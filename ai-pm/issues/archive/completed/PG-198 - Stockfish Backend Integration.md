@@ -6,145 +6,178 @@ effort: 7
 impact: 8
 dependencies: []
 created_date: "2026-01-10"
-updated_date: "2026-02-08"
+updated_date: "2026-02-09"
 plan_type: agent_plan
 executable: false
 ---
 
-# Implementation Plan: Stockfish Backend Integration
+# Implementation Plan: Stockfish Frontend Integration
 
 > **NOTE**: This is a planning document for an agent. This plan is NOT to be executed automatically. It serves as a reference and specification for future implementation.
 
 ## Objective
 
-Integrate the Stockfish chess engine into the backend infrastructure to enable automated game analysis, position evaluation, and blunder detection. This provides the core engine capability required for the broader "Engine Integration for Game Analysis" feature (PG-197).
+Integrate the Stockfish chess engine into the frontend React application to enable automated game analysis, position evaluation, and blunder detection. This provides the core engine capability required for the broader "Engine Integration for Game Analysis" feature (PG-197).
 
 ## Plan Overview
 
 The system should:
-1. Integrate the Stockfish executable into the backend deployment and environment.
-2. Implement a robust UCI (Universal Chess Interface) protocol handler for communication.
-3. Create an abstraction layer (`IChessEngine`) to manage engine lifecycle and commands.
-4. Develop a game analysis service that can process PGNs move-by-move.
-5. Provide high-performance analysis while managing system resources effectively.
+1. Integrate a JavaScript/TypeScript Stockfish library (e.g., stockfish.js or stockfish.wasm) into the React frontend.
+2. Create a React hook or service to manage engine lifecycle and analysis operations.
+3. Develop UI components to display move-by-move evaluations, best moves, and blunder detection.
+4. Integrate analysis results with the existing ChessBoard and NotationDisplay components.
+5. Provide real-time analysis feedback as users navigate through game moves.
 
 ## Implementation Plan
 
-### Phase 1: Infrastructure and Setup
+### Phase 1: Stockfish Library Integration
 
 **Agent should:**
-- Download and bundle the appropriate Stockfish executable for the target environment.
-- Configure `appsettings.json` with engine paths, default depth, and resource limits.
-- Set up process management to handle starting, stopping, and restarting the engine process.
-- Implement a basic UCI command sender and receiver.
+- Install a Stockfish JavaScript/TypeScript library (e.g., `stockfish.js` or `stockfish.wasm`).
+- Create a React hook (`useStockfish`) to manage engine initialization and lifecycle.
+- Implement engine configuration (depth, threads, hash size) via React state or context.
+- Handle engine loading and initialization in the browser.
 
 **Key Integration Points:**
-- Backend configuration system.
-- System process management (System.Diagnostics.Process).
-- Dockerfile/deployment scripts for bundling the executable.
+- React hooks for state management.
+- Web Worker support for running Stockfish in background thread (if using stockfish.js).
+- Error handling for engine initialization failures.
 
 **Deliverables:**
-- Stockfish executable in the project structure.
-- Configuration settings in `appsettings.json`.
-- Basic process wrapper for the engine.
+- Stockfish library installed via npm.
+- `useStockfish` hook for engine management.
+- Configuration component/settings for engine parameters.
 
-### Phase 2: UCI Protocol Wrapper Implementation
-
-**Agent should:**
-- Implement the `IChessEngine` interface with support for:
-  - `isready`, `ucinewgame`, `position`, `go`, `stop`, `quit` commands.
-  - Parsing engine output (bestmove, info depth, info score cp, etc.).
-- Add support for setting engine options (Threads, Hash, MultiPV).
-- Implement timeout handling and error recovery for unresponsive engine processes.
-- Ensure thread-safety for concurrent analysis requests (or implement a pooling mechanism).
-
-**Key Integration Points:**
-- Dependency Injection (as a singleton or scoped service).
-- Logging for UCI communication debugging.
-
-**Deliverables:**
-- `IChessEngine` interface.
-- `StockfishEngine` implementation.
-- Unit tests for UCI parsing and command handling.
-
-### Phase 3: Analysis Service and API
+### Phase 2: Analysis Service Implementation
 
 **Agent should:**
-- Create `IGameAnalysisService` to provide high-level analysis functions.
+- Create a service/hook (`useGameAnalysis`) to coordinate analysis operations.
 - Implement move-by-move analysis logic:
-  - Parse PGN to FEN sequence.
-  - Run engine evaluation on each FEN.
-  - Extract centipawn scores and best moves.
-- Create API endpoints in a new `AnalysisController` to:
-  - Trigger analysis for a specific game ID.
-  - Retrieve current analysis status or results.
+  - Convert PGN moves to FEN positions using `chess.js` (already in use).
+  - Run engine evaluation on each position.
+  - Extract centipawn scores and best moves from engine output.
+- Cache analysis results to avoid re-analyzing the same positions.
+- Handle analysis progress and completion states.
 
 **Key Integration Points:**
-- Existing `GameController` and `ChessGame` repositories.
-- PGN parsing logic.
+- Existing `chess.js` library for position management.
+- React state management for analysis results.
+- Integration with existing `ChessBoard` component.
 
 **Deliverables:**
-- `IGameAnalysisService` implementation.
-- `AnalysisController` with core endpoints.
-- Analysis result DTOs.
+- `useGameAnalysis` hook.
+- Analysis result types/interfaces.
+- Caching mechanism for analysis results.
 
-### Phase 4: Persistence and Testing
+### Phase 3: UI Components for Analysis Display
 
 **Agent should:**
-- Extend the data model to store analysis results (MoveAnalysis, GameAnalysis).
-- Implement database persistence using existing repository patterns.
-- Create comprehensive integration tests covering the full flow from PGN to stored analysis.
-- Verify performance and resource usage with multiple concurrent analysis requests.
+- Create components to display:
+  - Move evaluation scores (centipawns) next to each move in NotationDisplay.
+  - Best move suggestions with visual indicators.
+  - Blunder detection (moves that significantly worsen position).
+  - Overall game analysis summary.
+- Add visual indicators (colors, icons) for:
+  - Excellent moves (green)
+  - Good moves (light green)
+  - Inaccuracies (yellow)
+  - Mistakes (orange)
+  - Blunders (red)
+- Integrate analysis display into existing NotationDisplay component.
 
 **Key Integration Points:**
-- Database context and migrations.
-- Test suite infrastructure.
+- Existing `NotationDisplay` component.
+- UI component library (Radix UI, shadcn/ui).
+- Color coding and visual feedback.
 
 **Deliverables:**
-- Database schema updates.
-- Repository methods for analysis persistence.
-- Integration test suite.
+- `AnalysisDisplay` component.
+- `MoveEvaluation` component for individual move scores.
+- `BlunderIndicator` component.
+- Updated `NotationDisplay` with analysis integration.
+
+### Phase 4: Integration and Testing
+
+**Agent should:**
+- Integrate analysis into the game viewing workflow.
+- Add controls to start/stop analysis.
+- Handle edge cases (incomplete games, invalid moves, etc.).
+- Test performance with long games.
+- Add loading states and progress indicators.
+
+**Key Integration Points:**
+- Complete game viewing flow.
+- User interaction patterns.
+- Performance optimization.
+
+**Deliverables:**
+- Fully integrated analysis feature.
+- Loading and progress indicators.
+- Error handling and edge case coverage.
 
 ## Technical Specifications
 
-### IChessEngine Interface
-```csharp
-public interface IChessEngine
-{
-    Task<string> GetBestMoveAsync(string fen, int depth);
-    Task<int> GetEvaluationAsync(string fen, int depth); // centipawns
-    Task SetOptionAsync(string name, string value);
-    Task InitializeAsync();
+### useStockfish Hook
+```typescript
+interface UseStockfishReturn {
+  engine: Stockfish | null;
+  isReady: boolean;
+  isLoading: boolean;
+  error: string | null;
+  analyzePosition: (fen: string, depth: number) => Promise<AnalysisResult>;
+  getBestMove: (fen: string, depth: number) => Promise<string>;
+  setDepth: (depth: number) => void;
+}
+
+function useStockfish(): UseStockfishReturn;
+```
+
+### Analysis Result Types
+```typescript
+interface AnalysisResult {
+  evaluation: number; // centipawns (positive = white advantage)
+  bestMove: string; // UCI format (e.g., "e2e4")
+  depth: number;
+  nodes?: number;
+}
+
+interface MoveAnalysis {
+  moveNumber: number;
+  move: string;
+  evaluation: number;
+  bestMove: string;
+  isBlunder: boolean;
+  isMistake: boolean;
+  isInaccuracy: boolean;
 }
 ```
 
-### API Endpoints
-```typescript
-// Backend API endpoints to implement:
-POST /api/analysis/{gameId}
-  Request: { depth: number }
-  Response: { status: "Started", jobId: string }
-
-GET /api/analysis/{gameId}
-  Response: GameAnalysisDto
-```
+### UI Component Integration
+- Add analysis indicators to `NotationDisplay` component
+- Show evaluation scores inline with moves
+- Display best move suggestions on hover/click
+- Color-code moves based on quality
 
 ## Acceptance Criteria
 
-### Backend
-- [x] Stockfish executable is correctly bundled and accessible by the application.
-- [x] UCI protocol handler correctly parses evaluation and bestmove output.
-- [x] Engine process is automatically restarted if it crashes or hangs.
-- [x] Game analysis service correctly processes a full PGN and returns evaluations for every move.
-- [ ] Analysis results are persisted in the database and linked to the correct game. (Deferred - can be added in future iteration)
-- [x] API provides clear feedback on analysis progress and completion.
+### Frontend
+- [ ] Stockfish library is installed and properly initialized in the React app.
+- [ ] Engine correctly analyzes positions and returns evaluations and best moves.
+- [ ] Analysis results are displayed inline with moves in the NotationDisplay component.
+- [ ] Visual indicators (colors, icons) show move quality (excellent, good, inaccuracy, mistake, blunder).
+- [ ] Best move suggestions are displayed and accessible to users.
+- [ ] Analysis can be started/stopped by user action.
+- [ ] Loading states and progress indicators are shown during analysis.
+- [ ] Analysis results are cached to avoid re-analyzing the same positions.
+- [ ] Performance is acceptable for games up to 100 moves.
 
 ## Dependencies
 
-### Backend
-- Stockfish 16+ executable.
-- Existing `ChessGame` repository and database.
-- `System.Diagnostics.Process` for engine interaction.
+### Frontend
+- Stockfish JavaScript library (e.g., `stockfish.js` or `stockfish.wasm`).
+- Existing `chess.js` library (already installed).
+- Existing `react-chessboard` component (already installed).
+- React hooks for state management.
 
 ## Impact Assessment
 
@@ -158,11 +191,11 @@ Integrating Stockfish is the foundational step for providing move-by-move analys
 **Effort Level**: 7
 
 **Effort Breakdown**:
-- Infrastructure & Setup: 4 hours
-- UCI Wrapper: 10 hours
-- Analysis Service: 8 hours
-- API & Persistence: 8 hours
-- Testing: 6 hours
-- **Backend Total**: 36 hours
+- Library Integration & Setup: 3 hours
+- React Hooks & Analysis Service: 8 hours
+- UI Components for Analysis Display: 10 hours
+- Integration with Existing Components: 6 hours
+- Testing & Performance Optimization: 5 hours
+- **Frontend Total**: 32 hours
 
-**Total Estimated**: 36 hours
+**Total Estimated**: 32 hours

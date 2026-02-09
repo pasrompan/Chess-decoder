@@ -41,6 +41,14 @@ public class GameManagementService : IGameManagementService
         var images = await imageRepo.GetByChessGameIdAsync(gameId);
         var statistics = await statsRepo.GetByChessGameIdAsync(gameId);
 
+        return MapToGameDetailsResponse(game, images, statistics);
+    }
+
+    private GameDetailsResponse MapToGameDetailsResponse(
+        Models.ChessGame game, 
+        IEnumerable<Models.GameImage> images, 
+        Models.GameStatistics? statistics)
+    {
         return new GameDetailsResponse
         {
             GameId = game.Id,
@@ -56,6 +64,10 @@ public class GameManagementService : IGameManagementService
             BlackPlayer = game.BlackPlayer,
             GameDate = game.GameDate,
             Round = game.Round,
+            Result = game.Result,
+            ProcessingCompleted = game.ProcessingCompleted,
+            LastEditedAt = game.LastEditedAt,
+            EditCount = game.EditCount,
             Statistics = statistics != null ? new GameStatisticsDto
             {
                 TotalMoves = statistics.TotalMoves,
@@ -200,6 +212,108 @@ public class GameManagementService : IGameManagementService
         {
             _logger.LogError(ex, "Error updating metadata for game {GameId}", gameId);
             return false;
+        }
+    }
+
+    public async Task<GameDetailsResponse?> UpdatePgnContentAsync(Guid gameId, string userId, string pgnContent)
+    {
+        try
+        {
+            var gameRepo = await _repositoryFactory.CreateChessGameRepositoryAsync();
+            var imageRepo = await _repositoryFactory.CreateGameImageRepositoryAsync();
+            var statsRepo = await _repositoryFactory.CreateGameStatisticsRepositoryAsync();
+
+            var game = await gameRepo.GetByIdAsync(gameId);
+            
+            if (game == null)
+            {
+                _logger.LogWarning("Game {GameId} not found for PGN update", gameId);
+                return null;
+            }
+
+            // Verify the user owns this game
+            if (game.UserId != userId)
+            {
+                _logger.LogWarning("User {UserId} does not own game {GameId}", userId, gameId);
+                return null;
+            }
+
+            // Validate PGN content is not empty
+            if (string.IsNullOrWhiteSpace(pgnContent))
+            {
+                _logger.LogWarning("Empty PGN content provided for game {GameId}", gameId);
+                throw new ArgumentException("PGN content cannot be empty");
+            }
+
+            // Update the game
+            game.PgnContent = pgnContent;
+            game.LastEditedAt = DateTime.UtcNow;
+            game.EditCount++;
+
+            await gameRepo.UpdateAsync(game);
+            
+            _logger.LogInformation("Successfully updated PGN for game {GameId}, edit count: {EditCount}", gameId, game.EditCount);
+
+            // Return updated game details
+            var images = await imageRepo.GetByChessGameIdAsync(gameId);
+            var statistics = await statsRepo.GetByChessGameIdAsync(gameId);
+            return MapToGameDetailsResponse(game, images, statistics);
+        }
+        catch (ArgumentException)
+        {
+            throw; // Re-throw validation exceptions
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating PGN for game {GameId}", gameId);
+            throw;
+        }
+    }
+
+    public async Task<GameDetailsResponse?> MarkProcessingCompleteAsync(Guid gameId, string userId)
+    {
+        try
+        {
+            var gameRepo = await _repositoryFactory.CreateChessGameRepositoryAsync();
+            var imageRepo = await _repositoryFactory.CreateGameImageRepositoryAsync();
+            var statsRepo = await _repositoryFactory.CreateGameStatisticsRepositoryAsync();
+
+            var game = await gameRepo.GetByIdAsync(gameId);
+            
+            if (game == null)
+            {
+                _logger.LogWarning("Game {GameId} not found for completion marking", gameId);
+                return null;
+            }
+
+            // Verify the user owns this game
+            if (game.UserId != userId)
+            {
+                _logger.LogWarning("User {UserId} does not own game {GameId}", userId, gameId);
+                return null;
+            }
+
+            // Mark as completed (idempotent - can be called multiple times)
+            if (!game.ProcessingCompleted)
+            {
+                game.ProcessingCompleted = true;
+                await gameRepo.UpdateAsync(game);
+                _logger.LogInformation("Game {GameId} marked as processing completed", gameId);
+            }
+            else
+            {
+                _logger.LogDebug("Game {GameId} was already marked as completed", gameId);
+            }
+
+            // Return updated game details
+            var images = await imageRepo.GetByChessGameIdAsync(gameId);
+            var statistics = await statsRepo.GetByChessGameIdAsync(gameId);
+            return MapToGameDetailsResponse(game, images, statistics);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error marking game {GameId} as completed", gameId);
+            throw;
         }
     }
 

@@ -27,5 +27,15 @@ public interface IGameManagementService
     /// Update game metadata (player details, date, round)
     /// </summary>
     Task<bool> UpdateGameMetadataAsync(Guid gameId, UpdateGameMetadataRequest request);
+
+    /// <summary>
+    /// Update PGN content for a game
+    /// </summary>
+    Task<GameDetailsResponse?> UpdatePgnContentAsync(Guid gameId, string userId, string pgnContent);
+
+    /// <summary>
+    /// Mark a game's processing as completed (user exported to Lichess/Chess.com)
+    /// </summary>
+    Task<GameDetailsResponse?> MarkProcessingCompleteAsync(Guid gameId, string userId);
 }
 
