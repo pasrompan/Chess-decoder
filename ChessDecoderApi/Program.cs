@@ -93,6 +93,7 @@ builder.Services.AddScoped<ChessDecoderApi.Services.ImageProcessing.IImageExtrac
 // Register game processing and management services
 builder.Services.AddScoped<ChessDecoderApi.Services.GameProcessing.IGameProcessingService, ChessDecoderApi.Services.GameProcessing.GameProcessingService>();
 builder.Services.AddScoped<ChessDecoderApi.Services.GameProcessing.IGameManagementService, ChessDecoderApi.Services.GameProcessing.GameManagementService>();
+builder.Services.AddScoped<ChessDecoderApi.Services.GameProcessing.IProjectService, ChessDecoderApi.Services.GameProcessing.ProjectService>();
 
 // Register Firestore service (FREE database - no cost for typical usage!)
 // Note: FirestoreService is marked obsolete but still needed for:

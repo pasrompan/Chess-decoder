@@ -20,6 +20,7 @@ public class GameProcessingService : IGameProcessingService
     private readonly IImageExtractionService _imageExtractionService;
     private readonly IImageManipulationService _imageManipulationService;
     private readonly Services.IImageProcessingService _legacyImageProcessingService;
+    private readonly IProjectService _projectService;
     private readonly RepositoryFactory _repositoryFactory;
     private readonly ILogger<GameProcessingService> _logger;
 
@@ -30,6 +31,7 @@ public class GameProcessingService : IGameProcessingService
         IImageExtractionService imageExtractionService,
         IImageManipulationService imageManipulationService,
         Services.IImageProcessingService legacyImageProcessingService,
+        IProjectService projectService,
         RepositoryFactory repositoryFactory,
         ILogger<GameProcessingService> logger)
     {
@@ -39,6 +41,7 @@ public class GameProcessingService : IGameProcessingService
         _imageExtractionService = imageExtractionService ?? throw new ArgumentNullException(nameof(imageExtractionService));
         _imageManipulationService = imageManipulationService ?? throw new ArgumentNullException(nameof(imageManipulationService));
         _legacyImageProcessingService = legacyImageProcessingService ?? throw new ArgumentNullException(nameof(legacyImageProcessingService));
+        _projectService = projectService ?? throw new ArgumentNullException(nameof(projectService));
         _repositoryFactory = repositoryFactory ?? throw new ArgumentNullException(nameof(repositoryFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -234,6 +237,35 @@ public class GameProcessingService : IGameProcessingService
         await gameRepo.CreateAsync(chessGame);
         await imageRepo.CreateAsync(gameImage);
         await statsRepo.CreateAsync(gameStats);
+
+        // Create project history for version tracking
+        try
+        {
+            var uploadData = new InitialUploadData
+            {
+                FileName = request.Image.FileName,
+                FileSize = request.Image.Length,
+                FileType = request.Image.ContentType,
+                UploadedAt = DateTime.UtcNow,
+                StorageLocation = isStoredInCloud ? "cloud" : "local",
+                StorageUrl = cloudStorageUrl
+            };
+
+            var processingDataForHistory = new ProcessingData
+            {
+                ProcessedAt = chessGame.ProcessedAt,
+                PgnContent = result.PgnContent ?? "",
+                ValidationStatus = chessGame.IsValid ? "valid" : "invalid",
+                ProcessingTimeMs = (int)processingTime.TotalMilliseconds
+            };
+
+            await _projectService.CreateProjectAsync(chessGame.Id, request.UserId, uploadData, processingDataForHistory);
+        }
+        catch (Exception ex)
+        {
+            // Log but don't fail the request if project history creation fails
+            _logger.LogWarning(ex, "Failed to create project history for game {GameId}, continuing...", chessGame.Id);
+        }
 
         _logger.LogInformation("Successfully processed game {GameId} for user {UserId}", chessGame.Id, request.UserId);
 

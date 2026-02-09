@@ -17,6 +17,7 @@ public class GameManagementMetadataTests
     private readonly Mock<RepositoryFactory> _repositoryFactoryMock;
     private readonly Mock<IChessGameRepository> _gameRepositoryMock;
     private readonly Mock<IImageProcessingService> _imageProcessingServiceMock;
+    private readonly Mock<IProjectService> _projectServiceMock;
     private readonly Mock<ILogger<GameManagementService>> _loggerMock;
     private readonly GameManagementService _service;
 
@@ -28,6 +29,7 @@ public class GameManagementMetadataTests
             Mock.Of<ILogger<RepositoryFactory>>());
         _gameRepositoryMock = new Mock<IChessGameRepository>();
         _imageProcessingServiceMock = new Mock<IImageProcessingService>();
+        _projectServiceMock = new Mock<IProjectService>();
         _loggerMock = new Mock<ILogger<GameManagementService>>();
 
         _repositoryFactoryMock.Setup(x => x.CreateChessGameRepositoryAsync()).ReturnsAsync(_gameRepositoryMock.Object);
@@ -35,6 +37,7 @@ public class GameManagementMetadataTests
         _service = new GameManagementService(
             _repositoryFactoryMock.Object,
             _imageProcessingServiceMock.Object,
+            _projectServiceMock.Object,
             _loggerMock.Object);
     }
 

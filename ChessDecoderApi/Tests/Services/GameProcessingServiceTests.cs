@@ -21,6 +21,7 @@ public class GameProcessingServiceTests
     private readonly Mock<IImageExtractionService> _imageExtractionServiceMock;
     private readonly Mock<IImageManipulationService> _imageManipulationServiceMock;
     private readonly Mock<IImageProcessingService> _legacyImageProcessingServiceMock;
+    private readonly Mock<IProjectService> _projectServiceMock;
     private readonly Mock<RepositoryFactory> _repositoryFactoryMock;
     private readonly Mock<IChessGameRepository> _gameRepositoryMock;
     private readonly Mock<ILogger<GameProcessingService>> _loggerMock;
@@ -34,6 +35,7 @@ public class GameProcessingServiceTests
         _imageExtractionServiceMock = new Mock<IImageExtractionService>();
         _imageManipulationServiceMock = new Mock<IImageManipulationService>();
         _legacyImageProcessingServiceMock = new Mock<IImageProcessingService>();
+        _projectServiceMock = new Mock<IProjectService>();
         _repositoryFactoryMock = new Mock<RepositoryFactory>(
             Mock.Of<IServiceProvider>(),
             Mock.Of<IFirestoreService>(),
@@ -52,6 +54,7 @@ public class GameProcessingServiceTests
             _imageExtractionServiceMock.Object,
             _imageManipulationServiceMock.Object,
             _legacyImageProcessingServiceMock.Object,
+            _projectServiceMock.Object,
             _repositoryFactoryMock.Object,
             _loggerMock.Object);
     }

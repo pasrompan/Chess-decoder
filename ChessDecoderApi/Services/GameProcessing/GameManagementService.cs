@@ -14,15 +14,18 @@ public class GameManagementService : IGameManagementService
 {
     private readonly RepositoryFactory _repositoryFactory;
     private readonly IImageProcessingService _imageProcessingService;
+    private readonly IProjectService _projectService;
     private readonly ILogger<GameManagementService> _logger;
 
     public GameManagementService(
         RepositoryFactory repositoryFactory,
         IImageProcessingService imageProcessingService,
+        IProjectService projectService,
         ILogger<GameManagementService> logger)
     {
         _repositoryFactory = repositoryFactory ?? throw new ArgumentNullException(nameof(repositoryFactory));
         _imageProcessingService = imageProcessingService ?? throw new ArgumentNullException(nameof(imageProcessingService));
+        _projectService = projectService ?? throw new ArgumentNullException(nameof(projectService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -254,6 +257,20 @@ public class GameManagementService : IGameManagementService
             
             _logger.LogInformation("Successfully updated PGN for game {GameId}, edit count: {EditCount}", gameId, game.EditCount);
 
+            // Add history entry for the PGN update
+            try
+            {
+                await _projectService.AddHistoryEntryAsync(
+                    gameId, 
+                    "modification", 
+                    $"PGN content updated (edit #{game.EditCount})",
+                    new Dictionary<string, object> { { "editCount", game.EditCount } });
+            }
+            catch (Exception historyEx)
+            {
+                _logger.LogWarning(historyEx, "Failed to add history entry for PGN update, continuing...");
+            }
+
             // Return updated game details
             var images = await imageRepo.GetByChessGameIdAsync(gameId);
             var statistics = await statsRepo.GetByChessGameIdAsync(gameId);
@@ -299,6 +316,19 @@ public class GameManagementService : IGameManagementService
                 game.ProcessingCompleted = true;
                 await gameRepo.UpdateAsync(game);
                 _logger.LogInformation("Game {GameId} marked as processing completed", gameId);
+
+                // Add history entry for export/completion
+                try
+                {
+                    await _projectService.AddHistoryEntryAsync(
+                        gameId, 
+                        "export", 
+                        "Game exported to Lichess/Chess.com");
+                }
+                catch (Exception historyEx)
+                {
+                    _logger.LogWarning(historyEx, "Failed to add history entry for completion, continuing...");
+                }
             }
             else
             {
