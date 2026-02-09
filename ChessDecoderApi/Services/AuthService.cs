@@ -2,6 +2,8 @@ using ChessDecoderApi.Models;
 using ChessDecoderApi.Repositories;
 using Google.Apis.Auth;
 using Microsoft.Extensions.Configuration;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 
@@ -118,6 +120,108 @@ public class AuthService : IAuthService
         
         _logger.LogInformation("User signed out: {UserId}", userId);
         return Task.FromResult(true);
+    }
+
+    public async Task<AuthResponse> VerifyTestCredentialsAsync(string email, string password)
+    {
+        // SECURITY: Test auth is ONLY available in Development environment
+        // This is a safeguard even if ENABLE_TEST_AUTH is accidentally set in production
+        var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production";
+        var isDevelopment = environment.Equals("Development", StringComparison.OrdinalIgnoreCase);
+        
+        if (!isDevelopment)
+        {
+            _logger.LogWarning("Test authentication rejected: Not in Development environment (current: {Environment})", environment);
+            return new AuthResponse
+            {
+                Valid = false,
+                Message = "Test authentication is not available"
+            };
+        }
+
+        // Check if test auth is explicitly enabled
+        var testAuthEnabled = _configuration.GetValue<bool>("ENABLE_TEST_AUTH", false) ||
+                              Environment.GetEnvironmentVariable("ENABLE_TEST_AUTH")?.ToLower() == "true";
+
+        if (!testAuthEnabled)
+        {
+            _logger.LogWarning("Test authentication attempted but ENABLE_TEST_AUTH is not enabled");
+            return new AuthResponse
+            {
+                Valid = false,
+                Message = "Test authentication is not available"
+            };
+        }
+
+        // Test credentials are read from configuration with fallback to hardcoded values
+        // In a team environment, these should be set via environment variables
+        var testEmail = _configuration.GetValue<string>("TestAuth:Email") 
+                       ?? Environment.GetEnvironmentVariable("TEST_AUTH_EMAIL")
+                       ?? "test@chessscribe.local";
+        var testPassword = _configuration.GetValue<string>("TestAuth:Password") 
+                          ?? Environment.GetEnvironmentVariable("TEST_AUTH_PASSWORD")
+                          ?? "testpassword123";
+
+        if (email != testEmail || password != testPassword)
+        {
+            _logger.LogWarning("Invalid test credentials provided for email: {Email}", email);
+            return new AuthResponse
+            {
+                Valid = false,
+                Message = "Invalid credentials"
+            };
+        }
+
+        // Create a deterministic user ID for test user using SHA256
+        // Note: GetHashCode() is NOT deterministic across .NET versions/restarts
+        var emailBytes = Encoding.UTF8.GetBytes(email.ToLowerInvariant());
+        var hashBytes = SHA256.HashData(emailBytes);
+        var testUserId = "test-user-e2e-" + Convert.ToHexString(hashBytes)[..16];
+        
+        // Get or create the test user
+        var user = await GetOrCreateTestUserAsync(testUserId, email, "Test User");
+
+        _logger.LogInformation("Test user authenticated successfully: {Email}", email);
+
+        return new AuthResponse
+        {
+            Valid = true,
+            User = user,
+            Message = "Test authentication successful"
+        };
+    }
+
+    private async Task<User> GetOrCreateTestUserAsync(string userId, string email, string name)
+    {
+        var userRepo = await _repositoryFactory.CreateUserRepositoryAsync();
+        
+        // Check if user exists
+        var existingUser = await userRepo.GetByIdAsync(userId);
+        
+        if (existingUser != null)
+        {
+            // Update last login time
+            existingUser.LastLoginAt = DateTime.UtcNow;
+            await userRepo.UpdateAsync(existingUser);
+            return existingUser;
+        }
+
+        // Create new test user
+        var newUser = new User
+        {
+            Id = userId,
+            Email = email,
+            Name = name,
+            Picture = null,
+            Provider = "test",
+            CreatedAt = DateTime.UtcNow,
+            LastLoginAt = DateTime.UtcNow,
+            Credits = 1000 // Give test user plenty of credits for testing
+        };
+
+        await userRepo.CreateAsync(newUser);
+        _logger.LogInformation("Created new test user: {Email}", email);
+        return newUser;
     }
 
     private async Task<User> GetOrCreateUserAsync(string userId, string email, string name, string? picture)
