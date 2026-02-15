@@ -226,4 +226,42 @@ public class ProjectService : IProjectService
             throw;
         }
     }
+
+    private const string MockUserId = "mock-user";
+
+    public async Task EnsureProjectForMockResponseAsync(Guid gameId, string pgnContent)
+    {
+        try
+        {
+            var historyRepo = await _repositoryFactory.CreateProjectHistoryRepositoryAsync();
+            var existing = await historyRepo.GetByGameIdAsync(gameId);
+            if (existing != null)
+            {
+                _logger.LogDebug("Project already exists for mock game {GameId}, skipping creation", gameId);
+                return;
+            }
+
+            var uploadData = new InitialUploadData
+            {
+                FileName = "mock-upload.jpg",
+                FileSize = 0,
+                FileType = "image/jpeg",
+                UploadedAt = DateTime.UtcNow,
+                StorageLocation = "local"
+            };
+            var processingData = new ProcessingData
+            {
+                ProcessedAt = DateTime.UtcNow,
+                PgnContent = pgnContent ?? "",
+                ValidationStatus = "valid",
+                ProcessingTimeMs = 0
+            };
+            await CreateProjectAsync(gameId, MockUserId, uploadData, processingData);
+            _logger.LogInformation("Created project history for mock game {GameId}", gameId);
+        }
+        catch (NotSupportedException)
+        {
+            _logger.LogDebug("Project history not available (Firestore not configured), mock project page will not be available");
+        }
+    }
 }

@@ -28,6 +28,8 @@ public class FirestoreProjectHistoryRepository : IProjectHistoryRepository
         
         var history = snapshot.ConvertTo<ProjectHistory>();
         history.Id = Guid.Parse(snapshot.Id);
+        if (snapshot.TryGetValue<string>("GameId", out var gameIdStr) && Guid.TryParse(gameIdStr, out var gameId))
+            history.GameId = gameId;
         return history;
     }
 
@@ -43,6 +45,8 @@ public class FirestoreProjectHistoryRepository : IProjectHistoryRepository
         
         var history = doc.ConvertTo<ProjectHistory>();
         history.Id = Guid.Parse(doc.Id);
+        if (doc.TryGetValue<string>("GameId", out var gameIdStr) && Guid.TryParse(gameIdStr, out var parsedGameId))
+            history.GameId = parsedGameId;
         return history;
     }
 
@@ -58,6 +62,8 @@ public class FirestoreProjectHistoryRepository : IProjectHistoryRepository
         {
             var history = doc.ConvertTo<ProjectHistory>();
             history.Id = Guid.Parse(doc.Id);
+            if (doc.TryGetValue<string>("GameId", out var gameIdStr) && Guid.TryParse(gameIdStr, out var gameId))
+                history.GameId = gameId;
             histories.Add(history);
         }
         

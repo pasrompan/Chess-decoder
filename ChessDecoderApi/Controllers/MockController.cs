@@ -11,13 +11,16 @@ namespace ChessDecoderApi.Controllers;
 public class MockController : ControllerBase
 {
     private readonly IGameProcessingService _gameProcessingService;
+    private readonly IProjectService _projectService;
     private readonly ILogger<MockController> _logger;
 
     public MockController(
         IGameProcessingService gameProcessingService,
+        IProjectService projectService,
         ILogger<MockController> logger)
     {
         _gameProcessingService = gameProcessingService ?? throw new ArgumentNullException(nameof(gameProcessingService));
+        _projectService = projectService ?? throw new ArgumentNullException(nameof(projectService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -47,6 +50,14 @@ public class MockController : ControllerBase
         try
         {
             var response = await _gameProcessingService.ProcessMockUploadAsync(image, autoCrop);
+            try
+            {
+                await _projectService.EnsureProjectForMockResponseAsync(response.GameId, response.PgnContent ?? "");
+            }
+            catch (NotSupportedException)
+            {
+                // Firestore not configured - project page won't work for mock, but upload still succeeds
+            }
             return Ok(response);
         }
         catch (Exception ex)

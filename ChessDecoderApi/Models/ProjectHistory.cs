@@ -12,8 +12,8 @@ public class ProjectHistory
     [Key]
     public Guid Id { get; set; } = Guid.NewGuid();
     
+    // NOTE: Guid GameId is stored as string in Firestore - parsed manually in FirestoreProjectHistoryRepository
     [Required]
-    [FirestoreProperty]
     public Guid GameId { get; set; }
     
     [Required]

@@ -31,4 +31,10 @@ public interface IProjectService
     /// Update processing data for a project
     /// </summary>
     Task<ProjectHistory?> UpdateProcessingDataAsync(Guid gameId, ProcessingData processingData);
+
+    /// <summary>
+    /// Ensure project history exists for a mock upload (so project page works when mock API is enabled).
+    /// Idempotent: no-op if project already exists for the game ID.
+    /// </summary>
+    Task EnsureProjectForMockResponseAsync(Guid gameId, string pgnContent);
 }
