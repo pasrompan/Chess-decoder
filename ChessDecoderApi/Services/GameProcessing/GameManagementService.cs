@@ -135,19 +135,12 @@ public class GameManagementService : IGameManagementService
         try
         {
             var gameRepo = await _repositoryFactory.CreateChessGameRepositoryAsync();
-            var imageRepo = await _repositoryFactory.CreateGameImageRepositoryAsync();
-            var statsRepo = await _repositoryFactory.CreateGameStatisticsRepositoryAsync();
-
-            // Delete related records (cascade should handle this, but being explicit)
-            await imageRepo.DeleteByChessGameIdAsync(gameId);
-            await statsRepo.DeleteByChessGameIdAsync(gameId);
-            
-            // Delete the game
+            // Soft-delete the game; related records remain for audit/recovery.
             var result = await gameRepo.DeleteAsync(gameId);
             
             if (result)
             {
-                _logger.LogInformation("Successfully deleted game {GameId}", gameId);
+                _logger.LogInformation("Successfully soft-deleted game {GameId}", gameId);
             }
             else
             {

@@ -66,6 +66,13 @@ public class ChessGame
     
     [FirestoreProperty]
     public int EditCount { get; set; } = 0;
+
+    // Soft-delete tracking
+    [FirestoreProperty]
+    public bool IsDeleted { get; set; } = false;
+
+    [FirestoreProperty]
+    public DateTime? DeletedAt { get; set; }
     
     // Navigation properties - NOT stored in Firestore
     [ForeignKey("UserId")]

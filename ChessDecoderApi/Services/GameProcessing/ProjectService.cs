@@ -70,53 +70,54 @@ public class ProjectService : IProjectService
         {
             var historyRepo = await _repositoryFactory.CreateProjectHistoryRepositoryAsync();
             var result = await historyRepo.GetByGameIdAsync(gameId);
+            var gameRepo = await _repositoryFactory.CreateChessGameRepositoryAsync();
+            var activeGame = await gameRepo.GetByIdAsync(gameId);
+
+            // Hidden/deleted games should not expose project history.
+            if (activeGame == null)
+            {
+                return null;
+            }
             
             // If project history doesn't exist, try to create it on-demand from game data
             if (result == null)
             {
-                // Use repository directly to avoid circular dependency
-                var gameRepo = await _repositoryFactory.CreateChessGameRepositoryAsync();
                 var imageRepo = await _repositoryFactory.CreateGameImageRepositoryAsync();
-                var game = await gameRepo.GetByIdAsync(gameId);
+                _logger.LogInformation("Creating project history on-demand for existing game {GameId}", gameId);
                 
-                if (game != null)
-                {
-                    _logger.LogInformation("Creating project history on-demand for existing game {GameId}", gameId);
-                    
-                    // Get game images
-                    var images = await imageRepo.GetByChessGameIdAsync(gameId);
-                    var firstImage = images.FirstOrDefault();
-                    
-                    // Create minimal project history from existing game data
-                    var uploadData = firstImage != null
-                        ? new InitialUploadData
-                        {
-                            FileName = firstImage.FileName ?? "unknown",
-                            FileSize = firstImage.FileSizeBytes,
-                            FileType = firstImage.FileType ?? "image/jpeg",
-                            UploadedAt = firstImage.UploadedAt,
-                            StorageLocation = firstImage.IsStoredInCloud ? "cloud" : "local",
-                            StorageUrl = firstImage.CloudStorageUrl
-                        }
-                        : new InitialUploadData
-                        {
-                            FileName = "unknown",
-                            FileSize = 0,
-                            FileType = "image/jpeg",
-                            UploadedAt = game.ProcessedAt,
-                            StorageLocation = "local"
-                        };
-
-                    var processingData = new ProcessingData
+                // Get game images
+                var images = await imageRepo.GetByChessGameIdAsync(gameId);
+                var firstImage = images.FirstOrDefault();
+                
+                // Create minimal project history from existing game data
+                var uploadData = firstImage != null
+                    ? new InitialUploadData
                     {
-                        ProcessedAt = game.ProcessedAt,
-                        PgnContent = game.PgnContent ?? "",
-                        ValidationStatus = game.IsValid ? "valid" : "invalid",
-                        ProcessingTimeMs = game.ProcessingTimeMs
+                        FileName = firstImage.FileName ?? "unknown",
+                        FileSize = firstImage.FileSizeBytes,
+                        FileType = firstImage.FileType ?? "image/jpeg",
+                        UploadedAt = firstImage.UploadedAt,
+                        StorageLocation = firstImage.IsStoredInCloud ? "cloud" : "local",
+                        StorageUrl = firstImage.CloudStorageUrl
+                    }
+                    : new InitialUploadData
+                    {
+                        FileName = "unknown",
+                        FileSize = 0,
+                        FileType = "image/jpeg",
+                        UploadedAt = activeGame.ProcessedAt,
+                        StorageLocation = "local"
                     };
 
-                    result = await CreateProjectAsync(gameId, game.UserId, uploadData, processingData);
-                }
+                var processingData = new ProcessingData
+                {
+                    ProcessedAt = activeGame.ProcessedAt,
+                    PgnContent = activeGame.PgnContent ?? "",
+                    ValidationStatus = activeGame.IsValid ? "valid" : "invalid",
+                    ProcessingTimeMs = activeGame.ProcessingTimeMs
+                };
+
+                result = await CreateProjectAsync(gameId, activeGame.UserId, uploadData, processingData);
             }
             
             return result;
@@ -138,7 +139,25 @@ public class ProjectService : IProjectService
         try
         {
             var historyRepo = await _repositoryFactory.CreateProjectHistoryRepositoryAsync();
-            return await historyRepo.GetByUserIdAsync(userId);
+            var allProjects = await historyRepo.GetByUserIdAsync(userId);
+            if (allProjects.Count == 0)
+            {
+                return allProjects;
+            }
+
+            var gameRepo = await _repositoryFactory.CreateChessGameRepositoryAsync();
+            var visibleProjects = new List<ProjectHistory>();
+
+            foreach (var project in allProjects)
+            {
+                var activeGame = await gameRepo.GetByIdAsync(project.GameId);
+                if (activeGame != null)
+                {
+                    visibleProjects.Add(project);
+                }
+            }
+
+            return visibleProjects;
         }
         catch (NotSupportedException)
         {

@@ -28,6 +28,10 @@ public class FirestoreChessGameRepository : IChessGameRepository
         
         var game = snapshot.ConvertTo<ChessGame>();
         game.Id = id;
+        if (game.IsDeleted)
+        {
+            return null;
+        }
         return game;
     }
 
@@ -44,7 +48,9 @@ public class FirestoreChessGameRepository : IChessGameRepository
             var game = doc.ConvertTo<ChessGame>();
             game.Id = Guid.Parse(doc.Id);
             return game;
-        }).ToList();
+        })
+        .Where(g => !g.IsDeleted)
+        .ToList();
     }
 
     public async Task<(List<ChessGame> games, int totalCount)> GetByUserIdPaginatedAsync(
@@ -52,28 +58,28 @@ public class FirestoreChessGameRepository : IChessGameRepository
         int pageNumber = 1, 
         int pageSize = 10)
     {
-        // Get total count
-        var totalQuery = _firestoreDb.Collection(GAMES_COLLECTION)
-            .WhereEqualTo("UserId", userId);
-        var totalSnapshot = await totalQuery.GetSnapshotAsync();
-        var totalCount = totalSnapshot.Count;
-
-        // Get paginated results
-        var offset = (pageNumber - 1) * pageSize;
+        // Get all user games and filter soft-deleted entries in memory
         var query = _firestoreDb.Collection(GAMES_COLLECTION)
             .WhereEqualTo("UserId", userId)
-            .OrderByDescending("ProcessedAt")
-            .Offset(offset)
-            .Limit(pageSize);
+            .OrderByDescending("ProcessedAt");
         
         var snapshot = await query.GetSnapshotAsync();
         
-        var games = snapshot.Documents.Select(doc =>
+        var allGames = snapshot.Documents.Select(doc =>
         {
             var game = doc.ConvertTo<ChessGame>();
             game.Id = Guid.Parse(doc.Id);
             return game;
-        }).ToList();
+        })
+        .Where(g => !g.IsDeleted)
+        .ToList();
+
+        var totalCount = allGames.Count;
+        var offset = (pageNumber - 1) * pageSize;
+        var games = allGames
+            .Skip(offset)
+            .Take(pageSize)
+            .ToList();
 
         return (games, totalCount);
     }
@@ -87,6 +93,8 @@ public class FirestoreChessGameRepository : IChessGameRepository
         }
         
         game.ProcessedAt = DateTime.UtcNow;
+        game.IsDeleted = false;
+        game.DeletedAt = null;
         
         var docRef = _firestoreDb.Collection(GAMES_COLLECTION).Document(game.Id.ToString());
         await docRef.SetAsync(game);
@@ -109,31 +117,47 @@ public class FirestoreChessGameRepository : IChessGameRepository
         try
         {
             var docRef = _firestoreDb.Collection(GAMES_COLLECTION).Document(id.ToString());
-            await docRef.DeleteAsync();
+            var snapshot = await docRef.GetSnapshotAsync();
+            if (!snapshot.Exists)
+            {
+                return false;
+            }
+
+            var game = snapshot.ConvertTo<ChessGame>();
+            if (game.IsDeleted)
+            {
+                return false;
+            }
+
+            await docRef.SetAsync(new Dictionary<string, object?>
+            {
+                { "IsDeleted", true },
+                { "DeletedAt", DateTime.UtcNow }
+            }, SetOptions.MergeAll);
             
-            _logger.LogInformation("[Firestore] Deleted game: {GameId}", id);
+            _logger.LogInformation("[Firestore] Soft-deleted game: {GameId}", id);
             return true;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "[Firestore] Error deleting game: {GameId}", id);
+            _logger.LogError(ex, "[Firestore] Error soft-deleting game: {GameId}", id);
             return false;
         }
     }
 
     public async Task<bool> ExistsAsync(Guid id)
     {
-        var docRef = _firestoreDb.Collection(GAMES_COLLECTION).Document(id.ToString());
-        var snapshot = await docRef.GetSnapshotAsync();
-        return snapshot.Exists;
+        var game = await GetByIdAsync(id);
+        return game != null;
     }
 
     public async Task<int> GetCountByUserIdAsync(string userId)
     {
         var query = _firestoreDb.Collection(GAMES_COLLECTION)
-            .WhereEqualTo("UserId", userId);
+            .WhereEqualTo("UserId", userId)
+            .OrderByDescending("ProcessedAt");
         var snapshot = await query.GetSnapshotAsync();
-        return snapshot.Count;
+        return snapshot.Documents.Select(doc => doc.ConvertTo<ChessGame>())
+            .Count(g => !g.IsDeleted);
     }
 }
-

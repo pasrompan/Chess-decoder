@@ -13,6 +13,8 @@ public class ProjectServiceTests
 {
     private readonly Mock<RepositoryFactory> _repositoryFactoryMock;
     private readonly Mock<IProjectHistoryRepository> _projectHistoryRepositoryMock;
+    private readonly Mock<IChessGameRepository> _gameRepositoryMock;
+    private readonly Mock<IGameImageRepository> _imageRepositoryMock;
     private readonly Mock<ILogger<ProjectService>> _loggerMock;
     private readonly ProjectService _service;
 
@@ -23,11 +25,19 @@ public class ProjectServiceTests
             Mock.Of<IFirestoreService>(),
             Mock.Of<ILogger<RepositoryFactory>>());
         _projectHistoryRepositoryMock = new Mock<IProjectHistoryRepository>();
+        _gameRepositoryMock = new Mock<IChessGameRepository>();
+        _imageRepositoryMock = new Mock<IGameImageRepository>();
         _loggerMock = new Mock<ILogger<ProjectService>>();
 
         _repositoryFactoryMock
             .Setup(x => x.CreateProjectHistoryRepositoryAsync())
             .ReturnsAsync(_projectHistoryRepositoryMock.Object);
+        _repositoryFactoryMock
+            .Setup(x => x.CreateChessGameRepositoryAsync())
+            .ReturnsAsync(_gameRepositoryMock.Object);
+        _repositoryFactoryMock
+            .Setup(x => x.CreateGameImageRepositoryAsync())
+            .ReturnsAsync(_imageRepositoryMock.Object);
 
         _service = new ProjectService(_repositoryFactoryMock.Object, _loggerMock.Object);
     }
@@ -109,10 +119,20 @@ public class ProjectServiceTests
             UserId = "test-user",
             CreatedAt = DateTime.UtcNow
         };
+        var game = new ChessGame
+        {
+            Id = gameId,
+            UserId = "test-user",
+            Title = "Test Game",
+            PgnContent = "1. e4 e5 *"
+        };
 
         _projectHistoryRepositoryMock
             .Setup(x => x.GetByGameIdAsync(gameId))
             .ReturnsAsync(expectedHistory);
+        _gameRepositoryMock
+            .Setup(x => x.GetByIdAsync(gameId))
+            .ReturnsAsync(game);
 
         // Act
         var result = await _service.GetProjectByGameIdAsync(gameId);
@@ -130,6 +150,9 @@ public class ProjectServiceTests
         _projectHistoryRepositoryMock
             .Setup(x => x.GetByGameIdAsync(gameId))
             .ReturnsAsync((ProjectHistory?)null);
+        _gameRepositoryMock
+            .Setup(x => x.GetByIdAsync(gameId))
+            .ReturnsAsync((ChessGame?)null);
 
         // Act
         var result = await _service.GetProjectByGameIdAsync(gameId);
@@ -152,6 +175,15 @@ public class ProjectServiceTests
         _projectHistoryRepositoryMock
             .Setup(x => x.GetByUserIdAsync(userId))
             .ReturnsAsync(projects);
+        _gameRepositoryMock
+            .Setup(x => x.GetByIdAsync(It.IsAny<Guid>()))
+            .ReturnsAsync((Guid gameId) => new ChessGame
+            {
+                Id = gameId,
+                UserId = userId,
+                Title = "Visible game",
+                PgnContent = "1. e4 e5 *"
+            });
 
         // Act
         var result = await _service.GetUserProjectsAsync(userId);
@@ -159,6 +191,44 @@ public class ProjectServiceTests
         // Assert
         Assert.Equal(2, result.Count);
         Assert.All(result, p => Assert.Equal(userId, p.UserId));
+    }
+
+    [Fact]
+    public async Task GetUserProjectsAsync_ExcludesProjectsForDeletedOrMissingGames()
+    {
+        // Arrange
+        var userId = "test-user";
+        var visibleGameId = Guid.NewGuid();
+        var hiddenGameId = Guid.NewGuid();
+        var projects = new List<ProjectHistory>
+        {
+            new ProjectHistory { Id = Guid.NewGuid(), GameId = visibleGameId, UserId = userId },
+            new ProjectHistory { Id = Guid.NewGuid(), GameId = hiddenGameId, UserId = userId }
+        };
+
+        _projectHistoryRepositoryMock
+            .Setup(x => x.GetByUserIdAsync(userId))
+            .ReturnsAsync(projects);
+
+        _gameRepositoryMock
+            .Setup(x => x.GetByIdAsync(visibleGameId))
+            .ReturnsAsync(new ChessGame
+            {
+                Id = visibleGameId,
+                UserId = userId,
+                Title = "Visible",
+                PgnContent = "1. e4 e5 *"
+            });
+        _gameRepositoryMock
+            .Setup(x => x.GetByIdAsync(hiddenGameId))
+            .ReturnsAsync((ChessGame?)null);
+
+        // Act
+        var result = await _service.GetUserProjectsAsync(userId);
+
+        // Assert
+        Assert.Single(result);
+        Assert.Equal(visibleGameId, result[0].GameId);
     }
 
     [Fact]

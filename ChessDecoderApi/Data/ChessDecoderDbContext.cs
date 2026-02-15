@@ -41,6 +41,7 @@ public class ChessDecoderDbContext : DbContext
             entity.Property(e => e.PgnContent).HasColumnType("text");
             entity.Property(e => e.PgnOutputPath).HasMaxLength(500);
             entity.Property(e => e.ValidationMessage).HasMaxLength(1000);
+            entity.Property(e => e.IsDeleted).HasDefaultValue(false);
             
             // Relationship with User
             entity.HasOne(e => e.User)
