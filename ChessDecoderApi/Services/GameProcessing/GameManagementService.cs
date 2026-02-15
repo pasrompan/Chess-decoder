@@ -4,6 +4,8 @@ using ChessDecoderApi.DTOs.Responses;
 using ChessDecoderApi.Models;
 using ChessDecoderApi.Repositories;
 using ChessDecoderApi.Services;
+using System.Globalization;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace ChessDecoderApi.Services.GameProcessing;
@@ -253,8 +255,10 @@ public class GameManagementService : IGameManagementService
                 throw new ArgumentException("PGN content cannot be empty");
             }
 
+            var normalizedPgnContent = NormalizePgnForPersistence(pgnContent, game);
+
             // Update the game
-            game.PgnContent = pgnContent;
+            game.PgnContent = normalizedPgnContent;
             game.LastEditedAt = DateTime.UtcNow;
             game.EditCount++;
 
@@ -285,7 +289,7 @@ public class GameManagementService : IGameManagementService
                 var processingData = new ProcessingData
                 {
                     ProcessedAt = existingProcessing?.ProcessedAt ?? game.ProcessedAt,
-                    PgnContent = pgnContent,
+                    PgnContent = normalizedPgnContent,
                     ValidationStatus = existingProcessing?.ValidationStatus ?? (game.IsValid ? "valid" : "invalid"),
                     ProcessingTimeMs = existingProcessing?.ProcessingTimeMs ?? game.ProcessingTimeMs
                 };
@@ -447,41 +451,154 @@ public class GameManagementService : IGameManagementService
     {
         var whiteMoves = new List<string>();
         var blackMoves = new List<string>();
-        
-        // Remove PGN headers and metadata
-        var lines = pgnContent.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-        var movesSection = string.Join(" ", lines.Where(line => !line.StartsWith("[") && !string.IsNullOrWhiteSpace(line)));
-        
-        // Remove result markers and extra whitespace
-        movesSection = movesSection.Replace("*", "").Replace("1-0", "").Replace("0-1", "").Replace("1/2-1/2", "").Trim();
-        
-        // Extract moves using regex pattern: "1. e4 e5 2. Nf3 Nc6" etc.
-        var movePattern = @"\d+\.\s*([^\s]+)(?:\s+([^\s]+))?";
+
+        if (string.IsNullOrWhiteSpace(pgnContent))
+        {
+            return (whiteMoves, blackMoves);
+        }
+
+        // Normalize line endings and remove PGN headers (including indented headers).
+        var normalized = pgnContent.Replace("\r\n", "\n");
+        var lines = normalized.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        var movesSection = string.Join(" ", lines
+            .Where(line => !line.TrimStart().StartsWith("[", StringComparison.Ordinal))
+            .Where(line => !string.IsNullOrWhiteSpace(line)));
+
+        // Remove PGN comments/variations and game result markers.
+        movesSection = Regex.Replace(movesSection, @"\{[^}]*\}", " ");
+        movesSection = Regex.Replace(movesSection, @"\([^)]*\)", " ");
+        movesSection = Regex.Replace(movesSection, @"\b(?:1-0|0-1|1/2-1/2|\*)\b", " ");
+        movesSection = Regex.Replace(movesSection, @"\s+", " ").Trim();
+
+        // Extract moves like: "1. e4 e5", "1... e5", etc.
+        var movePattern = @"\d+\.(?:\.\.)?\s*([^\s]+)(?:\s+([^\s]+))?";
         var matches = Regex.Matches(movesSection, movePattern);
-        
+
         foreach (Match match in matches)
         {
-            // Add white move
             if (match.Groups[1].Success)
             {
                 var whiteMove = match.Groups[1].Value.Trim();
-                if (!string.IsNullOrEmpty(whiteMove) && whiteMove != "*")
+                if (!string.IsNullOrWhiteSpace(whiteMove) && whiteMove != "*")
                 {
                     whiteMoves.Add(whiteMove);
                 }
             }
-            
-            // Add black move if present
+
             if (match.Groups[2].Success)
             {
                 var blackMove = match.Groups[2].Value.Trim();
-                if (!string.IsNullOrEmpty(blackMove) && blackMove != "*")
+                if (!string.IsNullOrWhiteSpace(blackMove) && blackMove != "*")
                 {
                     blackMoves.Add(blackMove);
                 }
             }
         }
-        
+
         return (whiteMoves, blackMoves);
+    }
+
+    private string NormalizePgnForPersistence(string pgnContent, Models.ChessGame game)
+    {
+        var normalized = pgnContent.Replace("\r\n", "\n").Trim();
+        if (!LooksCorruptedPgn(normalized))
+        {
+            return normalized;
+        }
+
+        var (whiteMoves, blackMoves) = ExtractMovesFromPgn(normalized);
+        if (whiteMoves.Count == 0 && blackMoves.Count == 0)
+        {
+            throw new ArgumentException("PGN content does not contain valid move data");
+        }
+
+        var white = GetHeaderValue(normalized, "White") ?? game.WhitePlayer;
+        var black = GetHeaderValue(normalized, "Black") ?? game.BlackPlayer;
+        var round = GetHeaderValue(normalized, "Round") ?? game.Round;
+        var date = ParsePgnDate(GetHeaderValue(normalized, "Date")) ?? game.GameDate;
+
+        var metadata = new PgnMetadata
+        {
+            WhitePlayer = white,
+            BlackPlayer = black,
+            Round = round,
+            GameDate = date
+        };
+
+        var rebuilt = _imageProcessingService.GeneratePGNContentAsync(whiteMoves, blackMoves, metadata).TrimEnd();
+
+        var eventHeader = GetHeaderValue(normalized, "Event");
+        var siteHeader = GetHeaderValue(normalized, "Site");
+        if (!string.IsNullOrWhiteSpace(eventHeader) || !string.IsNullOrWhiteSpace(siteHeader))
+        {
+            var sb = new StringBuilder();
+            if (!string.IsNullOrWhiteSpace(eventHeader))
+            {
+                sb.AppendLine($"[Event \"{eventHeader}\"]");
+            }
+
+            if (!string.IsNullOrWhiteSpace(siteHeader))
+            {
+                sb.AppendLine($"[Site \"{siteHeader}\"]");
+            }
+
+            sb.AppendLine(rebuilt);
+            rebuilt = sb.ToString().TrimEnd();
+        }
+
+        var resultValue = NormalizeResultValue(GetHeaderValue(normalized, "Result"));
+        if (resultValue != "*")
+        {
+            rebuilt = rebuilt.Replace("[Result \"*\"]", $"[Result \"{resultValue}\"]", StringComparison.Ordinal);
+            rebuilt = Regex.Replace(rebuilt, @"\s\*$", $" {resultValue}");
+        }
+
+        _logger.LogWarning("Normalized corrupted PGN payload before persistence for game {GameId}", game.Id);
+        return rebuilt;
+    }
+
+    private static bool LooksCorruptedPgn(string pgnContent)
+    {
+        var lines = pgnContent.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        var moveLines = lines
+            .Where(line => !line.TrimStart().StartsWith("[", StringComparison.Ordinal))
+            .ToList();
+        var moveSection = string.Join(" ", moveLines);
+
+        // Header tags should never appear in the move section.
+        return moveSection.Contains('[', StringComparison.Ordinal) || moveSection.Contains(']', StringComparison.Ordinal);
+    }
+
+    private static string? GetHeaderValue(string pgnContent, string tag)
+    {
+        var pattern = $@"^\s*\[{Regex.Escape(tag)}\s+""(?<value>.*?)""\]\s*$";
+        var match = Regex.Match(pgnContent, pattern, RegexOptions.Multiline);
+        return match.Success ? match.Groups["value"].Value : null;
+    }
+
+    private static DateTime? ParsePgnDate(string? dateValue)
+    {
+        if (string.IsNullOrWhiteSpace(dateValue) || dateValue.Contains('?'))
+        {
+            return null;
+        }
+
+        if (DateTime.TryParseExact(dateValue, "yyyy.MM.dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+        {
+            return date;
+        }
+
+        return null;
+    }
+
+    private static string NormalizeResultValue(string? result)
+    {
+        return result switch
+        {
+            "1-0" => "1-0",
+            "0-1" => "0-1",
+            "1/2-1/2" => "1/2-1/2",
+            _ => "*"
+        };
     }
 }

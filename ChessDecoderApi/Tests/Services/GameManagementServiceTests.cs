@@ -1,4 +1,5 @@
 using ChessDecoderApi.Models;
+using ChessDecoderApi.DTOs;
 using ChessDecoderApi.Repositories;
 using ChessDecoderApi.Repositories.Interfaces;
 using ChessDecoderApi.Services;
@@ -157,6 +158,43 @@ public class GameManagementServiceTests
             g.PgnContent == newPgnContent && 
             g.EditCount == 1 &&
             g.LastEditedAt != null)), Times.Once);
+    }
+
+    [Fact]
+    public async Task UpdatePgnContentAsync_CorruptedPgn_ShouldNormalizeBeforeSave()
+    {
+        // Arrange
+        var game = TestDataBuilder.CreateChessGame();
+        var corruptedPgn = @"[Event ""ChessScribe Game""]
+[Site ""ChessScribe""]
+[Date ""2026.02.15""]
+[White ""?""]
+[Black ""?""]
+[Result ""*""]
+
+1. [Date ""????.??.??""] 2. [White ""?""] 3. [Black ""?""] 4. [Result ""*""] 5. d4 Nf6 6. Nf3 g6 *";
+
+        _gameRepositoryMock.Setup(x => x.GetByIdAsync(game.Id)).ReturnsAsync(game);
+        _gameRepositoryMock.Setup(x => x.UpdateAsync(It.IsAny<ChessGame>())).ReturnsAsync((ChessGame g) => g);
+        _imageRepositoryMock.Setup(x => x.GetByChessGameIdAsync(game.Id)).ReturnsAsync(new List<GameImage>());
+        _statsRepositoryMock.Setup(x => x.GetByChessGameIdAsync(game.Id)).ReturnsAsync((GameStatistics?)null);
+        _imageProcessingServiceMock
+            .Setup(x => x.GeneratePGNContentAsync(
+                It.IsAny<IEnumerable<string>>(),
+                It.IsAny<IEnumerable<string>>(),
+                It.IsAny<PgnMetadata>()))
+            .Returns("[Date \"2026.02.15\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n\n1. d4 Nf6 2. Nf3 g6 *");
+
+        // Act
+        var result = await _service.UpdatePgnContentAsync(game.Id, game.UserId, corruptedPgn);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.DoesNotContain("1. [Date", result.PgnContent);
+        Assert.Contains("1. d4 Nf6", result.PgnContent);
+        Assert.Contains("2. Nf3 g6", result.PgnContent);
+        Assert.Contains("[Event \"ChessScribe Game\"]", result.PgnContent);
+        Assert.Contains("[Site \"ChessScribe\"]", result.PgnContent);
     }
 
     [Fact]
