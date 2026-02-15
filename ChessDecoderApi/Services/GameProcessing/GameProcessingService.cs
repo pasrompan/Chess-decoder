@@ -122,6 +122,10 @@ public class GameProcessingService : IGameProcessingService
 
         var imagePathForProcessing = isStoredInCloud ? cloudStorageUrl! : filePath;
         string? processedImageBase64 = null;
+        byte[]? processedImageBytes = null;
+        string? processedImageCloudStorageUrl = null;
+        string? processedImageCloudStorageObjectName = null;
+        string? processedImageLocalPath = null;
 
         // Handle autoCrop if enabled
         if (request.AutoCrop && !isStoredInCloud)
@@ -169,12 +173,46 @@ public class GameProcessingService : IGameProcessingService
         // Generate processed image
         try
         {
-            var imageBytes = await File.ReadAllBytesAsync(imagePathForProcessing);
-            processedImageBase64 = Convert.ToBase64String(imageBytes);
+            processedImageBytes = await File.ReadAllBytesAsync(imagePathForProcessing);
+            processedImageBase64 = Convert.ToBase64String(processedImageBytes);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to generate processed image");
+        }
+
+        if (processedImageBytes != null)
+        {
+            try
+            {
+                if (isStoredInCloud)
+                {
+                    var extension = Path.GetExtension(request.Image.FileName);
+                    var processedFileName = $"{Guid.NewGuid()}_processed{extension}";
+                    using var processedStream = new MemoryStream(processedImageBytes);
+                    processedImageCloudStorageObjectName = await _cloudStorageService.UploadGameImageAsync(
+                        processedStream,
+                        processedFileName,
+                        request.Image.ContentType);
+                    processedImageCloudStorageUrl = await _cloudStorageService.GetImageUrlAsync(processedImageCloudStorageObjectName);
+                }
+                else
+                {
+                    var processedDir = Path.Combine(Directory.GetCurrentDirectory(), "uploads", "processed");
+                    if (!Directory.Exists(processedDir))
+                    {
+                        Directory.CreateDirectory(processedDir);
+                    }
+
+                    var processedFileName = $"{Guid.NewGuid()}_processed{Path.GetExtension(request.Image.FileName)}";
+                    processedImageLocalPath = Path.Combine(processedDir, processedFileName);
+                    await File.WriteAllBytesAsync(processedImageLocalPath, processedImageBytes);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to persist processed image variant for game upload");
+            }
         }
 
         // Create game records
@@ -207,7 +245,8 @@ public class GameProcessingService : IGameProcessingService
             CloudStorageUrl = cloudStorageUrl,
             CloudStorageObjectName = cloudStorageObjectName,
             IsStoredInCloud = isStoredInCloud,
-            UploadedAt = DateTime.UtcNow
+            UploadedAt = DateTime.UtcNow,
+            Variant = "original"
         };
 
         var totalMoves = result.Validation?.Moves?.Count ?? 0;
@@ -236,6 +275,34 @@ public class GameProcessingService : IGameProcessingService
 
         await gameRepo.CreateAsync(chessGame);
         await imageRepo.CreateAsync(gameImage);
+
+        if (processedImageBytes != null)
+        {
+            try
+            {
+                var processedVariantImage = new GameImage
+                {
+                    Id = Guid.NewGuid(),
+                    ChessGameId = chessGame.Id,
+                    FileName = $"{Path.GetFileNameWithoutExtension(fileName)}_processed{Path.GetExtension(fileName)}",
+                    FilePath = processedImageLocalPath ?? string.Empty,
+                    FileType = request.Image.ContentType,
+                    FileSizeBytes = processedImageBytes.Length,
+                    CloudStorageUrl = processedImageCloudStorageUrl,
+                    CloudStorageObjectName = processedImageCloudStorageObjectName,
+                    IsStoredInCloud = isStoredInCloud && !string.IsNullOrWhiteSpace(processedImageCloudStorageObjectName),
+                    UploadedAt = DateTime.UtcNow,
+                    Variant = "processed"
+                };
+
+                await imageRepo.CreateAsync(processedVariantImage);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to save processed image variant record for game {GameId}", chessGame.Id);
+            }
+        }
+
         await statsRepo.CreateAsync(gameStats);
 
         // Create project history for version tracking
@@ -425,4 +492,3 @@ public class GameProcessingService : IGameProcessingService
         return "Unknown Opening";
     }
 }
-

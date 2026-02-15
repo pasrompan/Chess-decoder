@@ -1,6 +1,7 @@
 using ChessDecoderApi.DTOs;
 using ChessDecoderApi.DTOs.Requests;
 using ChessDecoderApi.DTOs.Responses;
+using ChessDecoderApi.Models;
 using ChessDecoderApi.Repositories;
 using ChessDecoderApi.Services;
 using System.Text.RegularExpressions;
@@ -15,17 +16,20 @@ public class GameManagementService : IGameManagementService
     private readonly RepositoryFactory _repositoryFactory;
     private readonly IImageProcessingService _imageProcessingService;
     private readonly IProjectService _projectService;
+    private readonly ICloudStorageService _cloudStorageService;
     private readonly ILogger<GameManagementService> _logger;
 
     public GameManagementService(
         RepositoryFactory repositoryFactory,
         IImageProcessingService imageProcessingService,
         IProjectService projectService,
+        ICloudStorageService cloudStorageService,
         ILogger<GameManagementService> logger)
     {
         _repositoryFactory = repositoryFactory ?? throw new ArgumentNullException(nameof(repositoryFactory));
         _imageProcessingService = imageProcessingService ?? throw new ArgumentNullException(nameof(imageProcessingService));
         _projectService = projectService ?? throw new ArgumentNullException(nameof(projectService));
+        _cloudStorageService = cloudStorageService ?? throw new ArgumentNullException(nameof(cloudStorageService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -85,7 +89,8 @@ public class GameManagementService : IGameManagementService
                 FileName = img.FileName,
                 CloudStorageUrl = img.CloudStorageUrl,
                 IsStoredInCloud = img.IsStoredInCloud,
-                UploadedAt = img.UploadedAt
+                UploadedAt = img.UploadedAt,
+                Variant = string.IsNullOrWhiteSpace(img.Variant) ? "original" : img.Variant
             }).ToList()
         };
     }
@@ -271,6 +276,27 @@ public class GameManagementService : IGameManagementService
                 _logger.LogWarning(historyEx, "Failed to add history entry for PGN update, continuing...");
             }
 
+            // Keep project processing snapshot aligned with the latest edited PGN
+            try
+            {
+                var existingProject = await _projectService.GetProjectByGameIdAsync(gameId);
+                var existingProcessing = existingProject?.Processing;
+
+                var processingData = new ProcessingData
+                {
+                    ProcessedAt = existingProcessing?.ProcessedAt ?? game.ProcessedAt,
+                    PgnContent = pgnContent,
+                    ValidationStatus = existingProcessing?.ValidationStatus ?? (game.IsValid ? "valid" : "invalid"),
+                    ProcessingTimeMs = existingProcessing?.ProcessingTimeMs ?? game.ProcessingTimeMs
+                };
+
+                await _projectService.UpdateProcessingDataAsync(gameId, processingData);
+            }
+            catch (Exception processingHistoryEx)
+            {
+                _logger.LogWarning(processingHistoryEx, "Failed to update project processing data for game {GameId}, continuing...", gameId);
+            }
+
             // Return updated game details
             var images = await imageRepo.GetByChessGameIdAsync(gameId);
             var statistics = await statsRepo.GetByChessGameIdAsync(gameId);
@@ -347,6 +373,76 @@ public class GameManagementService : IGameManagementService
         }
     }
 
+    public async Task<GameImageContentResult?> GetGameImageAsync(Guid gameId, string userId, string variant = "processed")
+    {
+        try
+        {
+            var gameRepo = await _repositoryFactory.CreateChessGameRepositoryAsync();
+            var imageRepo = await _repositoryFactory.CreateGameImageRepositoryAsync();
+
+            var game = await gameRepo.GetByIdAsync(gameId);
+            if (game == null)
+            {
+                return null;
+            }
+
+            if (game.UserId != userId)
+            {
+                _logger.LogWarning("User {UserId} attempted to access image for game {GameId} without ownership", userId, gameId);
+                return null;
+            }
+
+            var images = await imageRepo.GetByChessGameIdAsync(gameId);
+            if (!images.Any())
+            {
+                return null;
+            }
+
+            var requestedVariant = string.IsNullOrWhiteSpace(variant) ? "processed" : variant.Trim().ToLowerInvariant();
+            var selectedImage = images.FirstOrDefault(i =>
+                string.Equals(i.Variant, requestedVariant, StringComparison.OrdinalIgnoreCase))
+                ?? images.FirstOrDefault(i => string.Equals(i.Variant, "original", StringComparison.OrdinalIgnoreCase))
+                ?? images.First();
+
+            if (selectedImage.IsStoredInCloud)
+            {
+                var objectName = selectedImage.CloudStorageObjectName;
+                if (string.IsNullOrWhiteSpace(objectName))
+                {
+                    _logger.LogWarning("Cloud image for game {GameId} is missing object name", gameId);
+                    return null;
+                }
+
+                var stream = await _cloudStorageService.DownloadGameImageAsync(objectName);
+                return new GameImageContentResult
+                {
+                    Stream = stream,
+                    ContentType = string.IsNullOrWhiteSpace(selectedImage.FileType) ? "image/png" : selectedImage.FileType,
+                    Variant = string.IsNullOrWhiteSpace(selectedImage.Variant) ? "original" : selectedImage.Variant
+                };
+            }
+
+            if (string.IsNullOrWhiteSpace(selectedImage.FilePath) || !File.Exists(selectedImage.FilePath))
+            {
+                _logger.LogWarning("Local image file not found for game {GameId}, path: {Path}", gameId, selectedImage.FilePath);
+                return null;
+            }
+
+            var localStream = new FileStream(selectedImage.FilePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            return new GameImageContentResult
+            {
+                Stream = localStream,
+                ContentType = string.IsNullOrWhiteSpace(selectedImage.FileType) ? "image/png" : selectedImage.FileType,
+                Variant = string.IsNullOrWhiteSpace(selectedImage.Variant) ? "original" : selectedImage.Variant
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving image for game {GameId}", gameId);
+            return null;
+        }
+    }
+
     private (List<string> whiteMoves, List<string> blackMoves) ExtractMovesFromPgn(string pgnContent)
     {
         var whiteMoves = new List<string>();
@@ -389,4 +485,3 @@ public class GameManagementService : IGameManagementService
         return (whiteMoves, blackMoves);
     }
 }
-

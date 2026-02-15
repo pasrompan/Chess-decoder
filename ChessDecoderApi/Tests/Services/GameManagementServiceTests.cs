@@ -18,6 +18,7 @@ public class GameManagementServiceTests
     private readonly Mock<IGameStatisticsRepository> _statsRepositoryMock;
     private readonly Mock<IImageProcessingService> _imageProcessingServiceMock;
     private readonly Mock<IProjectService> _projectServiceMock;
+    private readonly Mock<ICloudStorageService> _cloudStorageServiceMock;
     private readonly Mock<ILogger<GameManagementService>> _loggerMock;
     private readonly GameManagementService _service;
 
@@ -32,13 +33,19 @@ public class GameManagementServiceTests
         _statsRepositoryMock = new Mock<IGameStatisticsRepository>();
         _imageProcessingServiceMock = new Mock<IImageProcessingService>();
         _projectServiceMock = new Mock<IProjectService>();
+        _cloudStorageServiceMock = new Mock<ICloudStorageService>();
         _loggerMock = new Mock<ILogger<GameManagementService>>();
 
         _repositoryFactoryMock.Setup(x => x.CreateChessGameRepositoryAsync()).ReturnsAsync(_gameRepositoryMock.Object);
         _repositoryFactoryMock.Setup(x => x.CreateGameImageRepositoryAsync()).ReturnsAsync(_imageRepositoryMock.Object);
         _repositoryFactoryMock.Setup(x => x.CreateGameStatisticsRepositoryAsync()).ReturnsAsync(_statsRepositoryMock.Object);
 
-        _service = new GameManagementService(_repositoryFactoryMock.Object, _imageProcessingServiceMock.Object, _projectServiceMock.Object, _loggerMock.Object);
+        _service = new GameManagementService(
+            _repositoryFactoryMock.Object,
+            _imageProcessingServiceMock.Object,
+            _projectServiceMock.Object,
+            _cloudStorageServiceMock.Object,
+            _loggerMock.Object);
     }
 
     [Fact]
@@ -275,4 +282,3 @@ public class GameManagementServiceTests
         _gameRepositoryMock.Verify(x => x.UpdateAsync(It.IsAny<ChessGame>()), Times.Never);
     }
 }
-

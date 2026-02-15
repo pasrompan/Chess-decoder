@@ -44,5 +44,5 @@ public class GameImageDto
     public string? CloudStorageUrl { get; set; }
     public bool IsStoredInCloud { get; set; }
     public DateTime UploadedAt { get; set; }
+    public string Variant { get; set; } = "original";
 }
-

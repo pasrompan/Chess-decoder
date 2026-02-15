@@ -18,6 +18,7 @@ public class GameManagementMetadataTests
     private readonly Mock<IChessGameRepository> _gameRepositoryMock;
     private readonly Mock<IImageProcessingService> _imageProcessingServiceMock;
     private readonly Mock<IProjectService> _projectServiceMock;
+    private readonly Mock<ICloudStorageService> _cloudStorageServiceMock;
     private readonly Mock<ILogger<GameManagementService>> _loggerMock;
     private readonly GameManagementService _service;
 
@@ -30,6 +31,7 @@ public class GameManagementMetadataTests
         _gameRepositoryMock = new Mock<IChessGameRepository>();
         _imageProcessingServiceMock = new Mock<IImageProcessingService>();
         _projectServiceMock = new Mock<IProjectService>();
+        _cloudStorageServiceMock = new Mock<ICloudStorageService>();
         _loggerMock = new Mock<ILogger<GameManagementService>>();
 
         _repositoryFactoryMock.Setup(x => x.CreateChessGameRepositoryAsync()).ReturnsAsync(_gameRepositoryMock.Object);
@@ -38,6 +40,7 @@ public class GameManagementMetadataTests
             _repositoryFactoryMock.Object,
             _imageProcessingServiceMock.Object,
             _projectServiceMock.Object,
+            _cloudStorageServiceMock.Object,
             _loggerMock.Object);
     }
 
@@ -212,4 +215,3 @@ public class GameManagementMetadataTests
         Assert.Equal("1", result.Round);
     }
 }
-

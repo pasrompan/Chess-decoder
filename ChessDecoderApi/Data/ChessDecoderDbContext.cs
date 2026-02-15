@@ -56,6 +56,7 @@ public class ChessDecoderDbContext : DbContext
             entity.Property(e => e.FileName).HasMaxLength(255);
             entity.Property(e => e.FilePath).HasMaxLength(500);
             entity.Property(e => e.FileType).HasMaxLength(50);
+            entity.Property(e => e.Variant).HasMaxLength(20).HasDefaultValue("original");
             
             // Relationship with ChessGame
             entity.HasOne(e => e.ChessGame)

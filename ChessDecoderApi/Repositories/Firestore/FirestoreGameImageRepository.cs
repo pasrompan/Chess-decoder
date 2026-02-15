@@ -28,6 +28,10 @@ public class FirestoreGameImageRepository : IGameImageRepository
         
         var image = snapshot.ConvertTo<GameImage>();
         image.Id = id;
+        if (string.IsNullOrWhiteSpace(image.Variant))
+        {
+            image.Variant = "original";
+        }
         
         // Manually parse chessGameId from string to Guid
         if (snapshot.TryGetValue<string>("chessGameId", out var chessGameIdStr) &&
@@ -50,6 +54,10 @@ public class FirestoreGameImageRepository : IGameImageRepository
         {
             var image = doc.ConvertTo<GameImage>();
             image.Id = Guid.Parse(doc.Id);
+            if (string.IsNullOrWhiteSpace(image.Variant))
+            {
+                image.Variant = "original";
+            }
             
             // Manually parse chessGameId from string to Guid
             if (doc.TryGetValue<string>("chessGameId", out var chessGameIdStr) &&
@@ -83,7 +91,8 @@ public class FirestoreGameImageRepository : IGameImageRepository
             { "UploadedAt", image.UploadedAt },
             { "CloudStorageUrl", image.CloudStorageUrl ?? "" },
             { "CloudStorageObjectName", image.CloudStorageObjectName ?? "" },
-            { "IsStoredInCloud", image.IsStoredInCloud }
+            { "IsStoredInCloud", image.IsStoredInCloud },
+            { "Variant", image.Variant }
         };
         
         var docRef = _firestoreDb.Collection(IMAGES_COLLECTION).Document(image.Id.ToString());
@@ -105,7 +114,8 @@ public class FirestoreGameImageRepository : IGameImageRepository
             { "UploadedAt", image.UploadedAt },
             { "CloudStorageUrl", image.CloudStorageUrl ?? "" },
             { "CloudStorageObjectName", image.CloudStorageObjectName ?? "" },
-            { "IsStoredInCloud", image.IsStoredInCloud }
+            { "IsStoredInCloud", image.IsStoredInCloud },
+            { "Variant", image.Variant }
         };
         
         var docRef = _firestoreDb.Collection(IMAGES_COLLECTION).Document(image.Id.ToString());
@@ -159,4 +169,3 @@ public class FirestoreGameImageRepository : IGameImageRepository
         return snapshot.Exists;
     }
 }
-

@@ -237,5 +237,37 @@ public class GameController : ControllerBase
             return StatusCode(500, new { message = "Failed to mark game as complete" });
         }
     }
-}
 
+    /// <summary>
+    /// Get a game image by variant (processed/original) for a specific user.
+    /// Falls back to original if requested variant is unavailable.
+    /// </summary>
+    [HttpGet("{gameId}/image")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> GetGameImage(Guid gameId, [FromQuery] string userId, [FromQuery] string variant = "processed")
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                return BadRequest(new { message = "UserId is required" });
+            }
+
+            var imageResult = await _gameManagementService.GetGameImageAsync(gameId, userId, variant);
+            if (imageResult == null)
+            {
+                return NotFound(new { message = "Game image not found or access denied" });
+            }
+
+            return File(imageResult.Stream, imageResult.ContentType);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving image for game {GameId}", gameId);
+            return StatusCode(500, new { message = "Failed to retrieve game image" });
+        }
+    }
+}

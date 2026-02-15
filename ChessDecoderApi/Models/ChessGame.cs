@@ -116,6 +116,9 @@ public class GameImage
     
     [FirestoreProperty]
     public bool IsStoredInCloud { get; set; } = false;
+
+    [FirestoreProperty]
+    public string Variant { get; set; } = "original"; // "original" or "processed"
     
     // Navigation property - NOT stored in Firestore
     [ForeignKey("ChessGameId")]
