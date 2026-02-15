@@ -260,6 +260,29 @@ public class GameManagementServiceTests
     }
 
     [Fact]
+    public async Task UpdatePgnContentAsync_CorruptedPgnWithoutMoveData_ThrowsArgumentException()
+    {
+        // Arrange
+        var game = TestDataBuilder.CreateChessGame();
+        var invalidCorruptedPgn = @"[Event ""ChessScribe Game""]
+[Site ""ChessScribe""]
+[Date ""2026.02.15""]
+[White ""?""]
+[Black ""?""]
+[Result ""*""]
+
+this is [broken] notation";
+
+        _gameRepositoryMock.Setup(x => x.GetByIdAsync(game.Id)).ReturnsAsync(game);
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() =>
+            _service.UpdatePgnContentAsync(game.Id, game.UserId, invalidCorruptedPgn));
+        Assert.Contains("valid move data", ex.Message);
+        _gameRepositoryMock.Verify(x => x.UpdateAsync(It.IsAny<ChessGame>()), Times.Never);
+    }
+
+    [Fact]
     public async Task MarkProcessingCompleteAsync_ExistingGameWithCorrectUser_SetsFlag()
     {
         // Arrange

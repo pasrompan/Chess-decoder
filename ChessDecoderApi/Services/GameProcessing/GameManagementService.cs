@@ -248,7 +248,16 @@ public class GameManagementService : IGameManagementService
                 throw new ArgumentException("PGN content cannot be empty");
             }
 
-            var normalizedPgnContent = NormalizePgnForPersistence(pgnContent, game);
+            string normalizedPgnContent;
+            try
+            {
+                normalizedPgnContent = NormalizePgnForPersistence(pgnContent, game);
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Invalid PGN content provided for game {GameId}", gameId);
+                throw;
+            }
 
             // Update the game
             game.PgnContent = normalizedPgnContent;

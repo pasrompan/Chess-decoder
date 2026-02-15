@@ -305,6 +305,26 @@ public class GameControllerTests
     }
 
     [Fact]
+    public async Task UpdateGamePgn_InvalidPgnFromService_ReturnsBadRequest()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+        var userId = "test-user";
+        var request = new UpdatePgnRequest { PgnContent = "corrupted input" };
+
+        _gameManagementServiceMock
+            .Setup(x => x.UpdatePgnContentAsync(gameId, userId, request.PgnContent))
+            .ThrowsAsync(new ArgumentException("PGN content does not contain valid move data"));
+
+        // Act
+        var result = await _controller.UpdateGamePgn(gameId, request, userId);
+
+        // Assert
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.NotNull(badRequest.Value);
+    }
+
+    [Fact]
     public async Task MarkProcessingComplete_Success_ReturnsOkWithUpdatedGame()
     {
         // Arrange
