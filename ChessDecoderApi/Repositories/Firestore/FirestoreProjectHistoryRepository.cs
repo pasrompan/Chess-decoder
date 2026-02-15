@@ -30,7 +30,7 @@ public class FirestoreProjectHistoryRepository : IProjectHistoryRepository
         history.Id = Guid.Parse(snapshot.Id);
         if (snapshot.TryGetValue<string>("GameId", out var gameIdStr) && Guid.TryParse(gameIdStr, out var gameId))
             history.GameId = gameId;
-        return history;
+        return EnsureDefaults(history);
     }
 
     public async Task<ProjectHistory?> GetByGameIdAsync(Guid gameId)
@@ -47,14 +47,13 @@ public class FirestoreProjectHistoryRepository : IProjectHistoryRepository
         history.Id = Guid.Parse(doc.Id);
         if (doc.TryGetValue<string>("GameId", out var gameIdStr) && Guid.TryParse(gameIdStr, out var parsedGameId))
             history.GameId = parsedGameId;
-        return history;
+        return EnsureDefaults(history);
     }
 
     public async Task<List<ProjectHistory>> GetByUserIdAsync(string userId)
     {
         var query = _firestoreDb.Collection(HISTORY_COLLECTION)
-            .WhereEqualTo("UserId", userId)
-            .OrderByDescending("CreatedAt");
+            .WhereEqualTo("UserId", userId);
         var snapshot = await query.GetSnapshotAsync();
         
         var histories = new List<ProjectHistory>();
@@ -64,10 +63,12 @@ public class FirestoreProjectHistoryRepository : IProjectHistoryRepository
             history.Id = Guid.Parse(doc.Id);
             if (doc.TryGetValue<string>("GameId", out var gameIdStr) && Guid.TryParse(gameIdStr, out var gameId))
                 history.GameId = gameId;
-            histories.Add(history);
+            histories.Add(EnsureDefaults(history));
         }
         
-        return histories;
+        return histories
+            .OrderByDescending(h => h.CreatedAt)
+            .ToList();
     }
 
     public async Task<ProjectHistory> CreateAsync(ProjectHistory history)
@@ -87,7 +88,7 @@ public class FirestoreProjectHistoryRepository : IProjectHistoryRepository
             { "CreatedAt", history.CreatedAt },
             { "InitialUpload", ConvertToFirestore(history.InitialUpload) },
             { "Processing", ConvertToFirestore(history.Processing) },
-            { "Versions", history.Versions.Select(ConvertToFirestore).ToList() }
+            { "Versions", (history.Versions ?? new List<HistoryEntry>()).Select(ConvertToFirestore).ToList() }
         };
         
         var docRef = _firestoreDb.Collection(HISTORY_COLLECTION).Document(history.Id.ToString());
@@ -106,7 +107,7 @@ public class FirestoreProjectHistoryRepository : IProjectHistoryRepository
             { "CreatedAt", history.CreatedAt },
             { "InitialUpload", ConvertToFirestore(history.InitialUpload) },
             { "Processing", ConvertToFirestore(history.Processing) },
-            { "Versions", history.Versions.Select(ConvertToFirestore).ToList() }
+            { "Versions", (history.Versions ?? new List<HistoryEntry>()).Select(ConvertToFirestore).ToList() }
         };
         
         var docRef = _firestoreDb.Collection(HISTORY_COLLECTION).Document(history.Id.ToString());
@@ -187,5 +188,11 @@ public class FirestoreProjectHistoryRepository : IProjectHistoryRepository
             { "Description", entry.Description },
             { "Changes", entry.Changes }
         };
+    }
+
+    private static ProjectHistory EnsureDefaults(ProjectHistory history)
+    {
+        history.Versions ??= new List<HistoryEntry>();
+        return history;
     }
 }

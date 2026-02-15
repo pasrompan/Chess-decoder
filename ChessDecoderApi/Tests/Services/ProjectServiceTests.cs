@@ -215,6 +215,37 @@ public class ProjectServiceTests
     }
 
     [Fact]
+    public async Task AddHistoryEntryAsync_ExistingProjectWithNullVersions_InitializesAndAddsVersion()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+        var existingHistory = new ProjectHistory
+        {
+            Id = Guid.NewGuid(),
+            GameId = gameId,
+            UserId = "test-user",
+            Versions = null!
+        };
+
+        _projectHistoryRepositoryMock
+            .Setup(x => x.GetByGameIdAsync(gameId))
+            .ReturnsAsync(existingHistory);
+        _projectHistoryRepositoryMock
+            .Setup(x => x.UpdateAsync(It.IsAny<ProjectHistory>()))
+            .ReturnsAsync((ProjectHistory h) => h);
+
+        // Act
+        var result = await _service.AddHistoryEntryAsync(gameId, "modification", "Initialized versions");
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.NotNull(result.Versions);
+        Assert.Single(result.Versions);
+        Assert.Equal(1, result.Versions[0].Version);
+        Assert.Equal("modification", result.Versions[0].ChangeType);
+    }
+
+    [Fact]
     public async Task UpdateProcessingDataAsync_ExistingProject_UpdatesData()
     {
         // Arrange

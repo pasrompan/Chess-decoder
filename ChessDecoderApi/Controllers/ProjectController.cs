@@ -140,6 +140,7 @@ public class ProjectController : ControllerBase
 
     private static ProjectInfoResponse MapToProjectInfo(Models.ProjectHistory history)
     {
+        var versions = history.Versions ?? new List<Models.HistoryEntry>();
         return new ProjectInfoResponse
         {
             ProjectId = history.Id,
@@ -162,12 +163,13 @@ public class ProjectController : ControllerBase
                 ValidationStatus = history.Processing.ValidationStatus,
                 ProcessingTimeMs = history.Processing.ProcessingTimeMs
             } : null,
-            VersionCount = history.Versions.Count
+            VersionCount = versions.Count
         };
     }
 
     private static ProjectHistoryResponse MapToProjectHistory(Models.ProjectHistory history)
     {
+        var versions = history.Versions ?? new List<Models.HistoryEntry>();
         return new ProjectHistoryResponse
         {
             ProjectId = history.Id,
@@ -190,7 +192,7 @@ public class ProjectController : ControllerBase
                 ValidationStatus = history.Processing.ValidationStatus,
                 ProcessingTimeMs = history.Processing.ProcessingTimeMs
             } : null,
-            Versions = history.Versions.Select(v => new HistoryEntryDto
+            Versions = versions.Select(v => new HistoryEntryDto
             {
                 Version = v.Version,
                 Timestamp = v.Timestamp,

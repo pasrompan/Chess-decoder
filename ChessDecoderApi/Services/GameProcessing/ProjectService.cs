@@ -165,6 +165,7 @@ public class ProjectService : IProjectService
                 return null;
             }
 
+            history.Versions ??= new List<HistoryEntry>();
             var nextVersion = history.Versions.Count > 0 
                 ? history.Versions.Max(v => v.Version) + 1 
                 : 1;
