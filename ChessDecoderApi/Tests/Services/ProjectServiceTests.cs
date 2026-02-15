@@ -351,4 +351,207 @@ public class ProjectServiceTests
         
         _projectHistoryRepositoryMock.Verify(x => x.UpdateAsync(It.IsAny<ProjectHistory>()), Times.Once);
     }
+
+    [Fact]
+    public async Task GetProjectByGameIdAsync_NoHistory_CreatesProjectFromExistingGameAndImage()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+        var processedAt = DateTime.UtcNow.AddMinutes(-5);
+        var uploadedAt = DateTime.UtcNow.AddMinutes(-6);
+        var game = new ChessGame
+        {
+            Id = gameId,
+            UserId = "test-user",
+            Title = "Existing game",
+            ProcessedAt = processedAt,
+            PgnContent = "1. e4 e5 *",
+            IsValid = true,
+            ProcessingTimeMs = 321
+        };
+        var image = new GameImage
+        {
+            Id = Guid.NewGuid(),
+            ChessGameId = gameId,
+            FileName = "board.png",
+            FileSizeBytes = 2048,
+            FileType = "image/png",
+            UploadedAt = uploadedAt,
+            IsStoredInCloud = true,
+            CloudStorageUrl = "https://storage.example.com/board.png",
+            Variant = "original"
+        };
+
+        _projectHistoryRepositoryMock
+            .Setup(x => x.GetByGameIdAsync(gameId))
+            .ReturnsAsync((ProjectHistory?)null);
+        _projectHistoryRepositoryMock
+            .Setup(x => x.CreateAsync(It.IsAny<ProjectHistory>()))
+            .ReturnsAsync((ProjectHistory history) => history);
+        _gameRepositoryMock
+            .Setup(x => x.GetByIdAsync(gameId))
+            .ReturnsAsync(game);
+        _imageRepositoryMock
+            .Setup(x => x.GetByChessGameIdAsync(gameId))
+            .ReturnsAsync(new List<GameImage> { image });
+
+        // Act
+        var result = await _service.GetProjectByGameIdAsync(gameId);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(gameId, result.GameId);
+        Assert.Equal("board.png", result.InitialUpload?.FileName);
+        Assert.Equal("cloud", result.InitialUpload?.StorageLocation);
+        Assert.Equal("valid", result.Processing?.ValidationStatus);
+        Assert.Single(result.Versions);
+
+        _projectHistoryRepositoryMock.Verify(x => x.CreateAsync(It.Is<ProjectHistory>(h =>
+            h.GameId == gameId &&
+            h.UserId == "test-user" &&
+            h.InitialUpload != null &&
+            h.InitialUpload.FileName == "board.png" &&
+            h.InitialUpload.FileType == "image/png" &&
+            h.InitialUpload.FileSize == 2048 &&
+            h.InitialUpload.StorageLocation == "cloud" &&
+            h.Processing != null &&
+            h.Processing.PgnContent == "1. e4 e5 *" &&
+            h.Processing.ValidationStatus == "valid" &&
+            h.Processing.ProcessingTimeMs == 321
+        )), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetProjectByGameIdAsync_NoHistoryOrImages_UsesFallbackUploadMetadata()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+        var processedAt = DateTime.UtcNow.AddMinutes(-2);
+        var game = new ChessGame
+        {
+            Id = gameId,
+            UserId = "test-user",
+            Title = "Existing game",
+            ProcessedAt = processedAt,
+            PgnContent = "1. d4 d5 *",
+            IsValid = false,
+            ProcessingTimeMs = 450
+        };
+
+        _projectHistoryRepositoryMock
+            .Setup(x => x.GetByGameIdAsync(gameId))
+            .ReturnsAsync((ProjectHistory?)null);
+        _projectHistoryRepositoryMock
+            .Setup(x => x.CreateAsync(It.IsAny<ProjectHistory>()))
+            .ReturnsAsync((ProjectHistory history) => history);
+        _gameRepositoryMock
+            .Setup(x => x.GetByIdAsync(gameId))
+            .ReturnsAsync(game);
+        _imageRepositoryMock
+            .Setup(x => x.GetByChessGameIdAsync(gameId))
+            .ReturnsAsync(new List<GameImage>());
+
+        // Act
+        var result = await _service.GetProjectByGameIdAsync(gameId);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal("unknown", result.InitialUpload?.FileName);
+        Assert.Equal(0, result.InitialUpload?.FileSize);
+        Assert.Equal("local", result.InitialUpload?.StorageLocation);
+        Assert.Equal("invalid", result.Processing?.ValidationStatus);
+        Assert.Equal(processedAt, result.InitialUpload?.UploadedAt);
+    }
+
+    [Fact]
+    public async Task GetUserProjectsAsync_FirestoreNotSupported_ReturnsEmptyList()
+    {
+        // Arrange
+        var userId = "test-user";
+        _repositoryFactoryMock
+            .Setup(x => x.CreateProjectHistoryRepositoryAsync())
+            .ThrowsAsync(new NotSupportedException("Firestore not configured"));
+
+        // Act
+        var result = await _service.GetUserProjectsAsync(userId);
+
+        // Assert
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task UpdateProcessingDataAsync_NonExistingProject_ReturnsNull()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+        var processingData = new ProcessingData
+        {
+            ProcessedAt = DateTime.UtcNow,
+            PgnContent = "1. c4 e5 *",
+            ValidationStatus = "valid",
+            ProcessingTimeMs = 200
+        };
+
+        _projectHistoryRepositoryMock
+            .Setup(x => x.GetByGameIdAsync(gameId))
+            .ReturnsAsync((ProjectHistory?)null);
+
+        // Act
+        var result = await _service.UpdateProcessingDataAsync(gameId, processingData);
+
+        // Assert
+        Assert.Null(result);
+        _projectHistoryRepositoryMock.Verify(x => x.UpdateAsync(It.IsAny<ProjectHistory>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task EnsureProjectForMockResponseAsync_WhenMissing_CreatesProjectWithMockUser()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+        const string pgn = "1. e4 e5 2. Nf3 Nc6 *";
+
+        _projectHistoryRepositoryMock
+            .Setup(x => x.GetByGameIdAsync(gameId))
+            .ReturnsAsync((ProjectHistory?)null);
+        _projectHistoryRepositoryMock
+            .Setup(x => x.CreateAsync(It.IsAny<ProjectHistory>()))
+            .ReturnsAsync((ProjectHistory history) => history);
+
+        // Act
+        await _service.EnsureProjectForMockResponseAsync(gameId, pgn);
+
+        // Assert
+        _projectHistoryRepositoryMock.Verify(x => x.CreateAsync(It.Is<ProjectHistory>(h =>
+            h.GameId == gameId &&
+            h.UserId == "mock-user" &&
+            h.InitialUpload != null &&
+            h.InitialUpload.FileName == "mock-upload.jpg" &&
+            h.Processing != null &&
+            h.Processing.PgnContent == pgn &&
+            h.Versions.Count == 1 &&
+            h.Versions[0].ChangeType == "initial_upload"
+        )), Times.Once);
+    }
+
+    [Fact]
+    public async Task EnsureProjectForMockResponseAsync_WhenExisting_DoesNotCreateNewProject()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+        _projectHistoryRepositoryMock
+            .Setup(x => x.GetByGameIdAsync(gameId))
+            .ReturnsAsync(new ProjectHistory
+            {
+                Id = Guid.NewGuid(),
+                GameId = gameId,
+                UserId = "mock-user"
+            });
+
+        // Act
+        await _service.EnsureProjectForMockResponseAsync(gameId, "1. d4 d5 *");
+
+        // Assert
+        _projectHistoryRepositoryMock.Verify(x => x.CreateAsync(It.IsAny<ProjectHistory>()), Times.Never);
+    }
 }

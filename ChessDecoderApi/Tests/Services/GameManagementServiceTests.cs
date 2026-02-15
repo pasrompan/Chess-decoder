@@ -135,6 +135,20 @@ public class GameManagementServiceTests
     }
 
     [Fact]
+    public async Task DeleteGameAsync_WhenRepositoryThrows_ReturnsFalse()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+        _gameRepositoryMock.Setup(x => x.DeleteAsync(gameId)).ThrowsAsync(new Exception("db failure"));
+
+        // Act
+        var result = await _service.DeleteGameAsync(gameId);
+
+        // Assert
+        Assert.False(result);
+    }
+
+    [Fact]
     public async Task UpdatePgnContentAsync_ExistingGameWithCorrectUser_UpdatesPgnAndReturnsDetails()
     {
         // Arrange
@@ -318,5 +332,197 @@ public class GameManagementServiceTests
         // Assert
         Assert.Null(result);
         _gameRepositoryMock.Verify(x => x.UpdateAsync(It.IsAny<ChessGame>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetGameByIdAsync_ImageVariantMissing_DefaultsToOriginal()
+    {
+        // Arrange
+        var game = TestDataBuilder.CreateChessGame();
+        _gameRepositoryMock.Setup(x => x.GetByIdAsync(game.Id)).ReturnsAsync(game);
+        _statsRepositoryMock.Setup(x => x.GetByChessGameIdAsync(game.Id)).ReturnsAsync((GameStatistics?)null);
+        _imageRepositoryMock.Setup(x => x.GetByChessGameIdAsync(game.Id)).ReturnsAsync(new List<GameImage>
+        {
+            new()
+            {
+                Id = Guid.NewGuid(),
+                ChessGameId = game.Id,
+                FileName = "board.jpg",
+                FilePath = "/tmp/board.jpg",
+                Variant = ""
+            }
+        });
+
+        // Act
+        var result = await _service.GetGameByIdAsync(game.Id);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Single(result.Images);
+        Assert.Equal("original", result.Images[0].Variant);
+    }
+
+    [Fact]
+    public async Task GetGameImageAsync_LocalProcessedVariant_ReturnsSelectedVariantStream()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+        var userId = "test-user";
+        var game = TestDataBuilder.CreateChessGame(id: gameId, userId: userId);
+        var tempFile = Path.GetTempFileName();
+        var content = "processed-image-content";
+        await File.WriteAllTextAsync(tempFile, content);
+
+        try
+        {
+            _gameRepositoryMock.Setup(x => x.GetByIdAsync(gameId)).ReturnsAsync(game);
+            _imageRepositoryMock.Setup(x => x.GetByChessGameIdAsync(gameId)).ReturnsAsync(new List<GameImage>
+            {
+                new()
+                {
+                    Id = Guid.NewGuid(),
+                    ChessGameId = gameId,
+                    FileName = "processed.jpg",
+                    FilePath = tempFile,
+                    FileType = "image/jpeg",
+                    Variant = "processed",
+                    IsStoredInCloud = false
+                }
+            });
+
+            // Act
+            var result = await _service.GetGameImageAsync(gameId, userId, "processed");
+
+            // Assert
+            Assert.NotNull(result);
+            Assert.Equal("image/jpeg", result.ContentType);
+            Assert.Equal("processed", result.Variant);
+            using var reader = new StreamReader(result.Stream);
+            var streamText = await reader.ReadToEndAsync();
+            Assert.Equal(content, streamText);
+        }
+        finally
+        {
+            if (File.Exists(tempFile))
+            {
+                File.Delete(tempFile);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task GetGameImageAsync_MissingRequestedVariant_FallsBackToOriginal()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+        var userId = "test-user";
+        var game = TestDataBuilder.CreateChessGame(id: gameId, userId: userId);
+        var tempFile = Path.GetTempFileName();
+        var content = "original-image-content";
+        await File.WriteAllTextAsync(tempFile, content);
+
+        try
+        {
+            _gameRepositoryMock.Setup(x => x.GetByIdAsync(gameId)).ReturnsAsync(game);
+            _imageRepositoryMock.Setup(x => x.GetByChessGameIdAsync(gameId)).ReturnsAsync(new List<GameImage>
+            {
+                new()
+                {
+                    Id = Guid.NewGuid(),
+                    ChessGameId = gameId,
+                    FileName = "original.jpg",
+                    FilePath = tempFile,
+                    FileType = "image/png",
+                    Variant = "original",
+                    IsStoredInCloud = false
+                }
+            });
+
+            // Act
+            var result = await _service.GetGameImageAsync(gameId, userId, "processed");
+
+            // Assert
+            Assert.NotNull(result);
+            Assert.Equal("original", result.Variant);
+            Assert.Equal("image/png", result.ContentType);
+            using var reader = new StreamReader(result.Stream);
+            var streamText = await reader.ReadToEndAsync();
+            Assert.Equal(content, streamText);
+        }
+        finally
+        {
+            if (File.Exists(tempFile))
+            {
+                File.Delete(tempFile);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task GetGameImageAsync_CloudImage_ReturnsDownloadedStream()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+        var userId = "test-user";
+        var game = TestDataBuilder.CreateChessGame(id: gameId, userId: userId);
+        var cloudStream = new MemoryStream(new byte[] { 1, 2, 3, 4 });
+
+        _gameRepositoryMock.Setup(x => x.GetByIdAsync(gameId)).ReturnsAsync(game);
+        _imageRepositoryMock.Setup(x => x.GetByChessGameIdAsync(gameId)).ReturnsAsync(new List<GameImage>
+        {
+            new()
+            {
+                Id = Guid.NewGuid(),
+                ChessGameId = gameId,
+                FileName = "processed.jpg",
+                FileType = "image/jpeg",
+                Variant = "processed",
+                IsStoredInCloud = true,
+                CloudStorageObjectName = "games/processed.jpg"
+            }
+        });
+        _cloudStorageServiceMock
+            .Setup(x => x.DownloadGameImageAsync("games/processed.jpg"))
+            .ReturnsAsync(cloudStream);
+
+        // Act
+        var result = await _service.GetGameImageAsync(gameId, userId, "processed");
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(cloudStream, result.Stream);
+        Assert.Equal("processed", result.Variant);
+        _cloudStorageServiceMock.Verify(x => x.DownloadGameImageAsync("games/processed.jpg"), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetGameImageAsync_CloudImageWithoutObjectName_ReturnsNull()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+        var userId = "test-user";
+        var game = TestDataBuilder.CreateChessGame(id: gameId, userId: userId);
+
+        _gameRepositoryMock.Setup(x => x.GetByIdAsync(gameId)).ReturnsAsync(game);
+        _imageRepositoryMock.Setup(x => x.GetByChessGameIdAsync(gameId)).ReturnsAsync(new List<GameImage>
+        {
+            new()
+            {
+                Id = Guid.NewGuid(),
+                ChessGameId = gameId,
+                FileName = "processed.jpg",
+                FileType = "image/jpeg",
+                Variant = "processed",
+                IsStoredInCloud = true,
+                CloudStorageObjectName = null
+            }
+        });
+
+        // Act
+        var result = await _service.GetGameImageAsync(gameId, userId, "processed");
+
+        // Assert
+        Assert.Null(result);
+        _cloudStorageServiceMock.Verify(x => x.DownloadGameImageAsync(It.IsAny<string>()), Times.Never);
     }
 }

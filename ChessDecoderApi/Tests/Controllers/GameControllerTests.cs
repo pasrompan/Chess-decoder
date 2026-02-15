@@ -361,6 +361,88 @@ public class GameControllerTests
         Assert.IsType<NotFoundObjectResult>(result);
     }
 
+    [Fact]
+    public async Task DeleteGame_Success_ReturnsOk()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+        _gameManagementServiceMock.Setup(x => x.DeleteGameAsync(gameId)).ReturnsAsync(true);
+
+        // Act
+        var result = await _controller.DeleteGame(gameId);
+
+        // Assert
+        Assert.IsType<OkObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task DeleteGame_GameNotFound_ReturnsNotFound()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+        _gameManagementServiceMock.Setup(x => x.DeleteGameAsync(gameId)).ReturnsAsync(false);
+
+        // Act
+        var result = await _controller.DeleteGame(gameId);
+
+        // Assert
+        Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task GetGameImage_MissingUserId_ReturnsBadRequest()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+
+        // Act
+        var result = await _controller.GetGameImage(gameId, "", "processed");
+
+        // Assert
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task GetGameImage_NotFound_ReturnsNotFound()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+        var userId = "test-user";
+        _gameManagementServiceMock
+            .Setup(x => x.GetGameImageAsync(gameId, userId, "processed"))
+            .ReturnsAsync((GameImageContentResult?)null);
+
+        // Act
+        var result = await _controller.GetGameImage(gameId, userId, "processed");
+
+        // Assert
+        Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task GetGameImage_Success_ReturnsFileResult()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+        var userId = "test-user";
+        var stream = new MemoryStream(new byte[] { 1, 2, 3 });
+        _gameManagementServiceMock
+            .Setup(x => x.GetGameImageAsync(gameId, userId, "processed"))
+            .ReturnsAsync(new GameImageContentResult
+            {
+                Stream = stream,
+                ContentType = "image/jpeg",
+                Variant = "processed"
+            });
+
+        // Act
+        var result = await _controller.GetGameImage(gameId, userId, "processed");
+
+        // Assert
+        var fileResult = Assert.IsType<FileStreamResult>(result);
+        Assert.Equal("image/jpeg", fileResult.ContentType);
+    }
+
     private GameUploadRequest CreateMockGameUploadRequest()
     {
         var fileMock = new Mock<IFormFile>();
@@ -385,4 +467,3 @@ public class GameControllerTests
         };
     }
 }
-
