@@ -41,6 +41,7 @@ public class ChessDecoderDbContext : DbContext
             entity.Property(e => e.PgnContent).HasColumnType("text");
             entity.Property(e => e.PgnOutputPath).HasMaxLength(500);
             entity.Property(e => e.ValidationMessage).HasMaxLength(1000);
+            entity.Property(e => e.IsDeleted).HasDefaultValue(false);
             
             // Relationship with User
             entity.HasOne(e => e.User)
@@ -56,6 +57,7 @@ public class ChessDecoderDbContext : DbContext
             entity.Property(e => e.FileName).HasMaxLength(255);
             entity.Property(e => e.FilePath).HasMaxLength(500);
             entity.Property(e => e.FileType).HasMaxLength(50);
+            entity.Property(e => e.Variant).HasMaxLength(20).HasDefaultValue("original");
             
             // Relationship with ChessGame
             entity.HasOne(e => e.ChessGame)

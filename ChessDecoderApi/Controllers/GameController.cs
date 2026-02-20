@@ -1,4 +1,5 @@
 using ChessDecoderApi.DTOs.Requests;
+using ChessDecoderApi.DTOs.Responses;
 using ChessDecoderApi.Services.GameProcessing;
 using Microsoft.AspNetCore.Mvc;
 
@@ -159,5 +160,114 @@ public class GameController : ControllerBase
             return StatusCode(500, new { message = "Failed to delete game" });
         }
     }
-}
 
+    /// <summary>
+    /// Update PGN content for a game
+    /// </summary>
+    [HttpPut("{gameId}/pgn")]
+    [ProducesResponseType(typeof(GameDetailsResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> UpdateGamePgn(Guid gameId, [FromBody] UpdatePgnRequest request, [FromQuery] string userId)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                return BadRequest(new { message = "UserId is required" });
+            }
+
+            if (string.IsNullOrWhiteSpace(request.PgnContent))
+            {
+                return BadRequest(new { message = "PGN content cannot be empty" });
+            }
+
+            var result = await _gameManagementService.UpdatePgnContentAsync(gameId, userId, request.PgnContent);
+            
+            if (result == null)
+            {
+                return NotFound(new { message = "Game not found or access denied" });
+            }
+            
+            return Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating PGN for game {GameId}", gameId);
+            return StatusCode(500, new { message = "Failed to update game PGN" });
+        }
+    }
+
+    /// <summary>
+    /// Mark a game's processing as completed (user exported to Lichess/Chess.com)
+    /// </summary>
+    [HttpPut("{gameId}/complete")]
+    [ProducesResponseType(typeof(GameDetailsResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> MarkProcessingComplete(Guid gameId, [FromQuery] string userId)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                return BadRequest(new { message = "UserId is required" });
+            }
+
+            var result = await _gameManagementService.MarkProcessingCompleteAsync(gameId, userId);
+            
+            if (result == null)
+            {
+                return NotFound(new { message = "Game not found or access denied" });
+            }
+            
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error marking game {GameId} as complete", gameId);
+            return StatusCode(500, new { message = "Failed to mark game as complete" });
+        }
+    }
+
+    /// <summary>
+    /// Get a game image by variant (processed/original) for a specific user.
+    /// Falls back to original if requested variant is unavailable.
+    /// </summary>
+    [HttpGet("{gameId}/image")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> GetGameImage(Guid gameId, [FromQuery] string userId, [FromQuery] string variant = "processed")
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                return BadRequest(new { message = "UserId is required" });
+            }
+
+            var imageResult = await _gameManagementService.GetGameImageAsync(gameId, userId, variant);
+            if (imageResult == null)
+            {
+                return NotFound(new { message = "Game image not found or access denied" });
+            }
+
+            return File(imageResult.Stream, imageResult.ContentType);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving image for game {GameId}", gameId);
+            return StatusCode(500, new { message = "Failed to retrieve game image" });
+        }
+    }
+}

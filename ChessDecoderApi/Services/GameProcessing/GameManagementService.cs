@@ -1,8 +1,11 @@
 using ChessDecoderApi.DTOs;
 using ChessDecoderApi.DTOs.Requests;
 using ChessDecoderApi.DTOs.Responses;
+using ChessDecoderApi.Models;
 using ChessDecoderApi.Repositories;
 using ChessDecoderApi.Services;
+using System.Globalization;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace ChessDecoderApi.Services.GameProcessing;
@@ -14,15 +17,21 @@ public class GameManagementService : IGameManagementService
 {
     private readonly RepositoryFactory _repositoryFactory;
     private readonly IImageProcessingService _imageProcessingService;
+    private readonly IProjectService _projectService;
+    private readonly ICloudStorageService _cloudStorageService;
     private readonly ILogger<GameManagementService> _logger;
 
     public GameManagementService(
         RepositoryFactory repositoryFactory,
         IImageProcessingService imageProcessingService,
+        IProjectService projectService,
+        ICloudStorageService cloudStorageService,
         ILogger<GameManagementService> logger)
     {
         _repositoryFactory = repositoryFactory ?? throw new ArgumentNullException(nameof(repositoryFactory));
         _imageProcessingService = imageProcessingService ?? throw new ArgumentNullException(nameof(imageProcessingService));
+        _projectService = projectService ?? throw new ArgumentNullException(nameof(projectService));
+        _cloudStorageService = cloudStorageService ?? throw new ArgumentNullException(nameof(cloudStorageService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -41,6 +50,14 @@ public class GameManagementService : IGameManagementService
         var images = await imageRepo.GetByChessGameIdAsync(gameId);
         var statistics = await statsRepo.GetByChessGameIdAsync(gameId);
 
+        return MapToGameDetailsResponse(game, images, statistics);
+    }
+
+    private GameDetailsResponse MapToGameDetailsResponse(
+        Models.ChessGame game, 
+        IEnumerable<Models.GameImage> images, 
+        Models.GameStatistics? statistics)
+    {
         return new GameDetailsResponse
         {
             GameId = game.Id,
@@ -56,6 +73,10 @@ public class GameManagementService : IGameManagementService
             BlackPlayer = game.BlackPlayer,
             GameDate = game.GameDate,
             Round = game.Round,
+            Result = game.Result,
+            ProcessingCompleted = game.ProcessingCompleted,
+            LastEditedAt = game.LastEditedAt,
+            EditCount = game.EditCount,
             Statistics = statistics != null ? new GameStatisticsDto
             {
                 TotalMoves = statistics.TotalMoves,
@@ -70,7 +91,8 @@ public class GameManagementService : IGameManagementService
                 FileName = img.FileName,
                 CloudStorageUrl = img.CloudStorageUrl,
                 IsStoredInCloud = img.IsStoredInCloud,
-                UploadedAt = img.UploadedAt
+                UploadedAt = img.UploadedAt,
+                Variant = string.IsNullOrWhiteSpace(img.Variant) ? "original" : img.Variant
             }).ToList()
         };
     }
@@ -113,19 +135,12 @@ public class GameManagementService : IGameManagementService
         try
         {
             var gameRepo = await _repositoryFactory.CreateChessGameRepositoryAsync();
-            var imageRepo = await _repositoryFactory.CreateGameImageRepositoryAsync();
-            var statsRepo = await _repositoryFactory.CreateGameStatisticsRepositoryAsync();
-
-            // Delete related records (cascade should handle this, but being explicit)
-            await imageRepo.DeleteByChessGameIdAsync(gameId);
-            await statsRepo.DeleteByChessGameIdAsync(gameId);
-            
-            // Delete the game
+            // Soft-delete the game; related records remain for audit/recovery.
             var result = await gameRepo.DeleteAsync(gameId);
             
             if (result)
             {
-                _logger.LogInformation("Successfully deleted game {GameId}", gameId);
+                _logger.LogInformation("Successfully soft-deleted game {GameId}", gameId);
             }
             else
             {
@@ -203,46 +218,389 @@ public class GameManagementService : IGameManagementService
         }
     }
 
+    public async Task<GameDetailsResponse?> UpdatePgnContentAsync(Guid gameId, string userId, string pgnContent)
+    {
+        try
+        {
+            var gameRepo = await _repositoryFactory.CreateChessGameRepositoryAsync();
+            var imageRepo = await _repositoryFactory.CreateGameImageRepositoryAsync();
+            var statsRepo = await _repositoryFactory.CreateGameStatisticsRepositoryAsync();
+
+            var game = await gameRepo.GetByIdAsync(gameId);
+            
+            if (game == null)
+            {
+                _logger.LogWarning("Game {GameId} not found for PGN update", gameId);
+                return null;
+            }
+
+            // Verify the user owns this game
+            if (game.UserId != userId)
+            {
+                _logger.LogWarning("User {UserId} does not own game {GameId}", userId, gameId);
+                return null;
+            }
+
+            // Validate PGN content is not empty
+            if (string.IsNullOrWhiteSpace(pgnContent))
+            {
+                _logger.LogWarning("Empty PGN content provided for game {GameId}", gameId);
+                throw new ArgumentException("PGN content cannot be empty");
+            }
+
+            string normalizedPgnContent;
+            try
+            {
+                normalizedPgnContent = NormalizePgnForPersistence(pgnContent, game);
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Invalid PGN content provided for game {GameId}", gameId);
+                throw;
+            }
+
+            // Update the game
+            game.PgnContent = normalizedPgnContent;
+            game.LastEditedAt = DateTime.UtcNow;
+            game.EditCount++;
+
+            await gameRepo.UpdateAsync(game);
+            
+            _logger.LogInformation("Successfully updated PGN for game {GameId}, edit count: {EditCount}", gameId, game.EditCount);
+
+            // Add history entry for the PGN update
+            try
+            {
+                await _projectService.AddHistoryEntryAsync(
+                    gameId, 
+                    "modification", 
+                    $"PGN content updated (edit #{game.EditCount})",
+                    new Dictionary<string, object> { { "editCount", game.EditCount } });
+            }
+            catch (Exception historyEx)
+            {
+                _logger.LogWarning(historyEx, "Failed to add history entry for PGN update, continuing...");
+            }
+
+            // Keep project processing snapshot aligned with the latest edited PGN
+            try
+            {
+                var existingProject = await _projectService.GetProjectByGameIdAsync(gameId);
+                var existingProcessing = existingProject?.Processing;
+
+                var processingData = new ProcessingData
+                {
+                    ProcessedAt = existingProcessing?.ProcessedAt ?? game.ProcessedAt,
+                    PgnContent = normalizedPgnContent,
+                    ValidationStatus = existingProcessing?.ValidationStatus ?? (game.IsValid ? "valid" : "invalid"),
+                    ProcessingTimeMs = existingProcessing?.ProcessingTimeMs ?? game.ProcessingTimeMs
+                };
+
+                await _projectService.UpdateProcessingDataAsync(gameId, processingData);
+            }
+            catch (Exception processingHistoryEx)
+            {
+                _logger.LogWarning(processingHistoryEx, "Failed to update project processing data for game {GameId}, continuing...", gameId);
+            }
+
+            // Return updated game details
+            var images = await imageRepo.GetByChessGameIdAsync(gameId);
+            var statistics = await statsRepo.GetByChessGameIdAsync(gameId);
+            return MapToGameDetailsResponse(game, images, statistics);
+        }
+        catch (ArgumentException)
+        {
+            throw; // Re-throw validation exceptions
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating PGN for game {GameId}", gameId);
+            throw;
+        }
+    }
+
+    public async Task<GameDetailsResponse?> MarkProcessingCompleteAsync(Guid gameId, string userId)
+    {
+        try
+        {
+            var gameRepo = await _repositoryFactory.CreateChessGameRepositoryAsync();
+            var imageRepo = await _repositoryFactory.CreateGameImageRepositoryAsync();
+            var statsRepo = await _repositoryFactory.CreateGameStatisticsRepositoryAsync();
+
+            var game = await gameRepo.GetByIdAsync(gameId);
+            
+            if (game == null)
+            {
+                _logger.LogWarning("Game {GameId} not found for completion marking", gameId);
+                return null;
+            }
+
+            // Verify the user owns this game
+            if (game.UserId != userId)
+            {
+                _logger.LogWarning("User {UserId} does not own game {GameId}", userId, gameId);
+                return null;
+            }
+
+            // Mark as completed (idempotent - can be called multiple times)
+            if (!game.ProcessingCompleted)
+            {
+                game.ProcessingCompleted = true;
+                await gameRepo.UpdateAsync(game);
+                _logger.LogInformation("Game {GameId} marked as processing completed", gameId);
+
+                // Add history entry for export/completion
+                try
+                {
+                    await _projectService.AddHistoryEntryAsync(
+                        gameId, 
+                        "export", 
+                        "Game exported to Lichess/Chess.com");
+                }
+                catch (Exception historyEx)
+                {
+                    _logger.LogWarning(historyEx, "Failed to add history entry for completion, continuing...");
+                }
+            }
+            else
+            {
+                _logger.LogDebug("Game {GameId} was already marked as completed", gameId);
+            }
+
+            // Return updated game details
+            var images = await imageRepo.GetByChessGameIdAsync(gameId);
+            var statistics = await statsRepo.GetByChessGameIdAsync(gameId);
+            return MapToGameDetailsResponse(game, images, statistics);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error marking game {GameId} as completed", gameId);
+            throw;
+        }
+    }
+
+    public async Task<GameImageContentResult?> GetGameImageAsync(Guid gameId, string userId, string variant = "processed")
+    {
+        try
+        {
+            var gameRepo = await _repositoryFactory.CreateChessGameRepositoryAsync();
+            var imageRepo = await _repositoryFactory.CreateGameImageRepositoryAsync();
+
+            var game = await gameRepo.GetByIdAsync(gameId);
+            if (game == null)
+            {
+                return null;
+            }
+
+            if (game.UserId != userId)
+            {
+                _logger.LogWarning("User {UserId} attempted to access image for game {GameId} without ownership", userId, gameId);
+                return null;
+            }
+
+            var images = await imageRepo.GetByChessGameIdAsync(gameId);
+            if (!images.Any())
+            {
+                return null;
+            }
+
+            var requestedVariant = string.IsNullOrWhiteSpace(variant) ? "processed" : variant.Trim().ToLowerInvariant();
+            var selectedImage = images.FirstOrDefault(i =>
+                string.Equals(i.Variant, requestedVariant, StringComparison.OrdinalIgnoreCase))
+                ?? images.FirstOrDefault(i => string.Equals(i.Variant, "original", StringComparison.OrdinalIgnoreCase))
+                ?? images.First();
+
+            if (selectedImage.IsStoredInCloud)
+            {
+                var objectName = selectedImage.CloudStorageObjectName;
+                if (string.IsNullOrWhiteSpace(objectName))
+                {
+                    _logger.LogWarning("Cloud image for game {GameId} is missing object name", gameId);
+                    return null;
+                }
+
+                var stream = await _cloudStorageService.DownloadGameImageAsync(objectName);
+                return new GameImageContentResult
+                {
+                    Stream = stream,
+                    ContentType = string.IsNullOrWhiteSpace(selectedImage.FileType) ? "image/png" : selectedImage.FileType,
+                    Variant = string.IsNullOrWhiteSpace(selectedImage.Variant) ? "original" : selectedImage.Variant
+                };
+            }
+
+            if (string.IsNullOrWhiteSpace(selectedImage.FilePath) || !File.Exists(selectedImage.FilePath))
+            {
+                _logger.LogWarning("Local image file not found for game {GameId}, path: {Path}", gameId, selectedImage.FilePath);
+                return null;
+            }
+
+            var localStream = new FileStream(selectedImage.FilePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            return new GameImageContentResult
+            {
+                Stream = localStream,
+                ContentType = string.IsNullOrWhiteSpace(selectedImage.FileType) ? "image/png" : selectedImage.FileType,
+                Variant = string.IsNullOrWhiteSpace(selectedImage.Variant) ? "original" : selectedImage.Variant
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving image for game {GameId}", gameId);
+            return null;
+        }
+    }
+
     private (List<string> whiteMoves, List<string> blackMoves) ExtractMovesFromPgn(string pgnContent)
     {
         var whiteMoves = new List<string>();
         var blackMoves = new List<string>();
-        
-        // Remove PGN headers and metadata
-        var lines = pgnContent.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-        var movesSection = string.Join(" ", lines.Where(line => !line.StartsWith("[") && !string.IsNullOrWhiteSpace(line)));
-        
-        // Remove result markers and extra whitespace
-        movesSection = movesSection.Replace("*", "").Replace("1-0", "").Replace("0-1", "").Replace("1/2-1/2", "").Trim();
-        
-        // Extract moves using regex pattern: "1. e4 e5 2. Nf3 Nc6" etc.
-        var movePattern = @"\d+\.\s*([^\s]+)(?:\s+([^\s]+))?";
+
+        if (string.IsNullOrWhiteSpace(pgnContent))
+        {
+            return (whiteMoves, blackMoves);
+        }
+
+        // Normalize line endings and remove PGN headers (including indented headers).
+        var normalized = pgnContent.Replace("\r\n", "\n");
+        var lines = normalized.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        var movesSection = string.Join(" ", lines
+            .Where(line => !line.TrimStart().StartsWith("[", StringComparison.Ordinal))
+            .Where(line => !string.IsNullOrWhiteSpace(line)));
+
+        // Remove PGN comments/variations and game result markers.
+        movesSection = Regex.Replace(movesSection, @"\{[^}]*\}", " ");
+        movesSection = Regex.Replace(movesSection, @"\([^)]*\)", " ");
+        movesSection = Regex.Replace(movesSection, @"\b(?:1-0|0-1|1/2-1/2|\*)\b", " ");
+        movesSection = Regex.Replace(movesSection, @"\s+", " ").Trim();
+
+        // Extract moves like: "1. e4 e5", "1... e5", etc.
+        var movePattern = @"\d+\.(?:\.\.)?\s*([^\s]+)(?:\s+([^\s]+))?";
         var matches = Regex.Matches(movesSection, movePattern);
-        
+
         foreach (Match match in matches)
         {
-            // Add white move
             if (match.Groups[1].Success)
             {
                 var whiteMove = match.Groups[1].Value.Trim();
-                if (!string.IsNullOrEmpty(whiteMove) && whiteMove != "*")
+                if (!string.IsNullOrWhiteSpace(whiteMove) && whiteMove != "*")
                 {
                     whiteMoves.Add(whiteMove);
                 }
             }
-            
-            // Add black move if present
+
             if (match.Groups[2].Success)
             {
                 var blackMove = match.Groups[2].Value.Trim();
-                if (!string.IsNullOrEmpty(blackMove) && blackMove != "*")
+                if (!string.IsNullOrWhiteSpace(blackMove) && blackMove != "*")
                 {
                     blackMoves.Add(blackMove);
                 }
             }
         }
-        
+
         return (whiteMoves, blackMoves);
     }
-}
 
+    private string NormalizePgnForPersistence(string pgnContent, Models.ChessGame game)
+    {
+        var normalized = pgnContent.Replace("\r\n", "\n").Trim();
+        if (!LooksCorruptedPgn(normalized))
+        {
+            return normalized;
+        }
+
+        var (whiteMoves, blackMoves) = ExtractMovesFromPgn(normalized);
+        if (whiteMoves.Count == 0 && blackMoves.Count == 0)
+        {
+            throw new ArgumentException("PGN content does not contain valid move data");
+        }
+
+        var white = GetHeaderValue(normalized, "White") ?? game.WhitePlayer;
+        var black = GetHeaderValue(normalized, "Black") ?? game.BlackPlayer;
+        var round = GetHeaderValue(normalized, "Round") ?? game.Round;
+        var date = ParsePgnDate(GetHeaderValue(normalized, "Date")) ?? game.GameDate;
+
+        var metadata = new PgnMetadata
+        {
+            WhitePlayer = white,
+            BlackPlayer = black,
+            Round = round,
+            GameDate = date
+        };
+
+        var rebuilt = _imageProcessingService.GeneratePGNContentAsync(whiteMoves, blackMoves, metadata).TrimEnd();
+
+        var eventHeader = GetHeaderValue(normalized, "Event");
+        var siteHeader = GetHeaderValue(normalized, "Site");
+        if (!string.IsNullOrWhiteSpace(eventHeader) || !string.IsNullOrWhiteSpace(siteHeader))
+        {
+            var sb = new StringBuilder();
+            if (!string.IsNullOrWhiteSpace(eventHeader))
+            {
+                sb.AppendLine($"[Event \"{eventHeader}\"]");
+            }
+
+            if (!string.IsNullOrWhiteSpace(siteHeader))
+            {
+                sb.AppendLine($"[Site \"{siteHeader}\"]");
+            }
+
+            sb.AppendLine(rebuilt);
+            rebuilt = sb.ToString().TrimEnd();
+        }
+
+        var resultValue = NormalizeResultValue(GetHeaderValue(normalized, "Result"));
+        if (resultValue != "*")
+        {
+            rebuilt = rebuilt.Replace("[Result \"*\"]", $"[Result \"{resultValue}\"]", StringComparison.Ordinal);
+            rebuilt = Regex.Replace(rebuilt, @"\s\*$", $" {resultValue}");
+        }
+
+        _logger.LogWarning("Normalized corrupted PGN payload before persistence for game {GameId}", game.Id);
+        return rebuilt;
+    }
+
+    private static bool LooksCorruptedPgn(string pgnContent)
+    {
+        var lines = pgnContent.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        var moveLines = lines
+            .Where(line => !line.TrimStart().StartsWith("[", StringComparison.Ordinal))
+            .ToList();
+        var moveSection = string.Join(" ", moveLines);
+
+        // Header tags should never appear in the move section.
+        return moveSection.Contains('[', StringComparison.Ordinal) || moveSection.Contains(']', StringComparison.Ordinal);
+    }
+
+    private static string? GetHeaderValue(string pgnContent, string tag)
+    {
+        var pattern = $@"^\s*\[{Regex.Escape(tag)}\s+""(?<value>.*?)""\]\s*$";
+        var match = Regex.Match(pgnContent, pattern, RegexOptions.Multiline);
+        return match.Success ? match.Groups["value"].Value : null;
+    }
+
+    private static DateTime? ParsePgnDate(string? dateValue)
+    {
+        if (string.IsNullOrWhiteSpace(dateValue) || dateValue.Contains('?'))
+        {
+            return null;
+        }
+
+        if (DateTime.TryParseExact(dateValue, "yyyy.MM.dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+        {
+            return date;
+        }
+
+        return null;
+    }
+
+    private static string NormalizeResultValue(string? result)
+    {
+        return result switch
+        {
+            "1-0" => "1-0",
+            "0-1" => "0-1",
+            "1/2-1/2" => "1/2-1/2",
+            _ => "*"
+        };
+    }
+}

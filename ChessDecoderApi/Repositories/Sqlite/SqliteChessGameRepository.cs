@@ -21,13 +21,14 @@ public class SqliteChessGameRepository : IChessGameRepository
 
     public async Task<ChessGame?> GetByIdAsync(Guid id)
     {
-        return await _context.ChessGames.FindAsync(id);
+        return await _context.ChessGames
+            .FirstOrDefaultAsync(g => g.Id == id && !g.IsDeleted);
     }
 
     public async Task<List<ChessGame>> GetByUserIdAsync(string userId)
     {
         return await _context.ChessGames
-            .Where(g => g.UserId == userId)
+            .Where(g => g.UserId == userId && !g.IsDeleted)
             .OrderByDescending(g => g.ProcessedAt)
             .ToListAsync();
     }
@@ -37,7 +38,7 @@ public class SqliteChessGameRepository : IChessGameRepository
         int pageNumber = 1, 
         int pageSize = 10)
     {
-        var query = _context.ChessGames.Where(g => g.UserId == userId);
+        var query = _context.ChessGames.Where(g => g.UserId == userId && !g.IsDeleted);
         
         var totalCount = await query.CountAsync();
         
@@ -59,6 +60,8 @@ public class SqliteChessGameRepository : IChessGameRepository
         }
         
         game.ProcessedAt = DateTime.UtcNow;
+        game.IsDeleted = false;
+        game.DeletedAt = null;
         
         _context.ChessGames.Add(game);
         await _context.SaveChangesAsync();
@@ -80,30 +83,32 @@ public class SqliteChessGameRepository : IChessGameRepository
     {
         try
         {
-            var game = await GetByIdAsync(id);
+            var game = await _context.ChessGames.FirstOrDefaultAsync(g => g.Id == id);
             if (game == null) return false;
-            
-            _context.ChessGames.Remove(game);
+            if (game.IsDeleted) return false;
+
+            game.IsDeleted = true;
+            game.DeletedAt = DateTime.UtcNow;
+            _context.ChessGames.Update(game);
             await _context.SaveChangesAsync();
             
-            _logger.LogInformation("[SQLite] Deleted game: {GameId}", id);
+            _logger.LogInformation("[SQLite] Soft-deleted game: {GameId}", id);
             return true;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "[SQLite] Error deleting game: {GameId}", id);
+            _logger.LogError(ex, "[SQLite] Error soft-deleting game: {GameId}", id);
             return false;
         }
     }
 
     public async Task<bool> ExistsAsync(Guid id)
     {
-        return await _context.ChessGames.AnyAsync(g => g.Id == id);
+        return await _context.ChessGames.AnyAsync(g => g.Id == id && !g.IsDeleted);
     }
 
     public async Task<int> GetCountByUserIdAsync(string userId)
     {
-        return await _context.ChessGames.CountAsync(g => g.UserId == userId);
+        return await _context.ChessGames.CountAsync(g => g.UserId == userId && !g.IsDeleted);
     }
 }
-

@@ -17,6 +17,8 @@ public class GameManagementMetadataTests
     private readonly Mock<RepositoryFactory> _repositoryFactoryMock;
     private readonly Mock<IChessGameRepository> _gameRepositoryMock;
     private readonly Mock<IImageProcessingService> _imageProcessingServiceMock;
+    private readonly Mock<IProjectService> _projectServiceMock;
+    private readonly Mock<ICloudStorageService> _cloudStorageServiceMock;
     private readonly Mock<ILogger<GameManagementService>> _loggerMock;
     private readonly GameManagementService _service;
 
@@ -28,6 +30,8 @@ public class GameManagementMetadataTests
             Mock.Of<ILogger<RepositoryFactory>>());
         _gameRepositoryMock = new Mock<IChessGameRepository>();
         _imageProcessingServiceMock = new Mock<IImageProcessingService>();
+        _projectServiceMock = new Mock<IProjectService>();
+        _cloudStorageServiceMock = new Mock<ICloudStorageService>();
         _loggerMock = new Mock<ILogger<GameManagementService>>();
 
         _repositoryFactoryMock.Setup(x => x.CreateChessGameRepositoryAsync()).ReturnsAsync(_gameRepositoryMock.Object);
@@ -35,6 +39,8 @@ public class GameManagementMetadataTests
         _service = new GameManagementService(
             _repositoryFactoryMock.Object,
             _imageProcessingServiceMock.Object,
+            _projectServiceMock.Object,
+            _cloudStorageServiceMock.Object,
             _loggerMock.Object);
     }
 
@@ -135,6 +141,47 @@ public class GameManagementMetadataTests
     }
 
     [Fact]
+    public async Task UpdateGameMetadataAsync_WithIndentedHeaders_ShouldNotTreatHeadersAsMoves()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+        var existingGame = TestDataBuilder.CreateChessGame();
+        existingGame.Id = gameId;
+        existingGame.PgnContent = @"[Event ""ChessScribe Game""]
+ [Site ""ChessScribe""]
+ [Date ""2026.02.15""]
+ [White ""?""]
+ [Black ""?""]
+ [Result ""*""]
+
+1. d4 Nf6 2. Nf3 g6 3. e3 Bg7 *";
+
+        var request = new UpdateGameMetadataRequest
+        {
+            WhitePlayer = "Updated White"
+        };
+
+        _gameRepositoryMock.Setup(x => x.GetByIdAsync(gameId)).ReturnsAsync(existingGame);
+        _gameRepositoryMock.Setup(x => x.UpdateAsync(It.IsAny<ChessGame>())).ReturnsAsync((ChessGame g) => g);
+        _imageProcessingServiceMock
+            .Setup(x => x.GeneratePGNContentAsync(
+                It.IsAny<IEnumerable<string>>(),
+                It.IsAny<IEnumerable<string>>(),
+                It.IsAny<PgnMetadata>()))
+            .Returns("[Date \"2026.02.15\"]\n[White \"Updated White\"]\n[Black \"?\"]\n[Result \"*\"]\n\n1. d4 Nf6 2. Nf3 g6 3. e3 Bg7 *");
+
+        // Act
+        await _service.UpdateGameMetadataAsync(gameId, request);
+
+        // Assert
+        _imageProcessingServiceMock.Verify(x => x.GeneratePGNContentAsync(
+            It.Is<IEnumerable<string>>(w => w.SequenceEqual(new[] { "d4", "Nf3", "e3" })),
+            It.Is<IEnumerable<string>>(b => b.SequenceEqual(new[] { "Nf6", "g6", "Bg7" })),
+            It.IsAny<PgnMetadata>()
+        ), Times.Once);
+    }
+
+    [Fact]
     public async Task UpdateGameMetadataAsync_PartialUpdate_ShouldOnlyUpdateProvidedFields()
     {
         // Arrange
@@ -209,4 +256,3 @@ public class GameManagementMetadataTests
         Assert.Equal("1", result.Round);
     }
 }
-

@@ -226,6 +226,243 @@ public class GameControllerTests
         Assert.Equal("1", response.Round);
     }
 
+    [Fact]
+    public async Task UpdateGamePgn_Success_ReturnsOkWithUpdatedGame()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+        var userId = "test-user";
+        var request = new UpdatePgnRequest { PgnContent = "1. d4 d5 2. c4 e6" };
+        var expectedResponse = new GameDetailsResponse
+        {
+            GameId = gameId,
+            UserId = userId,
+            PgnContent = request.PgnContent,
+            EditCount = 1,
+            LastEditedAt = DateTime.UtcNow
+        };
+        
+        _gameManagementServiceMock
+            .Setup(x => x.UpdatePgnContentAsync(gameId, userId, request.PgnContent))
+            .ReturnsAsync(expectedResponse);
+
+        // Act
+        var result = await _controller.UpdateGamePgn(gameId, request, userId);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        var response = Assert.IsType<GameDetailsResponse>(okResult.Value);
+        Assert.Equal(request.PgnContent, response.PgnContent);
+        Assert.Equal(1, response.EditCount);
+    }
+
+    [Fact]
+    public async Task UpdateGamePgn_MissingUserId_ReturnsBadRequest()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+        var request = new UpdatePgnRequest { PgnContent = "1. e4 e5" };
+
+        // Act
+        var result = await _controller.UpdateGamePgn(gameId, request, "");
+
+        // Assert
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task UpdateGamePgn_EmptyPgnContent_ReturnsBadRequest()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+        var userId = "test-user";
+        var request = new UpdatePgnRequest { PgnContent = "" };
+
+        // Act
+        var result = await _controller.UpdateGamePgn(gameId, request, userId);
+
+        // Assert
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task UpdateGamePgn_GameNotFound_ReturnsNotFound()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+        var userId = "test-user";
+        var request = new UpdatePgnRequest { PgnContent = "1. e4 e5" };
+        
+        _gameManagementServiceMock
+            .Setup(x => x.UpdatePgnContentAsync(gameId, userId, request.PgnContent))
+            .ReturnsAsync((GameDetailsResponse?)null);
+
+        // Act
+        var result = await _controller.UpdateGamePgn(gameId, request, userId);
+
+        // Assert
+        Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task UpdateGamePgn_InvalidPgnFromService_ReturnsBadRequest()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+        var userId = "test-user";
+        var request = new UpdatePgnRequest { PgnContent = "corrupted input" };
+
+        _gameManagementServiceMock
+            .Setup(x => x.UpdatePgnContentAsync(gameId, userId, request.PgnContent))
+            .ThrowsAsync(new ArgumentException("PGN content does not contain valid move data"));
+
+        // Act
+        var result = await _controller.UpdateGamePgn(gameId, request, userId);
+
+        // Assert
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.NotNull(badRequest.Value);
+    }
+
+    [Fact]
+    public async Task MarkProcessingComplete_Success_ReturnsOkWithUpdatedGame()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+        var userId = "test-user";
+        var expectedResponse = new GameDetailsResponse
+        {
+            GameId = gameId,
+            UserId = userId,
+            ProcessingCompleted = true
+        };
+        
+        _gameManagementServiceMock
+            .Setup(x => x.MarkProcessingCompleteAsync(gameId, userId))
+            .ReturnsAsync(expectedResponse);
+
+        // Act
+        var result = await _controller.MarkProcessingComplete(gameId, userId);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        var response = Assert.IsType<GameDetailsResponse>(okResult.Value);
+        Assert.True(response.ProcessingCompleted);
+    }
+
+    [Fact]
+    public async Task MarkProcessingComplete_MissingUserId_ReturnsBadRequest()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+
+        // Act
+        var result = await _controller.MarkProcessingComplete(gameId, "");
+
+        // Assert
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task MarkProcessingComplete_GameNotFound_ReturnsNotFound()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+        var userId = "test-user";
+        
+        _gameManagementServiceMock
+            .Setup(x => x.MarkProcessingCompleteAsync(gameId, userId))
+            .ReturnsAsync((GameDetailsResponse?)null);
+
+        // Act
+        var result = await _controller.MarkProcessingComplete(gameId, userId);
+
+        // Assert
+        Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task DeleteGame_Success_ReturnsOk()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+        _gameManagementServiceMock.Setup(x => x.DeleteGameAsync(gameId)).ReturnsAsync(true);
+
+        // Act
+        var result = await _controller.DeleteGame(gameId);
+
+        // Assert
+        Assert.IsType<OkObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task DeleteGame_GameNotFound_ReturnsNotFound()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+        _gameManagementServiceMock.Setup(x => x.DeleteGameAsync(gameId)).ReturnsAsync(false);
+
+        // Act
+        var result = await _controller.DeleteGame(gameId);
+
+        // Assert
+        Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task GetGameImage_MissingUserId_ReturnsBadRequest()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+
+        // Act
+        var result = await _controller.GetGameImage(gameId, "", "processed");
+
+        // Assert
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task GetGameImage_NotFound_ReturnsNotFound()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+        var userId = "test-user";
+        _gameManagementServiceMock
+            .Setup(x => x.GetGameImageAsync(gameId, userId, "processed"))
+            .ReturnsAsync((GameImageContentResult?)null);
+
+        // Act
+        var result = await _controller.GetGameImage(gameId, userId, "processed");
+
+        // Assert
+        Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task GetGameImage_Success_ReturnsFileResult()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+        var userId = "test-user";
+        var stream = new MemoryStream(new byte[] { 1, 2, 3 });
+        _gameManagementServiceMock
+            .Setup(x => x.GetGameImageAsync(gameId, userId, "processed"))
+            .ReturnsAsync(new GameImageContentResult
+            {
+                Stream = stream,
+                ContentType = "image/jpeg",
+                Variant = "processed"
+            });
+
+        // Act
+        var result = await _controller.GetGameImage(gameId, userId, "processed");
+
+        // Assert
+        var fileResult = Assert.IsType<FileStreamResult>(result);
+        Assert.Equal("image/jpeg", fileResult.ContentType);
+    }
+
     private GameUploadRequest CreateMockGameUploadRequest()
     {
         var fileMock = new Mock<IFormFile>();
@@ -250,4 +487,3 @@ public class GameControllerTests
         };
     }
 }
-

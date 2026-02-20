@@ -117,5 +117,22 @@ public class RepositoryFactory
         var sqliteLogger = _serviceProvider.GetRequiredService<ILogger<SqliteGameStatisticsRepository>>();
         return new SqliteGameStatisticsRepository(context, sqliteLogger);
     }
+
+    public virtual async Task<IProjectHistoryRepository> CreateProjectHistoryRepositoryAsync()
+    {
+        if (await IsFirestoreAvailableAsync())
+        {
+            var firestoreDb = _serviceProvider.GetService<FirestoreDb>();
+            if (firestoreDb != null)
+            {
+                var logger = _serviceProvider.GetRequiredService<ILogger<FirestoreProjectHistoryRepository>>();
+                return new FirestoreProjectHistoryRepository(firestoreDb, logger);
+            }
+        }
+
+        // For SQLite fallback, throw not implemented for now
+        // ProjectHistory is primarily for cloud deployments with Firestore
+        throw new NotSupportedException("ProjectHistory repository is only available with Firestore");
+    }
 }
 
