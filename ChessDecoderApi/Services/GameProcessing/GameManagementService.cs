@@ -74,6 +74,7 @@ public class GameManagementService : IGameManagementService
             GameDate = game.GameDate,
             Round = game.Round,
             Result = game.Result,
+            HasContinuation = game.HasContinuation,
             ProcessingCompleted = game.ProcessingCompleted,
             LastEditedAt = game.LastEditedAt,
             EditCount = game.EditCount,
@@ -92,8 +93,15 @@ public class GameManagementService : IGameManagementService
                 CloudStorageUrl = img.CloudStorageUrl,
                 IsStoredInCloud = img.IsStoredInCloud,
                 UploadedAt = img.UploadedAt,
-                Variant = string.IsNullOrWhiteSpace(img.Variant) ? "original" : img.Variant
-            }).ToList()
+                Variant = string.IsNullOrWhiteSpace(img.Variant) ? "original" : img.Variant,
+                PageNumber = img.PageNumber <= 0 ? 1 : img.PageNumber,
+                StartingMoveNumber = img.StartingMoveNumber,
+                EndingMoveNumber = img.EndingMoveNumber,
+                ContinuationImageId = img.ContinuationImageId
+            })
+            .OrderBy(img => img.PageNumber)
+            .ThenBy(img => img.Variant, StringComparer.OrdinalIgnoreCase)
+            .ToList()
         };
     }
 
@@ -116,6 +124,7 @@ public class GameManagementService : IGameManagementService
                 Title = game.Title,
                 ProcessedAt = game.ProcessedAt,
                 IsValid = game.IsValid,
+                HasContinuation = game.HasContinuation,
                 TotalMoves = statistics?.TotalMoves ?? 0,
                 Opening = statistics?.Opening
             });

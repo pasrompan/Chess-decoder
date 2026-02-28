@@ -39,6 +39,12 @@ public class FirestoreGameImageRepository : IGameImageRepository
         {
             image.ChessGameId = chessGameId;
         }
+
+        if (snapshot.TryGetValue<string>("ContinuationImageId", out var continuationImageIdStr) &&
+            Guid.TryParse(continuationImageIdStr, out var continuationImageId))
+        {
+            image.ContinuationImageId = continuationImageId;
+        }
         
         return image;
     }
@@ -64,6 +70,12 @@ public class FirestoreGameImageRepository : IGameImageRepository
                 Guid.TryParse(chessGameIdStr, out var parsedGameId))
             {
                 image.ChessGameId = parsedGameId;
+            }
+
+            if (doc.TryGetValue<string>("ContinuationImageId", out var continuationImageIdStr) &&
+                Guid.TryParse(continuationImageIdStr, out var continuationImageId))
+            {
+                image.ContinuationImageId = continuationImageId;
             }
             
             return image;
@@ -92,7 +104,11 @@ public class FirestoreGameImageRepository : IGameImageRepository
             { "CloudStorageUrl", image.CloudStorageUrl ?? "" },
             { "CloudStorageObjectName", image.CloudStorageObjectName ?? "" },
             { "IsStoredInCloud", image.IsStoredInCloud },
-            { "Variant", image.Variant }
+            { "Variant", image.Variant },
+            { "PageNumber", image.PageNumber },
+            { "StartingMoveNumber", image.StartingMoveNumber },
+            { "EndingMoveNumber", image.EndingMoveNumber },
+            { "ContinuationImageId", image.ContinuationImageId?.ToString() ?? string.Empty }
         };
         
         var docRef = _firestoreDb.Collection(IMAGES_COLLECTION).Document(image.Id.ToString());
@@ -115,7 +131,11 @@ public class FirestoreGameImageRepository : IGameImageRepository
             { "CloudStorageUrl", image.CloudStorageUrl ?? "" },
             { "CloudStorageObjectName", image.CloudStorageObjectName ?? "" },
             { "IsStoredInCloud", image.IsStoredInCloud },
-            { "Variant", image.Variant }
+            { "Variant", image.Variant },
+            { "PageNumber", image.PageNumber },
+            { "StartingMoveNumber", image.StartingMoveNumber },
+            { "EndingMoveNumber", image.EndingMoveNumber },
+            { "ContinuationImageId", image.ContinuationImageId?.ToString() ?? string.Empty }
         };
         
         var docRef = _firestoreDb.Collection(IMAGES_COLLECTION).Document(image.Id.ToString());
