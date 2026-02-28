@@ -253,6 +253,156 @@ namespace ChessDecoderApi.Services
             return aggregateResult;
         }
 
+        /// <summary>
+        /// Evaluates dual-page images against ground truth data
+        /// </summary>
+        /// <param name="page1Path">Path to the first page image</param>
+        /// <param name="page2Path">Path to the second page image</param>
+        /// <param name="groundTruthPath">Path to the ground truth PGN file</param>
+        /// <param name="language">Language for chess notation (default: English)</param>
+        /// <param name="autoCrop">Whether to automatically crop images to table boundaries before processing (default: false)</param>
+        /// <returns>Evaluation result with normalized score (0 = perfect)</returns>
+        public async Task<EvaluationResult> EvaluateDualAsync(string page1Path, string page2Path, string groundTruthPath, string language = "English", bool autoCrop = false)
+        {
+            if (!_useRealApi)
+            {
+                throw new InvalidOperationException("Real API usage is disabled. Set useRealApi flag to true to enable evaluation.");
+            }
+
+            var result = new EvaluationResult
+            {
+                ImagePath = $"{page1Path} + {page2Path}",
+                GroundTruthPath = groundTruthPath,
+                Language = language
+            };
+
+            string? croppedPage1Path = null;
+            string? croppedPage2Path = null;
+
+            try
+            {
+                var groundTruthMoves = await LoadGroundTruthMovesAsync(groundTruthPath);
+                result.GroundTruthMoves = groundTruthMoves;
+
+                _logger.LogInformation("Loaded {Count} ground truth moves from {Path}", groundTruthMoves.Count, groundTruthPath);
+
+                string page1ForProcessing = page1Path;
+                string page2ForProcessing = page2Path;
+
+                if (autoCrop)
+                {
+                    _logger.LogInformation("Auto-crop enabled for dual pages");
+                    
+                    using var page1Image = Image.Load<Rgba32>(page1Path);
+                    var page1Boundaries = _imageProcessingService.FindTableBoundaries(page1Image);
+                    var croppedPage1Bytes = await _imageProcessingService.CropImageAsync(
+                        page1Path, page1Boundaries.X, page1Boundaries.Y, page1Boundaries.Width, page1Boundaries.Height);
+                    var ext1 = Path.GetExtension(page1Path);
+                    croppedPage1Path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}_page1_cropped{ext1}");
+                    await File.WriteAllBytesAsync(croppedPage1Path, croppedPage1Bytes);
+                    page1ForProcessing = croppedPage1Path;
+
+                    using var page2Image = Image.Load<Rgba32>(page2Path);
+                    var page2Boundaries = _imageProcessingService.FindTableBoundaries(page2Image);
+                    var croppedPage2Bytes = await _imageProcessingService.CropImageAsync(
+                        page2Path, page2Boundaries.X, page2Boundaries.Y, page2Boundaries.Width, page2Boundaries.Height);
+                    var ext2 = Path.GetExtension(page2Path);
+                    croppedPage2Path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}_page2_cropped{ext2}");
+                    await File.WriteAllBytesAsync(croppedPage2Path, croppedPage2Bytes);
+                    page2ForProcessing = croppedPage2Path;
+                }
+
+                var startTime = DateTime.UtcNow;
+
+                // Extract moves from page 1
+                var (whiteMoves1, blackMoves1) = await _imageProcessingService.ExtractMovesFromImageToStringAsync(page1ForProcessing);
+                
+                // Extract moves from page 2
+                var (whiteMoves2, blackMoves2) = await _imageProcessingService.ExtractMovesFromImageToStringAsync(page2ForProcessing);
+
+                // Combine moves from both pages
+                var whiteMoves = whiteMoves1.Concat(whiteMoves2).ToList();
+                var blackMoves = blackMoves1.Concat(blackMoves2).ToList();
+
+                var extractedMoves = new List<string>();
+                int maxMoves = Math.Max(whiteMoves.Count, blackMoves.Count);
+                for (int i = 0; i < maxMoves; i++)
+                {
+                    if (i < whiteMoves.Count) extractedMoves.Add(whiteMoves[i]);
+                    if (i < blackMoves.Count) extractedMoves.Add(blackMoves[i]);
+                }
+
+                result.ExtractedMoves = extractedMoves;
+                result.ProcessingTime = DateTime.UtcNow - startTime;
+                
+                _logger.LogInformation("Extracted {Count} moves from dual pages (Page1: {P1W}W/{P1B}B, Page2: {P2W}W/{P2B}B)", 
+                    extractedMoves.Count, whiteMoves1.Count, blackMoves1.Count, whiteMoves2.Count, blackMoves2.Count);
+                
+                result.GeneratedPgn = _imageProcessingService.GeneratePGNContentAsync(whiteMoves, blackMoves);
+
+                // Compute metrics
+                result.ExactMatchScore = ComputeExactMatchScore(groundTruthMoves, extractedMoves);
+                result.LevenshteinDistance = ComputeLevenshteinDistance(groundTruthMoves, extractedMoves);
+                result.PositionalAccuracy = ComputePositionalAccuracy(groundTruthMoves, extractedMoves);
+                result.LongestCommonSubsequence = ComputeLongestCommonSubsequence(groundTruthMoves, extractedMoves);
+                result.NormalizedScore = ComputeNormalizedScore(result);
+
+                // Get normalized moves if validator is available
+                if (_chessMoveValidator != null)
+                {
+                    var whiteValidation = _chessMoveValidator.ValidateMoves(whiteMoves.ToArray());
+                    var blackValidation = _chessMoveValidator.ValidateMoves(blackMoves.ToArray());
+                    _chessMoveValidator.ValidateMovesInGameContext(whiteValidation, blackValidation);
+
+                    var normalizedMoves = new List<string>();
+                    int maxNormalizedMoves = Math.Max(whiteValidation.Moves.Count, blackValidation.Moves.Count);
+                    for (int i = 0; i < maxNormalizedMoves; i++)
+                    {
+                        if (i < whiteValidation.Moves.Count && !string.IsNullOrWhiteSpace(whiteValidation.Moves[i].NormalizedNotation))
+                        {
+                            normalizedMoves.Add(whiteValidation.Moves[i].NormalizedNotation!);
+                        }
+                        if (i < blackValidation.Moves.Count && !string.IsNullOrWhiteSpace(blackValidation.Moves[i].NormalizedNotation))
+                        {
+                            normalizedMoves.Add(blackValidation.Moves[i].NormalizedNotation!);
+                        }
+                    }
+                    result.NormalizedMoves = normalizedMoves;
+
+                    result.NormalizedExactMatchScore = ComputeExactMatchScore(groundTruthMoves, normalizedMoves);
+                    result.NormalizedLevenshteinDistance = ComputeLevenshteinDistance(groundTruthMoves, normalizedMoves);
+                    result.NormalizedPositionalAccuracy = ComputePositionalAccuracy(groundTruthMoves, normalizedMoves);
+                    result.NormalizedLongestCommonSubsequence = ComputeLongestCommonSubsequence(groundTruthMoves, normalizedMoves);
+                    result.NormalizedNormalizedScore = ComputeNormalizedScoreForMoves(
+                        groundTruthMoves, normalizedMoves,
+                        result.NormalizedExactMatchScore, result.NormalizedLevenshteinDistance,
+                        result.NormalizedPositionalAccuracy, result.NormalizedLongestCommonSubsequence);
+                }
+
+                result.IsSuccessful = true;
+                _logger.LogInformation("Dual evaluation completed. Normalized Score: {Score:F3}", result.NormalizedScore);
+            }
+            catch (Exception ex)
+            {
+                result.IsSuccessful = false;
+                result.ErrorMessage = ex.Message;
+                _logger.LogError(ex, "Error during dual page evaluation");
+            }
+            finally
+            {
+                if (croppedPage1Path != null && File.Exists(croppedPage1Path))
+                {
+                    try { File.Delete(croppedPage1Path); } catch { }
+                }
+                if (croppedPage2Path != null && File.Exists(croppedPage2Path))
+                {
+                    try { File.Delete(croppedPage2Path); } catch { }
+                }
+            }
+
+            return result;
+        }
+
         private async Task<List<string>> LoadGroundTruthMovesAsync(string pgnPath)
         {
             if (!File.Exists(pgnPath))
