@@ -58,7 +58,7 @@ public class GameContinuationServiceTests
     }
 
     [Fact]
-    public async Task ProcessDualGameUploadAsync_OrdersPagesByMoveNumber_AndMerges()
+    public async Task ProcessDualGameUploadAsync_DefaultsSecondImageToContinuationNumbering()
     {
         var userId = "test-user";
         _authServiceMock.Setup(x => x.GetUserProfileAsync(userId)).ReturnsAsync(new User { Id = userId, Email = "u@test.com" });
@@ -75,17 +75,7 @@ public class GameContinuationServiceTests
             .ReturnsAsync((string objectName) => $"https://example.test/{objectName}");
 
         _imageExtractionServiceMock
-            .SetupSequence(x => x.ProcessImageAsync(It.IsAny<string>(), It.IsAny<ChessDecoderApi.DTOs.PgnMetadata>()))
-            .ReturnsAsync(new ChessGameResponse
-            {
-                Validation = new ChessGameValidation
-                {
-                    Moves = new List<ChessMovePair>
-                    {
-                        new() { MoveNumber = 50, WhiteMove = CreateMove("Qh5"), BlackMove = CreateMove("g6") }
-                    }
-                }
-            })
+            .Setup(x => x.ProcessImageAsync(It.IsAny<string>(), It.IsAny<ChessDecoderApi.DTOs.PgnMetadata>()))
             .ReturnsAsync(new ChessGameResponse
             {
                 Validation = new ChessGameValidation
@@ -98,11 +88,17 @@ public class GameContinuationServiceTests
                 }
             });
 
+        _imageExtractionServiceMock
+            .Setup(x => x.ExtractMovesFromImageToStringAsync(It.IsAny<string>()))
+            .ReturnsAsync((
+                new List<string> { "Bb5", "Ba4" },
+                new List<string> { "a6", "Nf6" }));
+
         var request = new DualGameUploadRequest
         {
             UserId = userId,
-            Page1 = CreateImageFile("late-page.jpg"),
-            Page2 = CreateImageFile("early-page.jpg"),
+            Page1 = CreateImageFile("first-page.jpg"),
+            Page2 = CreateImageFile("second-page.jpg"),
             AutoCrop = false
         };
 
@@ -111,13 +107,14 @@ public class GameContinuationServiceTests
         Assert.Equal(1, result.Page1.PageNumber);
         Assert.Equal(2, result.Page2.PageNumber);
         Assert.Equal(1, result.Page1.StartingMoveNumber);
-        Assert.Equal(50, result.Page2.StartingMoveNumber);
+        Assert.Equal(3, result.Page2.StartingMoveNumber);
         Assert.Contains("1. e4 e5", result.MergedPgn);
-        Assert.Contains("50. Qh5 g6", result.MergedPgn);
+        Assert.Contains("3. Bb5 a6", result.MergedPgn);
+        Assert.Contains("normalized", result.ContinuationValidation.Warnings[0], StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public async Task AddContinuationAsync_OverlapDetected_ReturnsOverlapWarning()
+    public async Task AddContinuationAsync_NormalizesMoveNumbersFromPageOneEnd()
     {
         var userId = "test-user";
         var gameId = Guid.NewGuid();
@@ -159,19 +156,11 @@ public class GameContinuationServiceTests
             .ReturnsAsync("https://example.test/obj/cont.jpg");
 
         _imageExtractionServiceMock
-            .Setup(x => x.ProcessImageAsync(It.IsAny<string>(), It.IsAny<ChessDecoderApi.DTOs.PgnMetadata>()))
-            .ReturnsAsync(new ChessGameResponse
-            {
-                Validation = new ChessGameValidation
-                {
-                    Moves = new List<ChessMovePair>
-                    {
-                        new() { MoveNumber = 3, WhiteMove = CreateMove("Bb5"), BlackMove = CreateMove("a6") },
-                        new() { MoveNumber = 4, WhiteMove = CreateMove("Ba4"), BlackMove = CreateMove("Nf6") },
-                        new() { MoveNumber = 5, WhiteMove = CreateMove("O-O"), BlackMove = CreateMove("Be7") }
-                    }
-                }
-            });
+            .Setup(x => x.ExtractMovesFromImageToStringAsync(It.IsAny<string>()))
+            .ReturnsAsync((
+                new List<string> { "O-O", "Re1" },
+                new List<string> { "Be7", "b5" }
+            ));
 
         var response = await _service.AddContinuationAsync(gameId, new ContinuationUploadRequest
         {
@@ -180,9 +169,10 @@ public class GameContinuationServiceTests
             AutoCrop = false
         });
 
-        Assert.True(response.ContinuationValidation.HasOverlap);
-        Assert.True(response.ContinuationValidation.OverlapMoves >= 1);
-        Assert.Contains(response.ContinuationValidation.Warnings, w => w.Contains("overlap", StringComparison.OrdinalIgnoreCase));
+        Assert.False(response.ContinuationValidation.HasOverlap);
+        Assert.Equal(5, response.Page2.StartingMoveNumber);
+        Assert.Contains(response.ContinuationValidation.Warnings, w => w.Contains("normalized", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains("5. O-O Be7", response.UpdatedPgn);
         _gameRepositoryMock.Verify(x => x.UpdateAsync(It.Is<ChessGame>(g => g.Id == gameId && g.HasContinuation)), Times.Once);
     }
 

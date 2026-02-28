@@ -410,46 +410,31 @@ public class GameProcessingService : IGameProcessingService
         {
             var startTime = DateTime.UtcNow;
             var page1Task = _imageExtractionService.ProcessImageAsync(page1ProcessingPath.PathToProcess, null);
-            var page2Task = _imageExtractionService.ProcessImageAsync(page2ProcessingPath.PathToProcess, null);
-            await Task.WhenAll(page1Task, page2Task);
+            var page2RawTask = _imageExtractionService.ExtractMovesFromImageToStringAsync(page2ProcessingPath.PathToProcess);
+            await Task.WhenAll(page1Task, page2RawTask);
             var processingTime = DateTime.UtcNow - startTime;
 
-            var firstResult = page1Task.Result;
-            var secondResult = page2Task.Result;
-
-            var firstRange = GetMoveRange(firstResult.Validation, firstResult.PgnContent);
-            var secondRange = GetMoveRange(secondResult.Validation, secondResult.PgnContent);
-
-            var ambiguousSameStart = firstRange.StartMoveNumber > 0 &&
-                                     secondRange.StartMoveNumber > 0 &&
-                                     firstRange.StartMoveNumber == secondRange.StartMoveNumber;
-
-            // If both pages start at the same move, keep request order and continue.
-            // This lets us still return usable results from page 1 instead of failing the whole upload.
-            var firstIsPage1 = ambiguousSameStart
-                ? true
-                : (firstRange.StartMoveNumber == 0 || secondRange.StartMoveNumber == 0
-                    ? firstRange.EndMoveNumber <= secondRange.EndMoveNumber
-                    : firstRange.StartMoveNumber < secondRange.StartMoveNumber);
-
-            var page1Result = firstIsPage1 ? firstResult : secondResult;
-            var page2Result = firstIsPage1 ? secondResult : firstResult;
-            var page1Stored = firstIsPage1 ? page1Upload : page2Upload;
-            var page2Stored = firstIsPage1 ? page2Upload : page1Upload;
-            var page1RequestFile = firstIsPage1 ? request.Page1 : request.Page2;
-            var page2RequestFile = firstIsPage1 ? request.Page2 : request.Page1;
-            var page1Range = firstIsPage1 ? firstRange : secondRange;
-            var page2Range = firstIsPage1 ? secondRange : firstRange;
+            var page1Result = page1Task.Result;
+            var page1Range = GetMoveRange(page1Result.Validation, page1Result.PgnContent);
 
             var page1Moves = ExtractMovePairs(page1Result.Validation, page1Result.PgnContent);
-            var page2Moves = ExtractMovePairs(page2Result.Validation, page2Result.PgnContent);
-            var mergeResult = MergePageMoves(page1Moves, page2Moves, page1Range, page2Range);
-            if (ambiguousSameStart)
+            if (page1Moves.Count == 0)
             {
-                mergeResult.Validation.IsValid = false;
-                mergeResult.Validation.Warnings.Insert(0,
-                    "Both uploaded pages start at the same move number. Returned page 1 as primary and merged overlapping moves where possible.");
+                throw new InvalidOperationException("Could not extract move data from page 1.");
             }
+
+            var defaultPage2StartMove = Math.Max(1, page1Range.EndMoveNumber + 1);
+            var page2Raw = page2RawTask.Result;
+            var page2Moves = BuildMovePairsFromRaw(page2Raw.whiteMoves, page2Raw.blackMoves, defaultPage2StartMove);
+            if (page2Moves.Count == 0)
+            {
+                throw new InvalidOperationException("Could not extract move data from page 2.");
+            }
+
+            var page2Range = GetMoveRangeFromMoves(page2Moves);
+            var mergeResult = MergePageMoves(page1Moves, page2Moves, page1Range, page2Range);
+            mergeResult.Validation.Warnings.Insert(0,
+                $"Page 2 move numbering was normalized to continue from move {defaultPage2StartMove}.");
             var mergedPgn = BuildPgnFromMovePairs(mergeResult.Moves, metadata, "*");
 
             var chessGame = new ChessGame
@@ -474,13 +459,13 @@ public class GameProcessingService : IGameProcessingService
             {
                 Id = Guid.NewGuid(),
                 ChessGameId = chessGame.Id,
-                FileName = page1Stored.FileName,
-                FilePath = page1Stored.FilePath,
-                FileType = page1RequestFile.ContentType,
-                FileSizeBytes = page1RequestFile.Length,
-                CloudStorageUrl = page1Stored.CloudStorageUrl,
-                CloudStorageObjectName = page1Stored.CloudStorageObjectName,
-                IsStoredInCloud = page1Stored.IsStoredInCloud,
+                FileName = page1Upload.FileName,
+                FilePath = page1Upload.FilePath,
+                FileType = request.Page1.ContentType,
+                FileSizeBytes = request.Page1.Length,
+                CloudStorageUrl = page1Upload.CloudStorageUrl,
+                CloudStorageObjectName = page1Upload.CloudStorageObjectName,
+                IsStoredInCloud = page1Upload.IsStoredInCloud,
                 UploadedAt = DateTime.UtcNow,
                 Variant = "original",
                 PageNumber = 1,
@@ -492,13 +477,13 @@ public class GameProcessingService : IGameProcessingService
             {
                 Id = Guid.NewGuid(),
                 ChessGameId = chessGame.Id,
-                FileName = page2Stored.FileName,
-                FilePath = page2Stored.FilePath,
-                FileType = page2RequestFile.ContentType,
-                FileSizeBytes = page2RequestFile.Length,
-                CloudStorageUrl = page2Stored.CloudStorageUrl,
-                CloudStorageObjectName = page2Stored.CloudStorageObjectName,
-                IsStoredInCloud = page2Stored.IsStoredInCloud,
+                FileName = page2Upload.FileName,
+                FilePath = page2Upload.FilePath,
+                FileType = request.Page2.ContentType,
+                FileSizeBytes = request.Page2.Length,
+                CloudStorageUrl = page2Upload.CloudStorageUrl,
+                CloudStorageObjectName = page2Upload.CloudStorageObjectName,
+                IsStoredInCloud = page2Upload.IsStoredInCloud,
                 UploadedAt = DateTime.UtcNow,
                 Variant = "original",
                 PageNumber = 2,
@@ -541,8 +526,8 @@ public class GameProcessingService : IGameProcessingService
                     FileSize = request.Page1.Length + request.Page2.Length,
                     FileType = "multipart/image",
                     UploadedAt = DateTime.UtcNow,
-                    StorageLocation = page1Stored.IsStoredInCloud || page2Stored.IsStoredInCloud ? "cloud" : "local",
-                    StorageUrl = page1Stored.CloudStorageUrl ?? page2Stored.CloudStorageUrl
+                    StorageLocation = page1Upload.IsStoredInCloud || page2Upload.IsStoredInCloud ? "cloud" : "local",
+                    StorageUrl = page1Upload.CloudStorageUrl ?? page2Upload.CloudStorageUrl
                 };
 
                 var processingDataForHistory = new ProcessingData
@@ -643,7 +628,7 @@ public class GameProcessingService : IGameProcessingService
         try
         {
             var startTime = DateTime.UtcNow;
-            var continuationResult = await _imageExtractionService.ProcessImageAsync(continuationProcessingPath.PathToProcess, null);
+            var continuationRaw = await _imageExtractionService.ExtractMovesFromImageToStringAsync(continuationProcessingPath.PathToProcess);
             var processingTime = DateTime.UtcNow - startTime;
 
             var page1Moves = ExtractMovePairs(null, game.PgnContent);
@@ -652,20 +637,19 @@ public class GameProcessingService : IGameProcessingService
                 throw new InvalidOperationException("Existing game does not contain move data to continue from");
             }
 
-            var page2Moves = ExtractMovePairs(continuationResult.Validation, continuationResult.PgnContent);
+            var page1Range = GetMoveRange(null, game.PgnContent);
+            var defaultPage2StartMove = Math.Max(1, page1Range.EndMoveNumber + 1);
+            var page2Moves = BuildMovePairsFromRaw(continuationRaw.whiteMoves, continuationRaw.blackMoves, defaultPage2StartMove);
             if (page2Moves.Count == 0)
             {
                 throw new InvalidOperationException("Could not extract continuation moves from uploaded image");
             }
 
-            var page1Range = GetMoveRange(null, game.PgnContent);
-            var page2Range = GetMoveRange(continuationResult.Validation, continuationResult.PgnContent);
-            if (page2Range.StartMoveNumber <= 1)
-            {
-                throw new InvalidOperationException("Continuation page appears to start from move 1. Please upload the first page with the standard upload flow.");
-            }
+            var page2Range = GetMoveRangeFromMoves(page2Moves);
 
             var mergeResult = MergePageMoves(page1Moves, page2Moves, page1Range, page2Range);
+            mergeResult.Validation.Warnings.Insert(0,
+                $"Continuation move numbering was normalized to continue from move {defaultPage2StartMove}.");
             var metadata = BuildMetadata(game.WhitePlayer, game.BlackPlayer, game.GameDate, game.Round);
             var gameResult = ExtractResultFromPgn(game.PgnContent);
             var mergedPgn = BuildPgnFromMovePairs(mergeResult.Moves, metadata, gameResult);
@@ -1028,8 +1012,9 @@ public class GameProcessingService : IGameProcessingService
 
         if (!string.IsNullOrWhiteSpace(pgnContent))
         {
-            var moveNumbers = Regex.Matches(pgnContent, @"\b(\d+)\.(?:\.\.)?")
-                .Select(m => int.TryParse(m.Groups[1].Value, out var number) ? number : 0)
+            var parsedMovePairs = ParseMovePairsFromPgn(pgnContent);
+            var moveNumbers = parsedMovePairs
+                .Select(m => m.MoveNumber)
                 .Where(n => n > 0)
                 .Distinct()
                 .OrderBy(n => n)
@@ -1042,6 +1027,67 @@ public class GameProcessingService : IGameProcessingService
         }
 
         return new MoveRange(0, 0);
+    }
+
+    private static MoveRange GetMoveRangeFromMoves(IReadOnlyCollection<ChessMovePair> moves)
+    {
+        var ordered = moves
+            .Where(m => m.MoveNumber > 0)
+            .OrderBy(m => m.MoveNumber)
+            .ToList();
+
+        if (ordered.Count == 0)
+        {
+            return new MoveRange(0, 0);
+        }
+
+        return new MoveRange(ordered[0].MoveNumber, ordered[^1].MoveNumber);
+    }
+
+    private static List<ChessMovePair> BuildMovePairsFromRaw(
+        IReadOnlyList<string> whiteMoves,
+        IReadOnlyList<string> blackMoves,
+        int startMoveNumber)
+    {
+        var result = new List<ChessMovePair>();
+        var maxMoves = Math.Max(whiteMoves.Count, blackMoves.Count);
+        var nextMoveNumber = Math.Max(1, startMoveNumber);
+
+        for (var i = 0; i < maxMoves; i++)
+        {
+            var white = i < whiteMoves.Count ? whiteMoves[i]?.Trim() : null;
+            var black = i < blackMoves.Count ? blackMoves[i]?.Trim() : null;
+
+            if (string.IsNullOrWhiteSpace(white) && string.IsNullOrWhiteSpace(black))
+            {
+                continue;
+            }
+
+            result.Add(new ChessMovePair
+            {
+                MoveNumber = nextMoveNumber++,
+                WhiteMove = string.IsNullOrWhiteSpace(white)
+                    ? null
+                    : new Models.ValidatedMove
+                    {
+                        Notation = white,
+                        NormalizedNotation = white,
+                        ValidationStatus = "warning",
+                        ValidationText = "Extracted from continuation image; numbering normalized from previous page."
+                    },
+                BlackMove = string.IsNullOrWhiteSpace(black)
+                    ? null
+                    : new Models.ValidatedMove
+                    {
+                        Notation = black,
+                        NormalizedNotation = black,
+                        ValidationStatus = "warning",
+                        ValidationText = "Extracted from continuation image; numbering normalized from previous page."
+                    }
+            });
+        }
+
+        return result;
     }
 
     private static List<ChessMovePair> ExtractMovePairs(ChessGameValidation? validation, string? pgnContent)

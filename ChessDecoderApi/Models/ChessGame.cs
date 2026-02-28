@@ -142,7 +142,7 @@ public class GameImage
     [FirestoreProperty]
     public int EndingMoveNumber { get; set; }
 
-    [FirestoreProperty]
+    // Stored manually as string in Firestore repository to avoid Guid converter issues.
     public Guid? ContinuationImageId { get; set; }
     
     // Navigation property - NOT stored in Firestore
