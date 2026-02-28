@@ -388,7 +388,7 @@ public class GameManagementService : IGameManagementService
         }
     }
 
-    public async Task<GameImageContentResult?> GetGameImageAsync(Guid gameId, string userId, string variant = "processed")
+    public async Task<GameImageContentResult?> GetGameImageAsync(Guid gameId, string userId, string variant = "processed", int? pageNumber = null)
     {
         try
         {
@@ -413,11 +413,24 @@ public class GameManagementService : IGameManagementService
                 return null;
             }
 
+            if (pageNumber.HasValue)
+            {
+                images = images
+                    .Where(i => i.PageNumber == pageNumber.Value)
+                    .ToList();
+
+                if (!images.Any())
+                {
+                    _logger.LogWarning("No images found for game {GameId} and page {PageNumber}", gameId, pageNumber.Value);
+                    return null;
+                }
+            }
+
             var requestedVariant = string.IsNullOrWhiteSpace(variant) ? "processed" : variant.Trim().ToLowerInvariant();
             var selectedImage = images.FirstOrDefault(i =>
                 string.Equals(i.Variant, requestedVariant, StringComparison.OrdinalIgnoreCase))
                 ?? images.FirstOrDefault(i => string.Equals(i.Variant, "original", StringComparison.OrdinalIgnoreCase))
-                ?? images.First();
+                ?? images.OrderBy(i => i.PageNumber).First();
 
             if (selectedImage.IsStoredInCloud)
             {

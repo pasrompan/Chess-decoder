@@ -901,12 +901,26 @@ public class GameProcessingService : IGameProcessingService
         string? cloudStorageUrl = null;
         string? cloudStorageObjectName = null;
         var isStoredInCloud = false;
+        byte[] imageBytes;
+
+        await using (var sourceStream = new MemoryStream())
+        {
+            await imageFile.CopyToAsync(sourceStream);
+            imageBytes = sourceStream.ToArray();
+        }
+
+        var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "uploads");
+        if (!Directory.Exists(uploadsDir))
+        {
+            Directory.CreateDirectory(uploadsDir);
+        }
+
+        localFilePath = Path.Combine(uploadsDir, fileName);
+        await File.WriteAllBytesAsync(localFilePath, imageBytes);
 
         try
         {
-            await using var imageStream = new MemoryStream();
-            await imageFile.CopyToAsync(imageStream);
-            imageStream.Position = 0;
+            await using var imageStream = new MemoryStream(imageBytes);
 
             cloudStorageObjectName = await _cloudStorageService.UploadGameImageAsync(imageStream, fileName, imageFile.ContentType);
             cloudStorageUrl = await _cloudStorageService.GetImageUrlAsync(cloudStorageObjectName);
@@ -915,27 +929,11 @@ public class GameProcessingService : IGameProcessingService
                 throw new InvalidOperationException("Cloud Storage URL was empty");
             }
 
-            // Keep dual/continuation behavior aligned with single upload:
-            // if object exists but is not publicly readable, fall back to local file processing.
-            using var accessibilityClient = new HttpClient();
-            var accessibilityResponse = await accessibilityClient.GetAsync(cloudStorageUrl);
-            accessibilityResponse.EnsureSuccessStatusCode();
-
             isStoredInCloud = true;
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to upload image to cloud storage, falling back to local upload");
-
-            var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "uploads");
-            if (!Directory.Exists(uploadsDir))
-            {
-                Directory.CreateDirectory(uploadsDir);
-            }
-
-            localFilePath = Path.Combine(uploadsDir, fileName);
-            await using var stream = new FileStream(localFilePath, FileMode.Create);
-            await imageFile.CopyToAsync(stream);
+            _logger.LogWarning(ex, "Failed to upload image to cloud storage; keeping local copy for processing");
         }
 
         return new StoredUploadImage(
@@ -948,11 +946,15 @@ public class GameProcessingService : IGameProcessingService
 
     private async Task<PreparedImagePath> PrepareImageForProcessingAsync(StoredUploadImage upload, IFormFile file, bool autoCrop)
     {
-        var hasCloudPath = upload.IsStoredInCloud && !string.IsNullOrWhiteSpace(upload.CloudStorageUrl);
-        var imagePathForProcessing = hasCloudPath ? upload.CloudStorageUrl! : upload.FilePath;
+        var hasLocalPath = !string.IsNullOrWhiteSpace(upload.FilePath) && File.Exists(upload.FilePath);
+        var imagePathForProcessing = hasLocalPath
+            ? upload.FilePath
+            : (upload.IsStoredInCloud && !string.IsNullOrWhiteSpace(upload.CloudStorageUrl)
+                ? upload.CloudStorageUrl!
+                : string.Empty);
         string? tempPath = null;
 
-        if (autoCrop && !hasCloudPath && !string.IsNullOrWhiteSpace(upload.FilePath))
+        if (autoCrop && hasLocalPath)
         {
             try
             {
@@ -974,6 +976,11 @@ public class GameProcessingService : IGameProcessingService
             {
                 _logger.LogWarning(ex, "Auto-crop failed; continuing with original image");
             }
+        }
+
+        if (string.IsNullOrWhiteSpace(imagePathForProcessing))
+        {
+            throw new InvalidOperationException("No valid image path available for processing.");
         }
 
         return new PreparedImagePath(imagePathForProcessing, tempPath);

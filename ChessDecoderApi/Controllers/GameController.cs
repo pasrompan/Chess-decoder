@@ -370,7 +370,7 @@ public class GameController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-    public async Task<IActionResult> GetGameImage(Guid gameId, [FromQuery] string userId, [FromQuery] string variant = "processed")
+    public async Task<IActionResult> GetGameImage(Guid gameId, [FromQuery] string userId, [FromQuery] string variant = "processed", [FromQuery] int? pageNumber = null)
     {
         try
         {
@@ -379,7 +379,7 @@ public class GameController : ControllerBase
                 return BadRequest(new { message = "UserId is required" });
             }
 
-            var imageResult = await _gameManagementService.GetGameImageAsync(gameId, userId, variant);
+            var imageResult = await _gameManagementService.GetGameImageAsync(gameId, userId, variant, pageNumber);
             if (imageResult == null)
             {
                 return NotFound(new { message = "Game image not found or access denied" });
