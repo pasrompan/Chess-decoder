@@ -6,6 +6,8 @@ using ChessDecoderApi.Repositories;
 using ChessDecoderApi.Services.ImageProcessing;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
+using System.Text;
+using System.Text.RegularExpressions;
 
 namespace ChessDecoderApi.Services.GameProcessing;
 
@@ -23,6 +25,7 @@ public class GameProcessingService : IGameProcessingService
     private readonly IProjectService _projectService;
     private readonly RepositoryFactory _repositoryFactory;
     private readonly ILogger<GameProcessingService> _logger;
+    private static readonly Regex PgnHeaderRegex = new(@"^\s*\[(?<tag>\w+)\s+""(?<value>.*?)""\]\s*$", RegexOptions.Multiline);
 
     public GameProcessingService(
         IAuthService authService,
@@ -169,6 +172,7 @@ public class GameProcessingService : IGameProcessingService
         var startTime = DateTime.UtcNow;
         var result = await _imageExtractionService.ProcessImageAsync(imagePathForProcessing, pgnMetadata);
         var processingTime = DateTime.UtcNow - startTime;
+        var primaryRange = GetMoveRange(result.Validation);
 
         // Generate processed image
         try
@@ -223,6 +227,7 @@ public class GameProcessingService : IGameProcessingService
             Title = $"Chess Game - {DateTime.UtcNow:yyyy-MM-dd HH:mm}",
             Description = $"Processed chess game from image upload (language auto-detected)",
             PgnContent = result.PgnContent ?? "",
+            PrimaryPagePgnContent = result.PgnContent ?? "",
             ProcessedAt = DateTime.UtcNow,
             ProcessingTimeMs = (int)processingTime.TotalMilliseconds,
             IsValid = result.Validation?.Moves?.All(m => 
@@ -231,7 +236,8 @@ public class GameProcessingService : IGameProcessingService
             WhitePlayer = request.WhitePlayer,
             BlackPlayer = request.BlackPlayer,
             GameDate = request.GameDate,
-            Round = request.Round
+            Round = request.Round,
+            HasContinuation = false
         };
 
         var gameImage = new GameImage
@@ -246,7 +252,10 @@ public class GameProcessingService : IGameProcessingService
             CloudStorageObjectName = cloudStorageObjectName,
             IsStoredInCloud = isStoredInCloud,
             UploadedAt = DateTime.UtcNow,
-            Variant = "original"
+            Variant = "original",
+            PageNumber = 1,
+            StartingMoveNumber = primaryRange.StartMoveNumber,
+            EndingMoveNumber = primaryRange.EndMoveNumber
         };
 
         var totalMoves = result.Validation?.Moves?.Count ?? 0;
@@ -292,7 +301,10 @@ public class GameProcessingService : IGameProcessingService
                     CloudStorageObjectName = processedImageCloudStorageObjectName,
                     IsStoredInCloud = isStoredInCloud && !string.IsNullOrWhiteSpace(processedImageCloudStorageObjectName),
                     UploadedAt = DateTime.UtcNow,
-                    Variant = "processed"
+                    Variant = "processed",
+                    PageNumber = 1,
+                    StartingMoveNumber = primaryRange.StartMoveNumber,
+                    EndingMoveNumber = primaryRange.EndMoveNumber
                 };
 
                 await imageRepo.CreateAsync(processedVariantImage);
@@ -366,6 +378,1100 @@ public class GameProcessingService : IGameProcessingService
 
         return Task.FromResult(GetMockGameProcessingResponse());
     }
+
+    public async Task<DualGameUploadResponse> ProcessDualGameUploadAsync(DualGameUploadRequest request)
+    {
+        _logger.LogInformation("Processing dual game upload for user {UserId}", request.UserId);
+
+        await ValidateUserAndCreditsAsync(request.UserId, "dual game upload");
+
+        var metadata = BuildMetadata(
+            request.WhitePlayer,
+            request.BlackPlayer,
+            request.GameDate,
+            request.Round);
+
+        StoredUploadImage page1Upload;
+        StoredUploadImage page2Upload;
+        
+        try
+        {
+            page1Upload = await PersistUploadedImageAsync(request.Page1);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to persist page 1 image for user {UserId}", request.UserId);
+            throw new InvalidOperationException("Failed to save page 1 image. Please try again.", ex);
+        }
+
+        try
+        {
+            page2Upload = await PersistUploadedImageAsync(request.Page2);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to persist page 2 image for user {UserId}", request.UserId);
+            throw new InvalidOperationException("Failed to save page 2 image. Please try again.", ex);
+        }
+
+        var page1ProcessingPath = await PrepareImageForProcessingAsync(page1Upload, request.Page1, request.AutoCrop);
+        var page2ProcessingPath = await PrepareImageForProcessingAsync(page2Upload, request.Page2, request.AutoCrop);
+
+        try
+        {
+            var startTime = DateTime.UtcNow;
+            
+            Task<ChessGameResponse> page1Task;
+            Task<(List<string> whiteMoves, List<string> blackMoves)> page2RawTask;
+            
+            try
+            {
+                page1Task = _imageExtractionService.ProcessImageAsync(page1ProcessingPath.PathToProcess, null);
+                page2RawTask = _imageExtractionService.ExtractMovesFromImageToStringAsync(page2ProcessingPath.PathToProcess);
+                await Task.WhenAll(page1Task, page2RawTask);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Image extraction failed during dual upload for user {UserId}", request.UserId);
+                throw new InvalidOperationException("Failed to extract moves from images. Please ensure both images contain readable chess notation.", ex);
+            }
+            
+            var processingTime = DateTime.UtcNow - startTime;
+
+            var page1Result = page1Task.Result;
+            var page1Range = GetMoveRange(page1Result.Validation, page1Result.PgnContent);
+
+            var page1Moves = ExtractMovePairs(page1Result.Validation, page1Result.PgnContent);
+            if (page1Moves.Count == 0)
+            {
+                _logger.LogWarning("No moves extracted from page 1 for user {UserId}. PGN content: {PgnContent}", 
+                    request.UserId, page1Result.PgnContent?.Substring(0, Math.Min(200, page1Result.PgnContent?.Length ?? 0)));
+                throw new InvalidOperationException("Could not extract move data from page 1. Please ensure the image contains readable chess notation.");
+            }
+
+            var defaultPage2StartMove = Math.Max(1, page1Range.EndMoveNumber + 1);
+            var page2Raw = page2RawTask.Result;
+            var page2Moves = BuildMovePairsFromRaw(page2Raw.whiteMoves, page2Raw.blackMoves, defaultPage2StartMove);
+            if (page2Moves.Count == 0)
+            {
+                _logger.LogWarning("No moves extracted from page 2 for user {UserId}. White moves: {WhiteCount}, Black moves: {BlackCount}", 
+                    request.UserId, page2Raw.whiteMoves.Count, page2Raw.blackMoves.Count);
+                throw new InvalidOperationException("Could not extract move data from page 2. Please ensure the image contains readable chess notation.");
+            }
+
+            var page2Range = GetMoveRangeFromMoves(page2Moves);
+            var mergeResult = MergePageMoves(page1Moves, page2Moves, page1Range, page2Range);
+            mergeResult.Validation.Warnings.Insert(0,
+                $"Page 2 move numbering was normalized to continue from move {defaultPage2StartMove}.");
+            var mergedPgn = BuildPgnFromMovePairs(mergeResult.Moves, metadata, "*");
+
+            var chessGame = new ChessGame
+            {
+                Id = Guid.NewGuid(),
+                UserId = request.UserId,
+                Title = $"Chess Game - {DateTime.UtcNow:yyyy-MM-dd HH:mm}",
+                Description = "Processed two-page chess game upload",
+                PgnContent = mergedPgn,
+                PrimaryPagePgnContent = BuildPgnFromMovePairs(page1Moves, metadata, "*"),
+                ProcessedAt = DateTime.UtcNow,
+                ProcessingTimeMs = (int)processingTime.TotalMilliseconds,
+                IsValid = true,
+                WhitePlayer = request.WhitePlayer,
+                BlackPlayer = request.BlackPlayer,
+                GameDate = request.GameDate,
+                Round = request.Round,
+                HasContinuation = true
+            };
+
+            var page1Image = CreateGameImage(chessGame.Id, page1Upload, request.Page1, 1, page1Range);
+            var page2Image = CreateGameImage(chessGame.Id, page2Upload, request.Page2, 2, page2Range);
+            page1Image.ContinuationImageId = page2Image.Id;
+
+            var totalMoves = mergeResult.Moves.Count(m =>
+                !string.IsNullOrWhiteSpace(GetMoveNotation(m.WhiteMove)) ||
+                !string.IsNullOrWhiteSpace(GetMoveNotation(m.BlackMove)));
+
+            var gameStats = new GameStatistics
+            {
+                Id = Guid.NewGuid(),
+                ChessGameId = chessGame.Id,
+                TotalMoves = totalMoves,
+                ValidMoves = totalMoves,
+                InvalidMoves = 0,
+                Opening = ExtractOpening(mergedPgn),
+                Result = "In Progress"
+            };
+
+            await _creditService.DeductCreditsAsync(request.UserId, 1);
+
+            var gameRepo = await _repositoryFactory.CreateChessGameRepositoryAsync();
+            var imageRepo = await _repositoryFactory.CreateGameImageRepositoryAsync();
+            var statsRepo = await _repositoryFactory.CreateGameStatisticsRepositoryAsync();
+
+            await gameRepo.CreateAsync(chessGame);
+            await imageRepo.CreateAsync(page1Image);
+            await imageRepo.CreateAsync(page2Image);
+            await statsRepo.CreateAsync(gameStats);
+
+            try
+            {
+                var uploadData = new InitialUploadData
+                {
+                    FileName = $"{request.Page1.FileName}; {request.Page2.FileName}",
+                    FileSize = request.Page1.Length + request.Page2.Length,
+                    FileType = "multipart/image",
+                    UploadedAt = DateTime.UtcNow,
+                    StorageLocation = page1Upload.IsStoredInCloud || page2Upload.IsStoredInCloud ? "cloud" : "local",
+                    StorageUrl = page1Upload.CloudStorageUrl ?? page2Upload.CloudStorageUrl
+                };
+
+                var processingDataForHistory = new ProcessingData
+                {
+                    ProcessedAt = chessGame.ProcessedAt,
+                    PgnContent = mergedPgn,
+                    ValidationStatus = "valid",
+                    ProcessingTimeMs = (int)processingTime.TotalMilliseconds
+                };
+
+                await _projectService.CreateProjectAsync(chessGame.Id, request.UserId, uploadData, processingDataForHistory);
+                await _projectService.AddHistoryEntryAsync(
+                    chessGame.Id,
+                    "update",
+                    "Second page uploaded and merged automatically",
+                    new Dictionary<string, object>
+                    {
+                        { "page1StartMove", page1Range.StartMoveNumber },
+                        { "page1EndMove", page1Range.EndMoveNumber },
+                        { "page2StartMove", page2Range.StartMoveNumber },
+                        { "page2EndMove", page2Range.EndMoveNumber }
+                    });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to write project history for dual upload game {GameId}", chessGame.Id);
+            }
+
+            return new DualGameUploadResponse
+            {
+                GameId = chessGame.Id,
+                MergedPgn = mergedPgn,
+                TotalMoves = totalMoves,
+                Validation = new ChessGameValidation
+                {
+                    GameId = chessGame.Id.ToString(),
+                    Moves = mergeResult.Moves
+                },
+                ProcessingTimeMs = processingTime.TotalMilliseconds,
+                CreditsRemaining = await _creditService.GetUserCreditsAsync(request.UserId),
+                Page1 = ToPageInfo(page1Image),
+                Page2 = ToPageInfo(page2Image),
+                ContinuationValidation = mergeResult.Validation
+            };
+        }
+        finally
+        {
+            CleanupTempFile(page1ProcessingPath.TempPathToDelete);
+            CleanupTempFile(page2ProcessingPath.TempPathToDelete);
+        }
+    }
+
+    public async Task<ContinuationUploadResponse> AddContinuationAsync(Guid gameId, ContinuationUploadRequest request)
+    {
+        _logger.LogInformation("Adding continuation for game {GameId}", gameId);
+
+        await ValidateUserAndCreditsAsync(request.UserId, $"continuation upload for game {gameId}");
+
+        var gameRepo = await _repositoryFactory.CreateChessGameRepositoryAsync();
+        var imageRepo = await _repositoryFactory.CreateGameImageRepositoryAsync();
+        var statsRepo = await _repositoryFactory.CreateGameStatisticsRepositoryAsync();
+
+        var game = await gameRepo.GetByIdAsync(gameId);
+        if (game == null)
+        {
+            _logger.LogWarning("Game {GameId} not found for continuation upload", gameId);
+            throw new KeyNotFoundException("Game not found");
+        }
+
+        if (!string.Equals(game.UserId, request.UserId, StringComparison.Ordinal))
+        {
+            _logger.LogWarning("User {UserId} attempted to access game {GameId} owned by another user", request.UserId, gameId);
+            throw new KeyNotFoundException("Game not found");
+        }
+
+        if (game.HasContinuation)
+        {
+            _logger.LogWarning("Game {GameId} already has a continuation page", gameId);
+            throw new InvalidOperationException("Game already has a continuation page");
+        }
+
+        var existingImages = await imageRepo.GetByChessGameIdAsync(gameId);
+        var page2Exists = existingImages.Any(i => i.PageNumber == 2 && string.Equals(i.Variant, "original", StringComparison.OrdinalIgnoreCase));
+        if (page2Exists)
+        {
+            _logger.LogWarning("Game {GameId} already has a page 2 image", gameId);
+            throw new InvalidOperationException("Game already has a continuation page");
+        }
+
+        StoredUploadImage continuationUpload;
+        try
+        {
+            continuationUpload = await PersistUploadedImageAsync(request.Image);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to persist continuation image for game {GameId}", gameId);
+            throw new InvalidOperationException("Failed to save continuation image. Please try again.", ex);
+        }
+
+        var continuationProcessingPath = await PrepareImageForProcessingAsync(continuationUpload, request.Image, request.AutoCrop);
+
+        try
+        {
+            var startTime = DateTime.UtcNow;
+            
+            (List<string> whiteMoves, List<string> blackMoves) continuationRaw;
+            try
+            {
+                continuationRaw = await _imageExtractionService.ExtractMovesFromImageToStringAsync(continuationProcessingPath.PathToProcess);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to extract moves from continuation image for game {GameId}", gameId);
+                throw new InvalidOperationException("Failed to extract moves from continuation image. Please ensure the image contains readable chess notation.", ex);
+            }
+            
+            var processingTime = DateTime.UtcNow - startTime;
+
+            var page1Moves = ExtractMovePairs(null, game.PgnContent);
+            if (page1Moves.Count == 0)
+            {
+                _logger.LogWarning("Game {GameId} has no existing moves to continue from. PGN: {PgnContent}", 
+                    gameId, game.PgnContent?.Substring(0, Math.Min(200, game.PgnContent?.Length ?? 0)));
+                throw new InvalidOperationException("Existing game does not contain move data to continue from");
+            }
+
+            var page1Range = GetMoveRange(null, game.PgnContent);
+            var defaultPage2StartMove = Math.Max(1, page1Range.EndMoveNumber + 1);
+            var page2Moves = BuildMovePairsFromRaw(continuationRaw.whiteMoves, continuationRaw.blackMoves, defaultPage2StartMove);
+            if (page2Moves.Count == 0)
+            {
+                _logger.LogWarning("No moves extracted from continuation image for game {GameId}. White: {WhiteCount}, Black: {BlackCount}", 
+                    gameId, continuationRaw.whiteMoves.Count, continuationRaw.blackMoves.Count);
+                throw new InvalidOperationException("Could not extract continuation moves from uploaded image. Please ensure the image contains readable chess notation.");
+            }
+
+            var page2Range = GetMoveRangeFromMoves(page2Moves);
+
+            var mergeResult = MergePageMoves(page1Moves, page2Moves, page1Range, page2Range);
+            mergeResult.Validation.Warnings.Insert(0,
+                $"Continuation move numbering was normalized to continue from move {defaultPage2StartMove}.");
+            var metadata = BuildMetadata(game.WhitePlayer, game.BlackPlayer, game.GameDate, game.Round);
+            var gameResult = ExtractResultFromPgn(game.PgnContent);
+            var mergedPgn = BuildPgnFromMovePairs(mergeResult.Moves, metadata, gameResult);
+
+            var page2Image = CreateGameImage(game.Id, continuationUpload, request.Image, 2, page2Range);
+
+            var page1Images = existingImages.Where(i =>
+                    i.PageNumber == 1 ||
+                    (i.PageNumber <= 0 && string.Equals(i.Variant, "original", StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+
+            foreach (var image in page1Images)
+            {
+                image.PageNumber = 1;
+                image.ContinuationImageId = page2Image.Id;
+                if (image.StartingMoveNumber == 0 || image.EndingMoveNumber == 0)
+                {
+                    image.StartingMoveNumber = page1Range.StartMoveNumber;
+                    image.EndingMoveNumber = page1Range.EndMoveNumber;
+                }
+                await imageRepo.UpdateAsync(image);
+            }
+
+            await imageRepo.CreateAsync(page2Image);
+
+            if (string.IsNullOrWhiteSpace(game.PrimaryPagePgnContent))
+            {
+                game.PrimaryPagePgnContent = game.PgnContent;
+            }
+
+            game.PgnContent = mergedPgn;
+            game.HasContinuation = true;
+            game.ProcessingTimeMs += (int)processingTime.TotalMilliseconds;
+            await gameRepo.UpdateAsync(game);
+
+            var totalMoves = mergeResult.Moves.Count(m =>
+                !string.IsNullOrWhiteSpace(GetMoveNotation(m.WhiteMove)) ||
+                !string.IsNullOrWhiteSpace(GetMoveNotation(m.BlackMove)));
+
+            await statsRepo.CreateOrUpdateAsync(new GameStatistics
+            {
+                Id = Guid.NewGuid(),
+                ChessGameId = game.Id,
+                TotalMoves = totalMoves,
+                ValidMoves = totalMoves,
+                InvalidMoves = 0,
+                Opening = ExtractOpening(mergedPgn),
+                Result = gameResult == "*" ? "In Progress" : gameResult,
+                CreatedAt = DateTime.UtcNow
+            });
+
+            await _creditService.DeductCreditsAsync(request.UserId, 1);
+
+            try
+            {
+                await _projectService.AddHistoryEntryAsync(
+                    game.Id,
+                    "update",
+                    "Continuation page uploaded",
+                    new Dictionary<string, object>
+                    {
+                        { "page2StartMove", page2Range.StartMoveNumber },
+                        { "page2EndMove", page2Range.EndMoveNumber },
+                        { "warningsCount", mergeResult.Validation.Warnings.Count }
+                    });
+
+                await _projectService.UpdateProcessingDataAsync(game.Id, new ProcessingData
+                {
+                    ProcessedAt = DateTime.UtcNow,
+                    PgnContent = mergedPgn,
+                    ValidationStatus = "valid",
+                    ProcessingTimeMs = game.ProcessingTimeMs
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to update project history for continuation on game {GameId}", game.Id);
+            }
+
+            return new ContinuationUploadResponse
+            {
+                GameId = game.Id,
+                UpdatedPgn = mergedPgn,
+                TotalMoves = totalMoves,
+                Validation = new ChessGameValidation
+                {
+                    GameId = game.Id.ToString(),
+                    Moves = mergeResult.Moves
+                },
+                ProcessingTimeMs = processingTime.TotalMilliseconds,
+                Page2 = ToPageInfo(page2Image),
+                ContinuationValidation = mergeResult.Validation
+            };
+        }
+        finally
+        {
+            CleanupTempFile(continuationProcessingPath.TempPathToDelete);
+        }
+    }
+
+    public async Task<GamePagesResponse> GetGamePagesAsync(Guid gameId, string userId)
+    {
+        var gameRepo = await _repositoryFactory.CreateChessGameRepositoryAsync();
+        var imageRepo = await _repositoryFactory.CreateGameImageRepositoryAsync();
+
+        var game = await gameRepo.GetByIdAsync(gameId);
+        if (game == null || !string.Equals(game.UserId, userId, StringComparison.Ordinal))
+        {
+            throw new KeyNotFoundException("Game not found");
+        }
+
+        var images = await imageRepo.GetByChessGameIdAsync(gameId);
+        var originalImages = images.Where(i => string.Equals(i.Variant, "original", StringComparison.OrdinalIgnoreCase)).ToList();
+        var page1 = originalImages.FirstOrDefault(i => i.PageNumber == 1) ?? originalImages.FirstOrDefault();
+        var page2 = originalImages.FirstOrDefault(i => i.PageNumber == 2);
+
+        return new GamePagesResponse
+        {
+            GameId = gameId,
+            HasContinuation = page2 != null || game.HasContinuation,
+            Page1 = page1 != null ? ToPageInfo(page1) : null,
+            Page2 = page2 != null ? ToPageInfo(page2) : null
+        };
+    }
+
+    public async Task<DeleteContinuationResponse> DeleteContinuationAsync(Guid gameId, string userId)
+    {
+        var gameRepo = await _repositoryFactory.CreateChessGameRepositoryAsync();
+        var imageRepo = await _repositoryFactory.CreateGameImageRepositoryAsync();
+        var statsRepo = await _repositoryFactory.CreateGameStatisticsRepositoryAsync();
+
+        var game = await gameRepo.GetByIdAsync(gameId);
+        if (game == null || !string.Equals(game.UserId, userId, StringComparison.Ordinal))
+        {
+            throw new KeyNotFoundException("Game not found");
+        }
+
+        var images = await imageRepo.GetByChessGameIdAsync(gameId);
+        var page2Images = images.Where(i => i.PageNumber == 2).ToList();
+        if (page2Images.Count == 0)
+        {
+            throw new InvalidOperationException("Game has no continuation page to delete");
+        }
+
+        foreach (var page2 in page2Images)
+        {
+            await imageRepo.DeleteAsync(page2.Id);
+        }
+
+        var page1Images = images.Where(i => i.PageNumber == 1 || i.PageNumber == 0).ToList();
+        foreach (var page1 in page1Images)
+        {
+            if (page1.ContinuationImageId.HasValue)
+            {
+                page1.ContinuationImageId = null;
+                await imageRepo.UpdateAsync(page1);
+            }
+        }
+
+        var restoredPgn = string.IsNullOrWhiteSpace(game.PrimaryPagePgnContent)
+            ? game.PgnContent
+            : game.PrimaryPagePgnContent;
+
+        game.PgnContent = restoredPgn;
+        game.HasContinuation = false;
+        await gameRepo.UpdateAsync(game);
+
+        var restoredMoves = ExtractMovePairs(null, restoredPgn);
+        var totalMoves = restoredMoves.Count(m =>
+            !string.IsNullOrWhiteSpace(GetMoveNotation(m.WhiteMove)) ||
+            !string.IsNullOrWhiteSpace(GetMoveNotation(m.BlackMove)));
+
+        await statsRepo.CreateOrUpdateAsync(new GameStatistics
+        {
+            Id = Guid.NewGuid(),
+            ChessGameId = game.Id,
+            TotalMoves = totalMoves,
+            ValidMoves = totalMoves,
+            InvalidMoves = 0,
+            Opening = ExtractOpening(restoredPgn),
+            Result = ExtractResultFromPgn(restoredPgn) == "*" ? "In Progress" : ExtractResultFromPgn(restoredPgn),
+            CreatedAt = DateTime.UtcNow
+        });
+
+        try
+        {
+            await _projectService.AddHistoryEntryAsync(game.Id, "update", "Continuation page removed");
+            await _projectService.UpdateProcessingDataAsync(game.Id, new ProcessingData
+            {
+                ProcessedAt = DateTime.UtcNow,
+                PgnContent = restoredPgn,
+                ValidationStatus = "valid",
+                ProcessingTimeMs = game.ProcessingTimeMs
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to update project history after continuation deletion for game {GameId}", gameId);
+        }
+
+        return new DeleteContinuationResponse
+        {
+            GameId = gameId,
+            UpdatedPgn = restoredPgn,
+            TotalMoves = totalMoves,
+            HasContinuation = false
+        };
+    }
+
+    private async Task ValidateUserAndCreditsAsync(string userId, string operationDescription)
+    {
+        var user = await _authService.GetUserProfileAsync(userId);
+        if (user == null)
+        {
+            _logger.LogWarning("User {UserId} not found during {Operation}", userId, operationDescription);
+            throw new InvalidOperationException("User not found or unauthorized");
+        }
+
+        if (!await _creditService.HasEnoughCreditsAsync(userId, 1))
+        {
+            _logger.LogWarning("User {UserId} has insufficient credits for {Operation}", userId, operationDescription);
+            throw new InvalidOperationException("Insufficient credits. Please purchase more credits to process images.");
+        }
+    }
+
+    private static GameImage CreateGameImage(
+        Guid chessGameId,
+        StoredUploadImage upload,
+        IFormFile file,
+        int pageNumber,
+        MoveRange moveRange)
+    {
+        return new GameImage
+        {
+            Id = Guid.NewGuid(),
+            ChessGameId = chessGameId,
+            FileName = upload.FileName,
+            FilePath = upload.FilePath,
+            FileType = file.ContentType,
+            FileSizeBytes = file.Length,
+            CloudStorageUrl = upload.CloudStorageUrl,
+            CloudStorageObjectName = upload.CloudStorageObjectName,
+            IsStoredInCloud = upload.IsStoredInCloud,
+            UploadedAt = DateTime.UtcNow,
+            Variant = "original",
+            PageNumber = pageNumber,
+            StartingMoveNumber = moveRange.StartMoveNumber,
+            EndingMoveNumber = moveRange.EndMoveNumber
+        };
+    }
+
+    private static PgnMetadata? BuildMetadata(string? whitePlayer, string? blackPlayer, DateTime? gameDate, string? round)
+    {
+        if (string.IsNullOrWhiteSpace(whitePlayer) &&
+            string.IsNullOrWhiteSpace(blackPlayer) &&
+            !gameDate.HasValue &&
+            string.IsNullOrWhiteSpace(round))
+        {
+            return null;
+        }
+
+        return new PgnMetadata
+        {
+            WhitePlayer = string.IsNullOrWhiteSpace(whitePlayer) ? null : whitePlayer,
+            BlackPlayer = string.IsNullOrWhiteSpace(blackPlayer) ? null : blackPlayer,
+            GameDate = gameDate,
+            Round = string.IsNullOrWhiteSpace(round) ? null : round
+        };
+    }
+
+    private async Task<StoredUploadImage> PersistUploadedImageAsync(IFormFile imageFile)
+    {
+        var fileName = $"{Guid.NewGuid()}_{imageFile.FileName}";
+        var localFilePath = string.Empty;
+        string? cloudStorageUrl = null;
+        string? cloudStorageObjectName = null;
+        var isStoredInCloud = false;
+        byte[] imageBytes;
+
+        await using (var sourceStream = new MemoryStream())
+        {
+            await imageFile.CopyToAsync(sourceStream);
+            imageBytes = sourceStream.ToArray();
+        }
+
+        var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "uploads");
+        if (!Directory.Exists(uploadsDir))
+        {
+            Directory.CreateDirectory(uploadsDir);
+        }
+
+        localFilePath = Path.Combine(uploadsDir, fileName);
+        await File.WriteAllBytesAsync(localFilePath, imageBytes);
+
+        try
+        {
+            await using var imageStream = new MemoryStream(imageBytes);
+
+            cloudStorageObjectName = await _cloudStorageService.UploadGameImageAsync(imageStream, fileName, imageFile.ContentType);
+            cloudStorageUrl = await _cloudStorageService.GetImageUrlAsync(cloudStorageObjectName);
+            if (string.IsNullOrWhiteSpace(cloudStorageUrl))
+            {
+                throw new InvalidOperationException("Cloud Storage URL was empty");
+            }
+
+            isStoredInCloud = true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to upload image to cloud storage; keeping local copy for processing");
+        }
+
+        return new StoredUploadImage(
+            fileName,
+            localFilePath,
+            cloudStorageUrl,
+            cloudStorageObjectName,
+            isStoredInCloud);
+    }
+
+    private async Task<PreparedImagePath> PrepareImageForProcessingAsync(StoredUploadImage upload, IFormFile file, bool autoCrop)
+    {
+        var hasLocalPath = !string.IsNullOrWhiteSpace(upload.FilePath) && File.Exists(upload.FilePath);
+        var imagePathForProcessing = hasLocalPath
+            ? upload.FilePath
+            : (upload.IsStoredInCloud && !string.IsNullOrWhiteSpace(upload.CloudStorageUrl)
+                ? upload.CloudStorageUrl!
+                : string.Empty);
+        string? tempPath = null;
+
+        if (autoCrop && hasLocalPath)
+        {
+            try
+            {
+                using var originalImage = Image.Load<Rgba32>(upload.FilePath);
+                var tableBoundaries = _legacyImageProcessingService.FindTableBoundaries(originalImage);
+                var croppedImageBytes = await _imageManipulationService.CropImageAsync(
+                    upload.FilePath,
+                    tableBoundaries.X,
+                    tableBoundaries.Y,
+                    tableBoundaries.Width,
+                    tableBoundaries.Height);
+
+                var croppedFileName = $"{Guid.NewGuid()}_cropped{Path.GetExtension(file.FileName)}";
+                tempPath = Path.Combine(Path.GetTempPath(), croppedFileName);
+                await File.WriteAllBytesAsync(tempPath, croppedImageBytes);
+                imagePathForProcessing = tempPath;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Auto-crop failed; continuing with original image");
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(imagePathForProcessing))
+        {
+            throw new InvalidOperationException("No valid image path available for processing.");
+        }
+
+        return new PreparedImagePath(imagePathForProcessing, tempPath);
+    }
+
+    private void CleanupTempFile(string? tempPath)
+    {
+        if (string.IsNullOrWhiteSpace(tempPath) || !File.Exists(tempPath))
+        {
+            return;
+        }
+
+        try
+        {
+            File.Delete(tempPath);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to clean temporary file {TempPath}", tempPath);
+        }
+    }
+
+    private static MoveRange GetMoveRange(ChessGameValidation? validation, string? pgnContent = null)
+    {
+        var moves = validation?.Moves?
+            .Where(m => m.MoveNumber > 0)
+            .Where(m => !string.IsNullOrWhiteSpace(GetMoveNotation(m.WhiteMove)) || !string.IsNullOrWhiteSpace(GetMoveNotation(m.BlackMove)))
+            .OrderBy(m => m.MoveNumber)
+            .ToList() ?? new List<ChessMovePair>();
+
+        if (moves.Count > 0)
+        {
+            var first = moves[0];
+            return new MoveRange(first.MoveNumber, moves[^1].MoveNumber);
+        }
+
+        if (!string.IsNullOrWhiteSpace(pgnContent))
+        {
+            var parsedMovePairs = ParseMovePairsFromPgn(pgnContent);
+            var moveNumbers = parsedMovePairs
+                .Select(m => m.MoveNumber)
+                .Where(n => n > 0)
+                .Distinct()
+                .OrderBy(n => n)
+                .ToList();
+
+            if (moveNumbers.Count > 0)
+            {
+                return new MoveRange(moveNumbers[0], moveNumbers[^1]);
+            }
+        }
+
+        return new MoveRange(0, 0);
+    }
+
+    private static MoveRange GetMoveRangeFromMoves(IReadOnlyCollection<ChessMovePair> moves)
+    {
+        var ordered = moves
+            .Where(m => m.MoveNumber > 0)
+            .OrderBy(m => m.MoveNumber)
+            .ToList();
+
+        if (ordered.Count == 0)
+        {
+            return new MoveRange(0, 0);
+        }
+
+        return new MoveRange(ordered[0].MoveNumber, ordered[^1].MoveNumber);
+    }
+
+    private static List<ChessMovePair> BuildMovePairsFromRaw(
+        IReadOnlyList<string> whiteMoves,
+        IReadOnlyList<string> blackMoves,
+        int startMoveNumber)
+    {
+        var result = new List<ChessMovePair>();
+        var maxMoves = Math.Max(whiteMoves.Count, blackMoves.Count);
+        var nextMoveNumber = Math.Max(1, startMoveNumber);
+
+        for (var i = 0; i < maxMoves; i++)
+        {
+            var white = i < whiteMoves.Count ? whiteMoves[i]?.Trim() : null;
+            var black = i < blackMoves.Count ? blackMoves[i]?.Trim() : null;
+
+            if (string.IsNullOrWhiteSpace(white) && string.IsNullOrWhiteSpace(black))
+            {
+                continue;
+            }
+
+            result.Add(new ChessMovePair
+            {
+                MoveNumber = nextMoveNumber++,
+                WhiteMove = string.IsNullOrWhiteSpace(white)
+                    ? null
+                    : new Models.ValidatedMove
+                    {
+                        Notation = white,
+                        NormalizedNotation = white,
+                        ValidationStatus = "warning",
+                        ValidationText = "Extracted from continuation image; numbering normalized from previous page."
+                    },
+                BlackMove = string.IsNullOrWhiteSpace(black)
+                    ? null
+                    : new Models.ValidatedMove
+                    {
+                        Notation = black,
+                        NormalizedNotation = black,
+                        ValidationStatus = "warning",
+                        ValidationText = "Extracted from continuation image; numbering normalized from previous page."
+                    }
+            });
+        }
+
+        return result;
+    }
+
+    private static List<ChessMovePair> ExtractMovePairs(ChessGameValidation? validation, string? pgnContent)
+    {
+        var fromValidation = validation?.Moves?
+            .Where(m => m.MoveNumber > 0)
+            .Select(CloneMovePair)
+            .Where(m => !string.IsNullOrWhiteSpace(GetMoveNotation(m.WhiteMove)) || !string.IsNullOrWhiteSpace(GetMoveNotation(m.BlackMove)))
+            .OrderBy(m => m.MoveNumber)
+            .ToList();
+
+        if (fromValidation != null && fromValidation.Count > 0)
+        {
+            return fromValidation;
+        }
+
+        return ParseMovePairsFromPgn(pgnContent);
+    }
+
+    private static MergeResult MergePageMoves(
+        IReadOnlyCollection<ChessMovePair> page1Moves,
+        IReadOnlyCollection<ChessMovePair> page2Moves,
+        MoveRange page1Range,
+        MoveRange page2Range)
+    {
+        var warnings = new List<string>();
+        var hasGap = false;
+        var hasOverlap = false;
+        int? gapSize = null;
+        int? overlapMoves = null;
+
+        if (page1Range.EndMoveNumber > 0 && page2Range.StartMoveNumber > 0)
+        {
+            if (page2Range.StartMoveNumber > page1Range.EndMoveNumber + 1)
+            {
+                hasGap = true;
+                gapSize = page2Range.StartMoveNumber - (page1Range.EndMoveNumber + 1);
+                warnings.Add($"Detected a gap of {gapSize} move(s) between page 1 and page 2.");
+            }
+            else if (page2Range.StartMoveNumber <= page1Range.EndMoveNumber)
+            {
+                hasOverlap = true;
+                overlapMoves = page1Range.EndMoveNumber - page2Range.StartMoveNumber + 1;
+                warnings.Add($"Detected overlap of {overlapMoves} move(s). Duplicate moves were deduplicated.");
+            }
+        }
+
+        var merged = page1Moves
+            .GroupBy(m => m.MoveNumber)
+            .ToDictionary(g => g.Key, g => CloneMovePair(g.First()));
+
+        foreach (var incoming in page2Moves.OrderBy(m => m.MoveNumber))
+        {
+            if (!merged.TryGetValue(incoming.MoveNumber, out var existing))
+            {
+                merged[incoming.MoveNumber] = CloneMovePair(incoming);
+                continue;
+            }
+
+            var incomingWhite = GetMoveNotation(incoming.WhiteMove);
+            var incomingBlack = GetMoveNotation(incoming.BlackMove);
+            var existingWhite = GetMoveNotation(existing.WhiteMove);
+            var existingBlack = GetMoveNotation(existing.BlackMove);
+
+            if (string.IsNullOrWhiteSpace(existingWhite) && !string.IsNullOrWhiteSpace(incomingWhite))
+            {
+                existing.WhiteMove = CloneMove(incoming.WhiteMove);
+            }
+            else if (!string.IsNullOrWhiteSpace(existingWhite) && !string.IsNullOrWhiteSpace(incomingWhite) &&
+                     !string.Equals(existingWhite, incomingWhite, StringComparison.OrdinalIgnoreCase))
+            {
+                warnings.Add($"Move {incoming.MoveNumber} white differs between pages. Kept page 1 move.");
+            }
+
+            if (string.IsNullOrWhiteSpace(existingBlack) && !string.IsNullOrWhiteSpace(incomingBlack))
+            {
+                existing.BlackMove = CloneMove(incoming.BlackMove);
+            }
+            else if (!string.IsNullOrWhiteSpace(existingBlack) && !string.IsNullOrWhiteSpace(incomingBlack) &&
+                     !string.Equals(existingBlack, incomingBlack, StringComparison.OrdinalIgnoreCase))
+            {
+                warnings.Add($"Move {incoming.MoveNumber} black differs between pages. Kept page 1 move.");
+            }
+
+            merged[incoming.MoveNumber] = existing;
+        }
+
+        var mergedMoves = merged
+            .OrderBy(kvp => kvp.Key)
+            .Select(kvp => kvp.Value)
+            .ToList();
+
+        return new MergeResult(
+            mergedMoves,
+            new ContinuationValidationResponse
+            {
+                IsValid = warnings.Count == 0,
+                Page1EndMove = page1Range.EndMoveNumber,
+                Page2StartMove = page2Range.StartMoveNumber,
+                HasGap = hasGap,
+                GapSize = gapSize,
+                HasOverlap = hasOverlap,
+                OverlapMoves = overlapMoves,
+                Warnings = warnings
+            });
+    }
+
+    private static string BuildPgnFromMovePairs(IEnumerable<ChessMovePair> moves, PgnMetadata? metadata, string result)
+    {
+        var normalizedResult = result is "1-0" or "0-1" or "1/2-1/2" ? result : "*";
+        var sb = new StringBuilder();
+
+        if (metadata?.GameDate.HasValue == true)
+        {
+            sb.AppendLine($"[Date \"{metadata.GameDate.Value:yyyy.MM.dd}\"]");
+        }
+        else
+        {
+            sb.AppendLine("[Date \"????.??.??\"]");
+        }
+
+        if (!string.IsNullOrWhiteSpace(metadata?.Round))
+        {
+            sb.AppendLine($"[Round \"{metadata.Round}\"]");
+        }
+
+        var whitePlayer = string.IsNullOrWhiteSpace(metadata?.WhitePlayer) ? "?" : metadata!.WhitePlayer;
+        var blackPlayer = string.IsNullOrWhiteSpace(metadata?.BlackPlayer) ? "?" : metadata!.BlackPlayer;
+        sb.AppendLine($"[White \"{whitePlayer}\"]");
+        sb.AppendLine($"[Black \"{blackPlayer}\"]");
+        sb.AppendLine($"[Result \"{normalizedResult}\"]");
+        sb.AppendLine();
+
+        foreach (var move in moves.OrderBy(m => m.MoveNumber))
+        {
+            var white = GetMoveNotation(move.WhiteMove);
+            var black = GetMoveNotation(move.BlackMove);
+
+            if (!string.IsNullOrWhiteSpace(white))
+            {
+                sb.Append($"{move.MoveNumber}. {white}");
+                if (!string.IsNullOrWhiteSpace(black))
+                {
+                    sb.Append($" {black}");
+                }
+                sb.Append(' ');
+                continue;
+            }
+
+            if (!string.IsNullOrWhiteSpace(black))
+            {
+                sb.Append($"{move.MoveNumber}... {black} ");
+            }
+        }
+
+        sb.Append(normalizedResult);
+        return sb.ToString().TrimEnd();
+    }
+
+    private static List<ChessMovePair> ParseMovePairsFromPgn(string? pgnContent)
+    {
+        if (string.IsNullOrWhiteSpace(pgnContent))
+        {
+            return new List<ChessMovePair>();
+        }
+
+        var cleaned = PgnHeaderRegex.Replace(pgnContent, string.Empty);
+        cleaned = Regex.Replace(cleaned, @"\{[^}]*\}", " ");
+        cleaned = Regex.Replace(cleaned, @"\([^)]*\)", " ");
+        cleaned = cleaned
+            .Replace("\r", " ")
+            .Replace("\n", " ");
+
+        var result = new SortedDictionary<int, ChessMovePair>();
+
+        var pairPattern = new Regex(@"(?<num>\d+)\.(?!\.)\s*(?<white>[^\s]+)(?:\s+(?<black>[^\s]+))?", RegexOptions.Compiled);
+        foreach (Match match in pairPattern.Matches(cleaned))
+        {
+            if (!int.TryParse(match.Groups["num"].Value, out var moveNumber))
+            {
+                continue;
+            }
+
+            if (!result.TryGetValue(moveNumber, out var movePair))
+            {
+                movePair = new ChessMovePair { MoveNumber = moveNumber };
+            }
+
+            var white = match.Groups["white"].Value.Trim();
+            var black = match.Groups["black"].Success ? match.Groups["black"].Value.Trim() : string.Empty;
+
+            if (!string.IsNullOrWhiteSpace(white) && white is not "1-0" and not "0-1" and not "1/2-1/2" and not "*")
+            {
+                movePair.WhiteMove = new Models.ValidatedMove
+                {
+                    Notation = white,
+                    NormalizedNotation = white,
+                    ValidationStatus = "valid",
+                    ValidationText = string.Empty
+                };
+            }
+
+            if (!string.IsNullOrWhiteSpace(black) && black is not "1-0" and not "0-1" and not "1/2-1/2" and not "*")
+            {
+                movePair.BlackMove = new Models.ValidatedMove
+                {
+                    Notation = black,
+                    NormalizedNotation = black,
+                    ValidationStatus = "valid",
+                    ValidationText = string.Empty
+                };
+            }
+
+            result[moveNumber] = movePair;
+        }
+
+        var blackOnlyPattern = new Regex(@"(?<num>\d+)\.\.\.\s*(?<black>[^\s]+)", RegexOptions.Compiled);
+        foreach (Match match in blackOnlyPattern.Matches(cleaned))
+        {
+            if (!int.TryParse(match.Groups["num"].Value, out var moveNumber))
+            {
+                continue;
+            }
+
+            if (!result.TryGetValue(moveNumber, out var movePair))
+            {
+                movePair = new ChessMovePair { MoveNumber = moveNumber };
+            }
+
+            var black = match.Groups["black"].Value.Trim();
+            if (!string.IsNullOrWhiteSpace(black) && black is not "1-0" and not "0-1" and not "1/2-1/2" and not "*")
+            {
+                movePair.BlackMove = new Models.ValidatedMove
+                {
+                    Notation = black,
+                    NormalizedNotation = black,
+                    ValidationStatus = "valid",
+                    ValidationText = string.Empty
+                };
+            }
+
+            result[moveNumber] = movePair;
+        }
+
+        return result.Values
+            .Where(m => !string.IsNullOrWhiteSpace(GetMoveNotation(m.WhiteMove)) || !string.IsNullOrWhiteSpace(GetMoveNotation(m.BlackMove)))
+            .OrderBy(m => m.MoveNumber)
+            .ToList();
+    }
+
+    private static string ExtractResultFromPgn(string pgnContent)
+    {
+        if (string.IsNullOrWhiteSpace(pgnContent))
+        {
+            return "*";
+        }
+
+        var resultTagMatch = Regex.Match(pgnContent, @"^\s*\[Result\s+""(?<result>.*?)""\]\s*$", RegexOptions.Multiline);
+        if (resultTagMatch.Success)
+        {
+            return NormalizeResult(resultTagMatch.Groups["result"].Value);
+        }
+
+        var tailMatch = Regex.Match(pgnContent.Trim(), @"\s(1-0|0-1|1/2-1/2|\*)\s*$");
+        return tailMatch.Success ? NormalizeResult(tailMatch.Groups[1].Value) : "*";
+    }
+
+    private static string NormalizeResult(string value)
+    {
+        return value switch
+        {
+            "1-0" => "1-0",
+            "0-1" => "0-1",
+            "1/2-1/2" => "1/2-1/2",
+            _ => "*"
+        };
+    }
+
+    private static string? GetMoveNotation(Models.ValidatedMove? move)
+    {
+        return string.IsNullOrWhiteSpace(move?.NormalizedNotation)
+            ? move?.Notation
+            : move.NormalizedNotation;
+    }
+
+    private static Models.ValidatedMove? CloneMove(Models.ValidatedMove? move)
+    {
+        if (move == null)
+        {
+            return null;
+        }
+
+        return new Models.ValidatedMove
+        {
+            Notation = move.Notation,
+            NormalizedNotation = move.NormalizedNotation,
+            ValidationStatus = move.ValidationStatus,
+            ValidationText = move.ValidationText
+        };
+    }
+
+    private static ChessMovePair CloneMovePair(ChessMovePair move)
+    {
+        return new ChessMovePair
+        {
+            MoveNumber = move.MoveNumber,
+            WhiteMove = CloneMove(move.WhiteMove),
+            BlackMove = CloneMove(move.BlackMove)
+        };
+    }
+
+    private static GamePageInfoResponse ToPageInfo(GameImage image)
+    {
+        return new GamePageInfoResponse
+        {
+            ImageId = image.Id,
+            PageNumber = image.PageNumber,
+            StartingMoveNumber = image.StartingMoveNumber,
+            EndingMoveNumber = image.EndingMoveNumber,
+            UploadedAt = image.UploadedAt,
+            Variant = string.IsNullOrWhiteSpace(image.Variant) ? "original" : image.Variant
+        };
+    }
+
+    private sealed record StoredUploadImage(
+        string FileName,
+        string FilePath,
+        string? CloudStorageUrl,
+        string? CloudStorageObjectName,
+        bool IsStoredInCloud);
+
+    private sealed record PreparedImagePath(string PathToProcess, string? TempPathToDelete);
+
+    private sealed record MoveRange(int StartMoveNumber, int EndMoveNumber);
+
+    private sealed record MergeResult(List<ChessMovePair> Moves, ContinuationValidationResponse Validation);
 
     private static GameProcessingResponse GetMockGameProcessingResponse()
     {

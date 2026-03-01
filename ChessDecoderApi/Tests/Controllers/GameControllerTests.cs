@@ -429,7 +429,7 @@ public class GameControllerTests
         var gameId = Guid.NewGuid();
         var userId = "test-user";
         _gameManagementServiceMock
-            .Setup(x => x.GetGameImageAsync(gameId, userId, "processed"))
+            .Setup(x => x.GetGameImageAsync(gameId, userId, "processed", null))
             .ReturnsAsync((GameImageContentResult?)null);
 
         // Act
@@ -447,7 +447,7 @@ public class GameControllerTests
         var userId = "test-user";
         var stream = new MemoryStream(new byte[] { 1, 2, 3 });
         _gameManagementServiceMock
-            .Setup(x => x.GetGameImageAsync(gameId, userId, "processed"))
+            .Setup(x => x.GetGameImageAsync(gameId, userId, "processed", null))
             .ReturnsAsync(new GameImageContentResult
             {
                 Stream = stream,

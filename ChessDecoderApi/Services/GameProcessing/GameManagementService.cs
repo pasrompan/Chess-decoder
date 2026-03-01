@@ -74,6 +74,7 @@ public class GameManagementService : IGameManagementService
             GameDate = game.GameDate,
             Round = game.Round,
             Result = game.Result,
+            HasContinuation = game.HasContinuation,
             ProcessingCompleted = game.ProcessingCompleted,
             LastEditedAt = game.LastEditedAt,
             EditCount = game.EditCount,
@@ -92,8 +93,15 @@ public class GameManagementService : IGameManagementService
                 CloudStorageUrl = img.CloudStorageUrl,
                 IsStoredInCloud = img.IsStoredInCloud,
                 UploadedAt = img.UploadedAt,
-                Variant = string.IsNullOrWhiteSpace(img.Variant) ? "original" : img.Variant
-            }).ToList()
+                Variant = string.IsNullOrWhiteSpace(img.Variant) ? "original" : img.Variant,
+                PageNumber = img.PageNumber <= 0 ? 1 : img.PageNumber,
+                StartingMoveNumber = img.StartingMoveNumber,
+                EndingMoveNumber = img.EndingMoveNumber,
+                ContinuationImageId = img.ContinuationImageId
+            })
+            .OrderBy(img => img.PageNumber)
+            .ThenBy(img => img.Variant, StringComparer.OrdinalIgnoreCase)
+            .ToList()
         };
     }
 
@@ -116,6 +124,7 @@ public class GameManagementService : IGameManagementService
                 Title = game.Title,
                 ProcessedAt = game.ProcessedAt,
                 IsValid = game.IsValid,
+                HasContinuation = game.HasContinuation,
                 TotalMoves = statistics?.TotalMoves ?? 0,
                 Opening = statistics?.Opening
             });
@@ -379,7 +388,7 @@ public class GameManagementService : IGameManagementService
         }
     }
 
-    public async Task<GameImageContentResult?> GetGameImageAsync(Guid gameId, string userId, string variant = "processed")
+    public async Task<GameImageContentResult?> GetGameImageAsync(Guid gameId, string userId, string variant = "processed", int? pageNumber = null)
     {
         try
         {
@@ -404,11 +413,24 @@ public class GameManagementService : IGameManagementService
                 return null;
             }
 
+            if (pageNumber.HasValue)
+            {
+                images = images
+                    .Where(i => i.PageNumber == pageNumber.Value)
+                    .ToList();
+
+                if (!images.Any())
+                {
+                    _logger.LogWarning("No images found for game {GameId} and page {PageNumber}", gameId, pageNumber.Value);
+                    return null;
+                }
+            }
+
             var requestedVariant = string.IsNullOrWhiteSpace(variant) ? "processed" : variant.Trim().ToLowerInvariant();
             var selectedImage = images.FirstOrDefault(i =>
                 string.Equals(i.Variant, requestedVariant, StringComparison.OrdinalIgnoreCase))
                 ?? images.FirstOrDefault(i => string.Equals(i.Variant, "original", StringComparison.OrdinalIgnoreCase))
-                ?? images.First();
+                ?? images.OrderBy(i => i.PageNumber).First();
 
             if (selectedImage.IsStoredInCloud)
             {

@@ -56,6 +56,12 @@ public class ChessGame
     
     [FirestoreProperty]
     public string? Result { get; set; }
+
+    [FirestoreProperty]
+    public bool HasContinuation { get; set; } = false;
+
+    [FirestoreProperty]
+    public string? PrimaryPagePgnContent { get; set; }
     
     // Processing completion tracking
     [FirestoreProperty]
@@ -126,6 +132,18 @@ public class GameImage
 
     [FirestoreProperty]
     public string Variant { get; set; } = "original"; // "original" or "processed"
+
+    [FirestoreProperty]
+    public int PageNumber { get; set; } = 1;
+
+    [FirestoreProperty]
+    public int StartingMoveNumber { get; set; }
+
+    [FirestoreProperty]
+    public int EndingMoveNumber { get; set; }
+
+    // Stored manually as string in Firestore repository to avoid Guid converter issues.
+    public Guid? ContinuationImageId { get; set; }
     
     // Navigation property - NOT stored in Firestore
     [ForeignKey("ChessGameId")]
