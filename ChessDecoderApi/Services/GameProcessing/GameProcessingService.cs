@@ -383,16 +383,7 @@ public class GameProcessingService : IGameProcessingService
     {
         _logger.LogInformation("Processing dual game upload for user {UserId}", request.UserId);
 
-        var user = await _authService.GetUserProfileAsync(request.UserId);
-        if (user == null)
-        {
-            throw new InvalidOperationException("User not found");
-        }
-
-        if (!await _creditService.HasEnoughCreditsAsync(request.UserId, 1))
-        {
-            throw new InvalidOperationException("Insufficient credits. Please purchase more credits to process images.");
-        }
+        await ValidateUserAndCreditsAsync(request.UserId, "dual game upload");
 
         var metadata = BuildMetadata(
             request.WhitePlayer,
@@ -400,8 +391,28 @@ public class GameProcessingService : IGameProcessingService
             request.GameDate,
             request.Round);
 
-        var page1Upload = await PersistUploadedImageAsync(request.Page1);
-        var page2Upload = await PersistUploadedImageAsync(request.Page2);
+        StoredUploadImage page1Upload;
+        StoredUploadImage page2Upload;
+        
+        try
+        {
+            page1Upload = await PersistUploadedImageAsync(request.Page1);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to persist page 1 image for user {UserId}", request.UserId);
+            throw new InvalidOperationException("Failed to save page 1 image. Please try again.", ex);
+        }
+
+        try
+        {
+            page2Upload = await PersistUploadedImageAsync(request.Page2);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to persist page 2 image for user {UserId}", request.UserId);
+            throw new InvalidOperationException("Failed to save page 2 image. Please try again.", ex);
+        }
 
         var page1ProcessingPath = await PrepareImageForProcessingAsync(page1Upload, request.Page1, request.AutoCrop);
         var page2ProcessingPath = await PrepareImageForProcessingAsync(page2Upload, request.Page2, request.AutoCrop);
@@ -409,9 +420,22 @@ public class GameProcessingService : IGameProcessingService
         try
         {
             var startTime = DateTime.UtcNow;
-            var page1Task = _imageExtractionService.ProcessImageAsync(page1ProcessingPath.PathToProcess, null);
-            var page2RawTask = _imageExtractionService.ExtractMovesFromImageToStringAsync(page2ProcessingPath.PathToProcess);
-            await Task.WhenAll(page1Task, page2RawTask);
+            
+            Task<ChessGameResponse> page1Task;
+            Task<(List<string> whiteMoves, List<string> blackMoves)> page2RawTask;
+            
+            try
+            {
+                page1Task = _imageExtractionService.ProcessImageAsync(page1ProcessingPath.PathToProcess, null);
+                page2RawTask = _imageExtractionService.ExtractMovesFromImageToStringAsync(page2ProcessingPath.PathToProcess);
+                await Task.WhenAll(page1Task, page2RawTask);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Image extraction failed during dual upload for user {UserId}", request.UserId);
+                throw new InvalidOperationException("Failed to extract moves from images. Please ensure both images contain readable chess notation.", ex);
+            }
+            
             var processingTime = DateTime.UtcNow - startTime;
 
             var page1Result = page1Task.Result;
@@ -420,7 +444,9 @@ public class GameProcessingService : IGameProcessingService
             var page1Moves = ExtractMovePairs(page1Result.Validation, page1Result.PgnContent);
             if (page1Moves.Count == 0)
             {
-                throw new InvalidOperationException("Could not extract move data from page 1.");
+                _logger.LogWarning("No moves extracted from page 1 for user {UserId}. PGN content: {PgnContent}", 
+                    request.UserId, page1Result.PgnContent?.Substring(0, Math.Min(200, page1Result.PgnContent?.Length ?? 0)));
+                throw new InvalidOperationException("Could not extract move data from page 1. Please ensure the image contains readable chess notation.");
             }
 
             var defaultPage2StartMove = Math.Max(1, page1Range.EndMoveNumber + 1);
@@ -428,7 +454,9 @@ public class GameProcessingService : IGameProcessingService
             var page2Moves = BuildMovePairsFromRaw(page2Raw.whiteMoves, page2Raw.blackMoves, defaultPage2StartMove);
             if (page2Moves.Count == 0)
             {
-                throw new InvalidOperationException("Could not extract move data from page 2.");
+                _logger.LogWarning("No moves extracted from page 2 for user {UserId}. White moves: {WhiteCount}, Black moves: {BlackCount}", 
+                    request.UserId, page2Raw.whiteMoves.Count, page2Raw.blackMoves.Count);
+                throw new InvalidOperationException("Could not extract move data from page 2. Please ensure the image contains readable chess notation.");
             }
 
             var page2Range = GetMoveRangeFromMoves(page2Moves);
@@ -455,41 +483,8 @@ public class GameProcessingService : IGameProcessingService
                 HasContinuation = true
             };
 
-            var page1Image = new GameImage
-            {
-                Id = Guid.NewGuid(),
-                ChessGameId = chessGame.Id,
-                FileName = page1Upload.FileName,
-                FilePath = page1Upload.FilePath,
-                FileType = request.Page1.ContentType,
-                FileSizeBytes = request.Page1.Length,
-                CloudStorageUrl = page1Upload.CloudStorageUrl,
-                CloudStorageObjectName = page1Upload.CloudStorageObjectName,
-                IsStoredInCloud = page1Upload.IsStoredInCloud,
-                UploadedAt = DateTime.UtcNow,
-                Variant = "original",
-                PageNumber = 1,
-                StartingMoveNumber = page1Range.StartMoveNumber,
-                EndingMoveNumber = page1Range.EndMoveNumber
-            };
-
-            var page2Image = new GameImage
-            {
-                Id = Guid.NewGuid(),
-                ChessGameId = chessGame.Id,
-                FileName = page2Upload.FileName,
-                FilePath = page2Upload.FilePath,
-                FileType = request.Page2.ContentType,
-                FileSizeBytes = request.Page2.Length,
-                CloudStorageUrl = page2Upload.CloudStorageUrl,
-                CloudStorageObjectName = page2Upload.CloudStorageObjectName,
-                IsStoredInCloud = page2Upload.IsStoredInCloud,
-                UploadedAt = DateTime.UtcNow,
-                Variant = "original",
-                PageNumber = 2,
-                StartingMoveNumber = page2Range.StartMoveNumber,
-                EndingMoveNumber = page2Range.EndMoveNumber
-            };
+            var page1Image = CreateGameImage(chessGame.Id, page1Upload, request.Page1, 1, page1Range);
+            var page2Image = CreateGameImage(chessGame.Id, page2Upload, request.Page2, 2, page2Range);
             page1Image.ContinuationImageId = page2Image.Id;
 
             var totalMoves = mergeResult.Moves.Count(m =>
@@ -584,16 +579,7 @@ public class GameProcessingService : IGameProcessingService
     {
         _logger.LogInformation("Adding continuation for game {GameId}", gameId);
 
-        var user = await _authService.GetUserProfileAsync(request.UserId);
-        if (user == null)
-        {
-            throw new InvalidOperationException("User not found");
-        }
-
-        if (!await _creditService.HasEnoughCreditsAsync(request.UserId, 1))
-        {
-            throw new InvalidOperationException("Insufficient credits. Please purchase more credits to process images.");
-        }
+        await ValidateUserAndCreditsAsync(request.UserId, $"continuation upload for game {gameId}");
 
         var gameRepo = await _repositoryFactory.CreateChessGameRepositoryAsync();
         var imageRepo = await _repositoryFactory.CreateGameImageRepositoryAsync();
@@ -602,16 +588,19 @@ public class GameProcessingService : IGameProcessingService
         var game = await gameRepo.GetByIdAsync(gameId);
         if (game == null)
         {
+            _logger.LogWarning("Game {GameId} not found for continuation upload", gameId);
             throw new KeyNotFoundException("Game not found");
         }
 
         if (!string.Equals(game.UserId, request.UserId, StringComparison.Ordinal))
         {
+            _logger.LogWarning("User {UserId} attempted to access game {GameId} owned by another user", request.UserId, gameId);
             throw new KeyNotFoundException("Game not found");
         }
 
         if (game.HasContinuation)
         {
+            _logger.LogWarning("Game {GameId} already has a continuation page", gameId);
             throw new InvalidOperationException("Game already has a continuation page");
         }
 
@@ -619,21 +608,45 @@ public class GameProcessingService : IGameProcessingService
         var page2Exists = existingImages.Any(i => i.PageNumber == 2 && string.Equals(i.Variant, "original", StringComparison.OrdinalIgnoreCase));
         if (page2Exists)
         {
+            _logger.LogWarning("Game {GameId} already has a page 2 image", gameId);
             throw new InvalidOperationException("Game already has a continuation page");
         }
 
-        var continuationUpload = await PersistUploadedImageAsync(request.Image);
+        StoredUploadImage continuationUpload;
+        try
+        {
+            continuationUpload = await PersistUploadedImageAsync(request.Image);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to persist continuation image for game {GameId}", gameId);
+            throw new InvalidOperationException("Failed to save continuation image. Please try again.", ex);
+        }
+
         var continuationProcessingPath = await PrepareImageForProcessingAsync(continuationUpload, request.Image, request.AutoCrop);
 
         try
         {
             var startTime = DateTime.UtcNow;
-            var continuationRaw = await _imageExtractionService.ExtractMovesFromImageToStringAsync(continuationProcessingPath.PathToProcess);
+            
+            (List<string> whiteMoves, List<string> blackMoves) continuationRaw;
+            try
+            {
+                continuationRaw = await _imageExtractionService.ExtractMovesFromImageToStringAsync(continuationProcessingPath.PathToProcess);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to extract moves from continuation image for game {GameId}", gameId);
+                throw new InvalidOperationException("Failed to extract moves from continuation image. Please ensure the image contains readable chess notation.", ex);
+            }
+            
             var processingTime = DateTime.UtcNow - startTime;
 
             var page1Moves = ExtractMovePairs(null, game.PgnContent);
             if (page1Moves.Count == 0)
             {
+                _logger.LogWarning("Game {GameId} has no existing moves to continue from. PGN: {PgnContent}", 
+                    gameId, game.PgnContent?.Substring(0, Math.Min(200, game.PgnContent?.Length ?? 0)));
                 throw new InvalidOperationException("Existing game does not contain move data to continue from");
             }
 
@@ -642,7 +655,9 @@ public class GameProcessingService : IGameProcessingService
             var page2Moves = BuildMovePairsFromRaw(continuationRaw.whiteMoves, continuationRaw.blackMoves, defaultPage2StartMove);
             if (page2Moves.Count == 0)
             {
-                throw new InvalidOperationException("Could not extract continuation moves from uploaded image");
+                _logger.LogWarning("No moves extracted from continuation image for game {GameId}. White: {WhiteCount}, Black: {BlackCount}", 
+                    gameId, continuationRaw.whiteMoves.Count, continuationRaw.blackMoves.Count);
+                throw new InvalidOperationException("Could not extract continuation moves from uploaded image. Please ensure the image contains readable chess notation.");
             }
 
             var page2Range = GetMoveRangeFromMoves(page2Moves);
@@ -654,23 +669,7 @@ public class GameProcessingService : IGameProcessingService
             var gameResult = ExtractResultFromPgn(game.PgnContent);
             var mergedPgn = BuildPgnFromMovePairs(mergeResult.Moves, metadata, gameResult);
 
-            var page2Image = new GameImage
-            {
-                Id = Guid.NewGuid(),
-                ChessGameId = game.Id,
-                FileName = continuationUpload.FileName,
-                FilePath = continuationUpload.FilePath,
-                FileType = request.Image.ContentType,
-                FileSizeBytes = request.Image.Length,
-                CloudStorageUrl = continuationUpload.CloudStorageUrl,
-                CloudStorageObjectName = continuationUpload.CloudStorageObjectName,
-                IsStoredInCloud = continuationUpload.IsStoredInCloud,
-                UploadedAt = DateTime.UtcNow,
-                Variant = "original",
-                PageNumber = 2,
-                StartingMoveNumber = page2Range.StartMoveNumber,
-                EndingMoveNumber = page2Range.EndMoveNumber
-            };
+            var page2Image = CreateGameImage(game.Id, continuationUpload, request.Image, 2, page2Range);
 
             var page1Images = existingImages.Where(i =>
                     i.PageNumber == 1 ||
@@ -872,6 +871,48 @@ public class GameProcessingService : IGameProcessingService
             UpdatedPgn = restoredPgn,
             TotalMoves = totalMoves,
             HasContinuation = false
+        };
+    }
+
+    private async Task ValidateUserAndCreditsAsync(string userId, string operationDescription)
+    {
+        var user = await _authService.GetUserProfileAsync(userId);
+        if (user == null)
+        {
+            _logger.LogWarning("User {UserId} not found during {Operation}", userId, operationDescription);
+            throw new InvalidOperationException("User not found or unauthorized");
+        }
+
+        if (!await _creditService.HasEnoughCreditsAsync(userId, 1))
+        {
+            _logger.LogWarning("User {UserId} has insufficient credits for {Operation}", userId, operationDescription);
+            throw new InvalidOperationException("Insufficient credits. Please purchase more credits to process images.");
+        }
+    }
+
+    private static GameImage CreateGameImage(
+        Guid chessGameId,
+        StoredUploadImage upload,
+        IFormFile file,
+        int pageNumber,
+        MoveRange moveRange)
+    {
+        return new GameImage
+        {
+            Id = Guid.NewGuid(),
+            ChessGameId = chessGameId,
+            FileName = upload.FileName,
+            FilePath = upload.FilePath,
+            FileType = file.ContentType,
+            FileSizeBytes = file.Length,
+            CloudStorageUrl = upload.CloudStorageUrl,
+            CloudStorageObjectName = upload.CloudStorageObjectName,
+            IsStoredInCloud = upload.IsStoredInCloud,
+            UploadedAt = DateTime.UtcNow,
+            Variant = "original",
+            PageNumber = pageNumber,
+            StartingMoveNumber = moveRange.StartMoveNumber,
+            EndingMoveNumber = moveRange.EndMoveNumber
         };
     }
 
