@@ -1,0 +1,2862 @@
+{
+    "openapi": "3.0.4",
+    "info": {
+      "title": "ChessDecoderApi",
+      "version": "1.0"
+    },
+    "paths": {
+      "/api/Auth/verify": {
+        "post": {
+          "tags": [
+            "Auth"
+          ],
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthRequest"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthRequest"
+                }
+              },
+              "application/*+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthRequest"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "OK",
+              "content": {
+                "text/plain": {
+                  "schema": {
+                    "$ref": "#/components/schemas/AuthResponse"
+                  }
+                },
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/AuthResponse"
+                  }
+                },
+                "text/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/AuthResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/Auth/test-login": {
+        "post": {
+          "tags": [
+            "Auth"
+          ],
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestLoginRequest"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestLoginRequest"
+                }
+              },
+              "application/*+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestLoginRequest"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "OK",
+              "content": {
+                "text/plain": {
+                  "schema": {
+                    "$ref": "#/components/schemas/AuthResponse"
+                  }
+                },
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/AuthResponse"
+                  }
+                },
+                "text/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/AuthResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/Auth/profile": {
+        "get": {
+          "tags": [
+            "Auth"
+          ],
+          "parameters": [
+            {
+              "name": "userId",
+              "in": "query",
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "OK",
+              "content": {
+                "text/plain": {
+                  "schema": {
+                    "$ref": "#/components/schemas/User"
+                  }
+                },
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/User"
+                  }
+                },
+                "text/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/User"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "put": {
+          "tags": [
+            "Auth"
+          ],
+          "parameters": [
+            {
+              "name": "userId",
+              "in": "query",
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfileRequest"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfileRequest"
+                }
+              },
+              "application/*+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfileRequest"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "OK",
+              "content": {
+                "text/plain": {
+                  "schema": {
+                    "$ref": "#/components/schemas/UserProfileResponse"
+                  }
+                },
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/UserProfileResponse"
+                  }
+                },
+                "text/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/UserProfileResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/Auth/signout": {
+        "post": {
+          "tags": [
+            "Auth"
+          ],
+          "parameters": [
+            {
+              "name": "userId",
+              "in": "query",
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "OK"
+            }
+          }
+        }
+      },
+      "/api/Debug/upload": {
+        "post": {
+          "tags": [
+            "Debug"
+          ],
+          "requestBody": {
+            "content": {
+              "multipart/form-data": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "image": {
+                      "type": "string",
+                      "format": "binary"
+                    },
+                    "promptText": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "encoding": {
+                  "image": {
+                    "style": "form"
+                  },
+                  "promptText": {
+                    "style": "form"
+                  }
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "OK"
+            }
+          }
+        }
+      },
+      "/api/Debug/split-columns": {
+        "post": {
+          "tags": [
+            "Debug"
+          ],
+          "requestBody": {
+            "content": {
+              "multipart/form-data": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "image": {
+                      "type": "string",
+                      "format": "binary"
+                    }
+                  }
+                },
+                "encoding": {
+                  "image": {
+                    "style": "form"
+                  }
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "OK"
+            }
+          }
+        }
+      },
+      "/api/Debug/table-boundaries": {
+        "post": {
+          "tags": [
+            "Debug"
+          ],
+          "requestBody": {
+            "content": {
+              "multipart/form-data": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "image": {
+                      "type": "string",
+                      "format": "binary"
+                    }
+                  }
+                },
+                "encoding": {
+                  "image": {
+                    "style": "form"
+                  }
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "OK"
+            }
+          }
+        }
+      },
+      "/api/Debug/crop-image": {
+        "post": {
+          "tags": [
+            "Debug"
+          ],
+          "requestBody": {
+            "content": {
+              "multipart/form-data": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "image": {
+                      "type": "string",
+                      "format": "binary"
+                    },
+                    "x": {
+                      "type": "integer",
+                      "format": "int32"
+                    },
+                    "y": {
+                      "type": "integer",
+                      "format": "int32"
+                    },
+                    "width": {
+                      "type": "integer",
+                      "format": "int32"
+                    },
+                    "height": {
+                      "type": "integer",
+                      "format": "int32"
+                    }
+                  }
+                },
+                "encoding": {
+                  "image": {
+                    "style": "form"
+                  },
+                  "x": {
+                    "style": "form"
+                  },
+                  "y": {
+                    "style": "form"
+                  },
+                  "width": {
+                    "style": "form"
+                  },
+                  "height": {
+                    "style": "form"
+                  }
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "OK"
+            }
+          }
+        }
+      },
+      "/api/Debug/table-analysis": {
+        "post": {
+          "tags": [
+            "Debug"
+          ],
+          "requestBody": {
+            "content": {
+              "multipart/form-data": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "image": {
+                      "type": "string",
+                      "format": "binary"
+                    }
+                  }
+                },
+                "encoding": {
+                  "image": {
+                    "style": "form"
+                  }
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "OK"
+            }
+          }
+        }
+      },
+      "/api/Evaluation/evaluate": {
+        "post": {
+          "tags": [
+            "Evaluation"
+          ],
+          "requestBody": {
+            "content": {
+              "multipart/form-data": {
+                "schema": {
+                  "required": [
+                    "GroundTruth",
+                    "Image"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "Image": {
+                      "type": "string",
+                      "format": "binary"
+                    },
+                    "GroundTruth": {
+                      "type": "string",
+                      "format": "binary"
+                    },
+                    "Language": {
+                      "type": "string"
+                    },
+                    "AutoCrop": {
+                      "type": "boolean"
+                    }
+                  }
+                },
+                "encoding": {
+                  "Image": {
+                    "style": "form"
+                  },
+                  "GroundTruth": {
+                    "style": "form"
+                  },
+                  "Language": {
+                    "style": "form"
+                  },
+                  "AutoCrop": {
+                    "style": "form"
+                  }
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "OK"
+            },
+            "400": {
+              "description": "Bad Request",
+              "content": {
+                "text/plain": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "text/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                }
+              }
+            },
+            "500": {
+              "description": "Internal Server Error"
+            }
+          }
+        }
+      },
+      "/api/Evaluation/evaluate-dual": {
+        "post": {
+          "tags": [
+            "Evaluation"
+          ],
+          "requestBody": {
+            "content": {
+              "multipart/form-data": {
+                "schema": {
+                  "required": [
+                    "GroundTruth",
+                    "Page1",
+                    "Page2"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "Page1": {
+                      "type": "string",
+                      "format": "binary"
+                    },
+                    "Page2": {
+                      "type": "string",
+                      "format": "binary"
+                    },
+                    "GroundTruth": {
+                      "type": "string",
+                      "format": "binary"
+                    },
+                    "Language": {
+                      "type": "string"
+                    },
+                    "AutoCrop": {
+                      "type": "boolean"
+                    }
+                  }
+                },
+                "encoding": {
+                  "Page1": {
+                    "style": "form"
+                  },
+                  "Page2": {
+                    "style": "form"
+                  },
+                  "GroundTruth": {
+                    "style": "form"
+                  },
+                  "Language": {
+                    "style": "form"
+                  },
+                  "AutoCrop": {
+                    "style": "form"
+                  }
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "OK"
+            },
+            "400": {
+              "description": "Bad Request",
+              "content": {
+                "text/plain": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "text/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                }
+              }
+            },
+            "500": {
+              "description": "Internal Server Error"
+            }
+          }
+        }
+      },
+      "/api/FirestoreTest/test": {
+        "get": {
+          "tags": [
+            "FirestoreTest"
+          ],
+          "responses": {
+            "200": {
+              "description": "OK"
+            }
+          }
+        }
+      },
+      "/api/FirestoreTest/status": {
+        "get": {
+          "tags": [
+            "FirestoreTest"
+          ],
+          "responses": {
+            "200": {
+              "description": "OK"
+            }
+          }
+        }
+      },
+      "/api/Game/health": {
+        "get": {
+          "tags": [
+            "Game"
+          ],
+          "responses": {
+            "200": {
+              "description": "OK"
+            }
+          }
+        }
+      },
+      "/api/Game/upload": {
+        "post": {
+          "tags": [
+            "Game"
+          ],
+          "requestBody": {
+            "content": {
+              "multipart/form-data": {
+                "schema": {
+                  "required": [
+                    "Image",
+                    "UserId"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "Image": {
+                      "type": "string",
+                      "format": "binary"
+                    },
+                    "UserId": {
+                      "type": "string"
+                    },
+                    "AutoCrop": {
+                      "type": "boolean"
+                    },
+                    "WhitePlayer": {
+                      "type": "string"
+                    },
+                    "BlackPlayer": {
+                      "type": "string"
+                    },
+                    "GameDate": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "Round": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "encoding": {
+                  "Image": {
+                    "style": "form"
+                  },
+                  "UserId": {
+                    "style": "form"
+                  },
+                  "AutoCrop": {
+                    "style": "form"
+                  },
+                  "WhitePlayer": {
+                    "style": "form"
+                  },
+                  "BlackPlayer": {
+                    "style": "form"
+                  },
+                  "GameDate": {
+                    "style": "form"
+                  },
+                  "Round": {
+                    "style": "form"
+                  }
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "OK"
+            },
+            "400": {
+              "description": "Bad Request",
+              "content": {
+                "text/plain": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "text/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                }
+              }
+            },
+            "404": {
+              "description": "Not Found",
+              "content": {
+                "text/plain": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "text/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                }
+              }
+            },
+            "500": {
+              "description": "Internal Server Error"
+            }
+          }
+        }
+      },
+      "/api/Game/upload-dual": {
+        "post": {
+          "tags": [
+            "Game"
+          ],
+          "requestBody": {
+            "content": {
+              "multipart/form-data": {
+                "schema": {
+                  "required": [
+                    "Page1",
+                    "Page2",
+                    "UserId"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "Page1": {
+                      "type": "string",
+                      "format": "binary"
+                    },
+                    "Page2": {
+                      "type": "string",
+                      "format": "binary"
+                    },
+                    "UserId": {
+                      "type": "string"
+                    },
+                    "AutoCrop": {
+                      "type": "boolean"
+                    },
+                    "WhitePlayer": {
+                      "type": "string"
+                    },
+                    "BlackPlayer": {
+                      "type": "string"
+                    },
+                    "GameDate": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "Round": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "encoding": {
+                  "Page1": {
+                    "style": "form"
+                  },
+                  "Page2": {
+                    "style": "form"
+                  },
+                  "UserId": {
+                    "style": "form"
+                  },
+                  "AutoCrop": {
+                    "style": "form"
+                  },
+                  "WhitePlayer": {
+                    "style": "form"
+                  },
+                  "BlackPlayer": {
+                    "style": "form"
+                  },
+                  "GameDate": {
+                    "style": "form"
+                  },
+                  "Round": {
+                    "style": "form"
+                  }
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "OK"
+            },
+            "400": {
+              "description": "Bad Request",
+              "content": {
+                "text/plain": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "text/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                }
+              }
+            },
+            "500": {
+              "description": "Internal Server Error"
+            }
+          }
+        }
+      },
+      "/api/Game/{gameId}/continuation": {
+        "post": {
+          "tags": [
+            "Game"
+          ],
+          "parameters": [
+            {
+              "name": "gameId",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          ],
+          "requestBody": {
+            "content": {
+              "multipart/form-data": {
+                "schema": {
+                  "required": [
+                    "Image",
+                    "UserId"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "Image": {
+                      "type": "string",
+                      "format": "binary"
+                    },
+                    "UserId": {
+                      "type": "string"
+                    },
+                    "AutoCrop": {
+                      "type": "boolean"
+                    }
+                  }
+                },
+                "encoding": {
+                  "Image": {
+                    "style": "form"
+                  },
+                  "UserId": {
+                    "style": "form"
+                  },
+                  "AutoCrop": {
+                    "style": "form"
+                  }
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "OK"
+            },
+            "400": {
+              "description": "Bad Request",
+              "content": {
+                "text/plain": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "text/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                }
+              }
+            },
+            "404": {
+              "description": "Not Found",
+              "content": {
+                "text/plain": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "text/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                }
+              }
+            },
+            "500": {
+              "description": "Internal Server Error"
+            }
+          }
+        },
+        "delete": {
+          "tags": [
+            "Game"
+          ],
+          "parameters": [
+            {
+              "name": "gameId",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            {
+              "name": "userId",
+              "in": "query",
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "OK"
+            },
+            "400": {
+              "description": "Bad Request",
+              "content": {
+                "text/plain": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "text/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                }
+              }
+            },
+            "404": {
+              "description": "Not Found",
+              "content": {
+                "text/plain": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "text/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                }
+              }
+            },
+            "500": {
+              "description": "Internal Server Error"
+            }
+          }
+        }
+      },
+      "/api/Game/{gameId}/pages": {
+        "get": {
+          "tags": [
+            "Game"
+          ],
+          "parameters": [
+            {
+              "name": "gameId",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            {
+              "name": "userId",
+              "in": "query",
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "OK"
+            },
+            "400": {
+              "description": "Bad Request",
+              "content": {
+                "text/plain": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "text/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                }
+              }
+            },
+            "404": {
+              "description": "Not Found",
+              "content": {
+                "text/plain": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "text/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                }
+              }
+            },
+            "500": {
+              "description": "Internal Server Error"
+            }
+          }
+        }
+      },
+      "/api/Game/{gameId}": {
+        "get": {
+          "tags": [
+            "Game"
+          ],
+          "parameters": [
+            {
+              "name": "gameId",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "OK"
+            },
+            "404": {
+              "description": "Not Found",
+              "content": {
+                "text/plain": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "text/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "delete": {
+          "tags": [
+            "Game"
+          ],
+          "parameters": [
+            {
+              "name": "gameId",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "OK"
+            },
+            "404": {
+              "description": "Not Found",
+              "content": {
+                "text/plain": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "text/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/Game/user/{userId}": {
+        "get": {
+          "tags": [
+            "Game"
+          ],
+          "parameters": [
+            {
+              "name": "userId",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "pageNumber",
+              "in": "query",
+              "schema": {
+                "type": "integer",
+                "format": "int32",
+                "default": 1
+              }
+            },
+            {
+              "name": "pageSize",
+              "in": "query",
+              "schema": {
+                "type": "integer",
+                "format": "int32",
+                "default": 10
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "OK"
+            }
+          }
+        }
+      },
+      "/api/Game/{gameId}/metadata": {
+        "put": {
+          "tags": [
+            "Game"
+          ],
+          "parameters": [
+            {
+              "name": "gameId",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          ],
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateGameMetadataRequest"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateGameMetadataRequest"
+                }
+              },
+              "application/*+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateGameMetadataRequest"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "OK"
+            },
+            "404": {
+              "description": "Not Found",
+              "content": {
+                "text/plain": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "text/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                }
+              }
+            },
+            "500": {
+              "description": "Internal Server Error"
+            }
+          }
+        }
+      },
+      "/api/Game/{gameId}/pgn": {
+        "put": {
+          "tags": [
+            "Game"
+          ],
+          "parameters": [
+            {
+              "name": "gameId",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            {
+              "name": "userId",
+              "in": "query",
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdatePgnRequest"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdatePgnRequest"
+                }
+              },
+              "application/*+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdatePgnRequest"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "OK",
+              "content": {
+                "text/plain": {
+                  "schema": {
+                    "$ref": "#/components/schemas/GameDetailsResponse"
+                  }
+                },
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/GameDetailsResponse"
+                  }
+                },
+                "text/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/GameDetailsResponse"
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Bad Request",
+              "content": {
+                "text/plain": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "text/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                }
+              }
+            },
+            "403": {
+              "description": "Forbidden",
+              "content": {
+                "text/plain": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "text/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                }
+              }
+            },
+            "404": {
+              "description": "Not Found",
+              "content": {
+                "text/plain": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "text/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                }
+              }
+            },
+            "500": {
+              "description": "Internal Server Error"
+            }
+          }
+        }
+      },
+      "/api/Game/{gameId}/complete": {
+        "put": {
+          "tags": [
+            "Game"
+          ],
+          "parameters": [
+            {
+              "name": "gameId",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            {
+              "name": "userId",
+              "in": "query",
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "OK",
+              "content": {
+                "text/plain": {
+                  "schema": {
+                    "$ref": "#/components/schemas/GameDetailsResponse"
+                  }
+                },
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/GameDetailsResponse"
+                  }
+                },
+                "text/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/GameDetailsResponse"
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Bad Request",
+              "content": {
+                "text/plain": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "text/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                }
+              }
+            },
+            "403": {
+              "description": "Forbidden",
+              "content": {
+                "text/plain": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "text/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                }
+              }
+            },
+            "404": {
+              "description": "Not Found",
+              "content": {
+                "text/plain": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "text/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                }
+              }
+            },
+            "500": {
+              "description": "Internal Server Error"
+            }
+          }
+        }
+      },
+      "/api/Game/{gameId}/image": {
+        "get": {
+          "tags": [
+            "Game"
+          ],
+          "parameters": [
+            {
+              "name": "gameId",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            {
+              "name": "userId",
+              "in": "query",
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "variant",
+              "in": "query",
+              "schema": {
+                "type": "string",
+                "default": "processed"
+              }
+            },
+            {
+              "name": "pageNumber",
+              "in": "query",
+              "schema": {
+                "type": "integer",
+                "format": "int32"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "OK"
+            },
+            "400": {
+              "description": "Bad Request",
+              "content": {
+                "text/plain": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "text/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                }
+              }
+            },
+            "404": {
+              "description": "Not Found",
+              "content": {
+                "text/plain": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "text/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                }
+              }
+            },
+            "500": {
+              "description": "Internal Server Error"
+            }
+          }
+        }
+      },
+      "/api/Image/download/{fileName}": {
+        "get": {
+          "tags": [
+            "Image"
+          ],
+          "parameters": [
+            {
+              "name": "fileName",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "OK"
+            }
+          }
+        }
+      },
+      "/api/Image/{fileName}": {
+        "delete": {
+          "tags": [
+            "Image"
+          ],
+          "parameters": [
+            {
+              "name": "fileName",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "OK"
+            }
+          }
+        }
+      },
+      "/api/Mock/upload": {
+        "post": {
+          "tags": [
+            "Mock"
+          ],
+          "requestBody": {
+            "content": {
+              "multipart/form-data": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "image": {
+                      "type": "string",
+                      "format": "binary"
+                    },
+                    "autoCrop": {
+                      "type": "boolean",
+                      "default": false
+                    }
+                  }
+                },
+                "encoding": {
+                  "image": {
+                    "style": "form"
+                  },
+                  "autoCrop": {
+                    "style": "form"
+                  }
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "OK"
+            },
+            "400": {
+              "description": "Bad Request",
+              "content": {
+                "text/plain": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "text/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                }
+              }
+            },
+            "500": {
+              "description": "Internal Server Error"
+            }
+          }
+        }
+      },
+      "/api/Project/{gameId}": {
+        "get": {
+          "tags": [
+            "Project"
+          ],
+          "parameters": [
+            {
+              "name": "gameId",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "OK",
+              "content": {
+                "text/plain": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProjectInfoResponse"
+                  }
+                },
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProjectInfoResponse"
+                  }
+                },
+                "text/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProjectInfoResponse"
+                  }
+                }
+              }
+            },
+            "404": {
+              "description": "Not Found",
+              "content": {
+                "text/plain": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "text/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                }
+              }
+            },
+            "500": {
+              "description": "Internal Server Error"
+            }
+          }
+        }
+      },
+      "/api/Project/{gameId}/history": {
+        "get": {
+          "tags": [
+            "Project"
+          ],
+          "parameters": [
+            {
+              "name": "gameId",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "OK",
+              "content": {
+                "text/plain": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProjectHistoryResponse"
+                  }
+                },
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProjectHistoryResponse"
+                  }
+                },
+                "text/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProjectHistoryResponse"
+                  }
+                }
+              }
+            },
+            "404": {
+              "description": "Not Found",
+              "content": {
+                "text/plain": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "text/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                }
+              }
+            },
+            "500": {
+              "description": "Internal Server Error"
+            }
+          }
+        },
+        "post": {
+          "tags": [
+            "Project"
+          ],
+          "parameters": [
+            {
+              "name": "gameId",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          ],
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddHistoryEntryRequest"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddHistoryEntryRequest"
+                }
+              },
+              "application/*+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddHistoryEntryRequest"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "OK",
+              "content": {
+                "text/plain": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProjectHistoryResponse"
+                  }
+                },
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProjectHistoryResponse"
+                  }
+                },
+                "text/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProjectHistoryResponse"
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Bad Request",
+              "content": {
+                "text/plain": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "text/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                }
+              }
+            },
+            "404": {
+              "description": "Not Found",
+              "content": {
+                "text/plain": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                },
+                "text/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProblemDetails"
+                  }
+                }
+              }
+            },
+            "500": {
+              "description": "Internal Server Error"
+            }
+          }
+        }
+      },
+      "/api/Project/user/{userId}": {
+        "get": {
+          "tags": [
+            "Project"
+          ],
+          "parameters": [
+            {
+              "name": "userId",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "OK",
+              "content": {
+                "text/plain": {
+                  "schema": {
+                    "$ref": "#/components/schemas/UserProjectsResponse"
+                  }
+                },
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/UserProjectsResponse"
+                  }
+                },
+                "text/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/UserProjectsResponse"
+                  }
+                }
+              }
+            },
+            "500": {
+              "description": "Internal Server Error"
+            }
+          }
+        }
+      },
+      "/api/Test/health": {
+        "get": {
+          "tags": [
+            "Test"
+          ],
+          "responses": {
+            "200": {
+              "description": "OK"
+            }
+          }
+        }
+      },
+      "/api/Test/users": {
+        "get": {
+          "tags": [
+            "Test"
+          ],
+          "responses": {
+            "200": {
+              "description": "OK"
+            }
+          }
+        }
+      },
+      "/api/Test/users/{userId}/credits": {
+        "get": {
+          "tags": [
+            "Test"
+          ],
+          "parameters": [
+            {
+              "name": "userId",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "OK"
+            }
+          }
+        }
+      },
+      "/api/Test/users/{userId}/credits/add": {
+        "post": {
+          "tags": [
+            "Test"
+          ],
+          "parameters": [
+            {
+              "name": "userId",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddCreditsRequest"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddCreditsRequest"
+                }
+              },
+              "application/*+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddCreditsRequest"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "OK"
+            }
+          }
+        }
+      },
+      "/api/Test/games": {
+        "get": {
+          "tags": [
+            "Test"
+          ],
+          "responses": {
+            "200": {
+              "description": "OK"
+            }
+          }
+        }
+      },
+      "/api/Test/stats": {
+        "get": {
+          "tags": [
+            "Test"
+          ],
+          "responses": {
+            "200": {
+              "description": "OK"
+            }
+          }
+        }
+      },
+      "/api/Test/test-data": {
+        "post": {
+          "tags": [
+            "Test"
+          ],
+          "responses": {
+            "200": {
+              "description": "OK"
+            }
+          }
+        }
+      }
+    },
+    "components": {
+      "schemas": {
+        "AddCreditsRequest": {
+          "type": "object",
+          "properties": {
+            "credits": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "additionalProperties": false
+        },
+        "AddHistoryEntryRequest": {
+          "type": "object",
+          "properties": {
+            "changeType": {
+              "type": "string",
+              "nullable": true
+            },
+            "description": {
+              "type": "string",
+              "nullable": true
+            },
+            "changes": {
+              "type": "object",
+              "additionalProperties": { },
+              "nullable": true
+            }
+          },
+          "additionalProperties": false
+        },
+        "AuthRequest": {
+          "type": "object",
+          "properties": {
+            "accessToken": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          "additionalProperties": false
+        },
+        "AuthResponse": {
+          "type": "object",
+          "properties": {
+            "valid": {
+              "type": "boolean"
+            },
+            "user": {
+              "$ref": "#/components/schemas/User"
+            },
+            "message": {
+              "type": "string",
+              "nullable": true
+            },
+            "jwtToken": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          "additionalProperties": false
+        },
+        "ChessGame": {
+          "required": [
+            "pgnContent",
+            "title",
+            "userId"
+          ],
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "userId": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "title": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "description": {
+              "type": "string",
+              "nullable": true
+            },
+            "pgnContent": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "pgnOutputPath": {
+              "type": "string",
+              "nullable": true
+            },
+            "processedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "processingTimeMs": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "isValid": {
+              "type": "boolean"
+            },
+            "validationMessage": {
+              "type": "string",
+              "nullable": true
+            },
+            "whitePlayer": {
+              "type": "string",
+              "nullable": true
+            },
+            "blackPlayer": {
+              "type": "string",
+              "nullable": true
+            },
+            "gameDate": {
+              "type": "string",
+              "format": "date-time",
+              "nullable": true
+            },
+            "round": {
+              "type": "string",
+              "nullable": true
+            },
+            "result": {
+              "type": "string",
+              "nullable": true
+            },
+            "hasContinuation": {
+              "type": "boolean"
+            },
+            "primaryPagePgnContent": {
+              "type": "string",
+              "nullable": true
+            },
+            "processingCompleted": {
+              "type": "boolean"
+            },
+            "lastEditedAt": {
+              "type": "string",
+              "format": "date-time",
+              "nullable": true
+            },
+            "editCount": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "isDeleted": {
+              "type": "boolean"
+            },
+            "deletedAt": {
+              "type": "string",
+              "format": "date-time",
+              "nullable": true
+            },
+            "user": {
+              "$ref": "#/components/schemas/User"
+            },
+            "inputImages": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/GameImage"
+              },
+              "nullable": true
+            },
+            "statistics": {
+              "$ref": "#/components/schemas/GameStatistics"
+            }
+          },
+          "additionalProperties": false
+        },
+        "GameDetailsResponse": {
+          "type": "object",
+          "properties": {
+            "gameId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "userId": {
+              "type": "string",
+              "nullable": true
+            },
+            "title": {
+              "type": "string",
+              "nullable": true
+            },
+            "description": {
+              "type": "string",
+              "nullable": true
+            },
+            "pgnContent": {
+              "type": "string",
+              "nullable": true
+            },
+            "processedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "processingTimeMs": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "isValid": {
+              "type": "boolean"
+            },
+            "validationMessage": {
+              "type": "string",
+              "nullable": true
+            },
+            "whitePlayer": {
+              "type": "string",
+              "nullable": true
+            },
+            "blackPlayer": {
+              "type": "string",
+              "nullable": true
+            },
+            "gameDate": {
+              "type": "string",
+              "format": "date-time",
+              "nullable": true
+            },
+            "round": {
+              "type": "string",
+              "nullable": true
+            },
+            "result": {
+              "type": "string",
+              "nullable": true
+            },
+            "hasContinuation": {
+              "type": "boolean"
+            },
+            "processingCompleted": {
+              "type": "boolean"
+            },
+            "lastEditedAt": {
+              "type": "string",
+              "format": "date-time",
+              "nullable": true
+            },
+            "editCount": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "statistics": {
+              "$ref": "#/components/schemas/GameStatisticsDto"
+            },
+            "images": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/GameImageDto"
+              },
+              "nullable": true
+            }
+          },
+          "additionalProperties": false
+        },
+        "GameImage": {
+          "required": [
+            "chessGameId",
+            "fileName",
+            "filePath"
+          ],
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "chessGameId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "fileName": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "filePath": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "fileType": {
+              "type": "string",
+              "nullable": true
+            },
+            "fileSizeBytes": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "uploadedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "cloudStorageUrl": {
+              "type": "string",
+              "nullable": true
+            },
+            "cloudStorageObjectName": {
+              "type": "string",
+              "nullable": true
+            },
+            "isStoredInCloud": {
+              "type": "boolean"
+            },
+            "variant": {
+              "type": "string",
+              "nullable": true
+            },
+            "pageNumber": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "startingMoveNumber": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "endingMoveNumber": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "continuationImageId": {
+              "type": "string",
+              "format": "uuid",
+              "nullable": true
+            },
+            "chessGame": {
+              "$ref": "#/components/schemas/ChessGame"
+            }
+          },
+          "additionalProperties": false
+        },
+        "GameImageDto": {
+          "type": "object",
+          "properties": {
+            "imageId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "fileName": {
+              "type": "string",
+              "nullable": true
+            },
+            "cloudStorageUrl": {
+              "type": "string",
+              "nullable": true
+            },
+            "isStoredInCloud": {
+              "type": "boolean"
+            },
+            "uploadedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "variant": {
+              "type": "string",
+              "nullable": true
+            },
+            "pageNumber": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "startingMoveNumber": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "endingMoveNumber": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "continuationImageId": {
+              "type": "string",
+              "format": "uuid",
+              "nullable": true
+            }
+          },
+          "additionalProperties": false
+        },
+        "GameStatistics": {
+          "required": [
+            "chessGameId"
+          ],
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "chessGameId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "totalMoves": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "validMoves": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "invalidMoves": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "opening": {
+              "type": "string",
+              "nullable": true
+            },
+            "result": {
+              "type": "string",
+              "nullable": true
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "chessGame": {
+              "$ref": "#/components/schemas/ChessGame"
+            }
+          },
+          "additionalProperties": false
+        },
+        "GameStatisticsDto": {
+          "type": "object",
+          "properties": {
+            "totalMoves": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "validMoves": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "invalidMoves": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "opening": {
+              "type": "string",
+              "nullable": true
+            },
+            "result": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          "additionalProperties": false
+        },
+        "HistoryEntryDto": {
+          "type": "object",
+          "properties": {
+            "version": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "changeType": {
+              "type": "string",
+              "nullable": true
+            },
+            "description": {
+              "type": "string",
+              "nullable": true
+            },
+            "changes": {
+              "type": "object",
+              "additionalProperties": { },
+              "nullable": true
+            }
+          },
+          "additionalProperties": false
+        },
+        "InitialUploadDto": {
+          "type": "object",
+          "properties": {
+            "fileName": {
+              "type": "string",
+              "nullable": true
+            },
+            "fileSize": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "fileType": {
+              "type": "string",
+              "nullable": true
+            },
+            "uploadedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "storageLocation": {
+              "type": "string",
+              "nullable": true
+            },
+            "storageUrl": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          "additionalProperties": false
+        },
+        "ProblemDetails": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "nullable": true
+            },
+            "title": {
+              "type": "string",
+              "nullable": true
+            },
+            "status": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            },
+            "detail": {
+              "type": "string",
+              "nullable": true
+            },
+            "instance": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          "additionalProperties": { }
+        },
+        "ProcessingDto": {
+          "type": "object",
+          "properties": {
+            "processedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "pgnContent": {
+              "type": "string",
+              "nullable": true
+            },
+            "validationStatus": {
+              "type": "string",
+              "nullable": true
+            },
+            "processingTimeMs": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "additionalProperties": false
+        },
+        "ProjectHistoryResponse": {
+          "type": "object",
+          "properties": {
+            "projectId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "gameId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "userId": {
+              "type": "string",
+              "nullable": true
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "initialUpload": {
+              "$ref": "#/components/schemas/InitialUploadDto"
+            },
+            "processing": {
+              "$ref": "#/components/schemas/ProcessingDto"
+            },
+            "versions": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/HistoryEntryDto"
+              },
+              "nullable": true
+            }
+          },
+          "additionalProperties": false
+        },
+        "ProjectInfoResponse": {
+          "type": "object",
+          "properties": {
+            "projectId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "gameId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "userId": {
+              "type": "string",
+              "nullable": true
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "initialUpload": {
+              "$ref": "#/components/schemas/InitialUploadDto"
+            },
+            "processing": {
+              "$ref": "#/components/schemas/ProcessingDto"
+            },
+            "versionCount": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "additionalProperties": false
+        },
+        "TestLoginRequest": {
+          "type": "object",
+          "properties": {
+            "email": {
+              "type": "string",
+              "nullable": true
+            },
+            "password": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          "additionalProperties": false
+        },
+        "UpdateGameMetadataRequest": {
+          "type": "object",
+          "properties": {
+            "whitePlayer": {
+              "type": "string",
+              "nullable": true
+            },
+            "blackPlayer": {
+              "type": "string",
+              "nullable": true
+            },
+            "gameDate": {
+              "type": "string",
+              "format": "date-time",
+              "nullable": true
+            },
+            "round": {
+              "type": "string",
+              "nullable": true
+            },
+            "result": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          "additionalProperties": false
+        },
+        "UpdatePgnRequest": {
+          "required": [
+            "pgnContent"
+          ],
+          "type": "object",
+          "properties": {
+            "pgnContent": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "User": {
+          "required": [
+            "email",
+            "name",
+            "provider"
+          ],
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "nullable": true
+            },
+            "email": {
+              "minLength": 1,
+              "type": "string",
+              "format": "email"
+            },
+            "name": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "picture": {
+              "type": "string",
+              "nullable": true
+            },
+            "provider": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "lastLoginAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "credits": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "processedGames": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/ChessGame"
+              },
+              "nullable": true
+            }
+          },
+          "additionalProperties": false
+        },
+        "UserProfileRequest": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          "additionalProperties": false
+        },
+        "UserProfileResponse": {
+          "type": "object",
+          "properties": {
+            "user": {
+              "$ref": "#/components/schemas/User"
+            },
+            "message": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          "additionalProperties": false
+        },
+        "UserProjectsResponse": {
+          "type": "object",
+          "properties": {
+            "projects": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/ProjectInfoResponse"
+              },
+              "nullable": true
+            },
+            "totalCount": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    }
+  }
