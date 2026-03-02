@@ -8,6 +8,7 @@ class Program
     private static readonly HttpClient HttpClient = new();
     private const string ApiBaseUrl = "http://localhost:5100";
     private const string EvaluationEndpoint = "/api/Evaluation/evaluate";
+    private const string DualEvaluationEndpoint = "/api/Evaluation/evaluate-dual";
     private const bool AutoCrop = false;
     
     // Rate limiting: Delay between requests to avoid hitting RPM limits
@@ -110,16 +111,27 @@ class Program
             GameFolder = gameFolder
         };
 
-        // Find image file
+        // Find image files - check for multi-page games (e.g., Game11.jpg and Game11_2.jpg)
         var imageExtensions = new[] { ".png", ".jpg", ".jpeg" };
-        var imageFile = Directory.GetFiles(gameFolder)
-            .FirstOrDefault(f => imageExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()));
+        var imageFiles = Directory.GetFiles(gameFolder)
+            .Where(f => imageExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
+            .OrderBy(f => f)
+            .ToList();
 
-        if (imageFile == null)
+        if (imageFiles.Count == 0)
         {
             result.IsSuccessful = false;
             result.ErrorMessage = "No image file found";
             return result;
+        }
+
+        // Detect multi-page games by checking for _2 suffix pattern
+        var (page1File, page2File) = DetectMultiPageImages(imageFiles, gameName);
+        var isMultiPage = page2File != null;
+
+        if (isMultiPage)
+        {
+            Console.WriteLine($"      Multi-page game detected: {Path.GetFileName(page1File)} + {Path.GetFileName(page2File)}");
         }
 
         // Find text file
@@ -136,75 +148,14 @@ class Program
         // Call evaluation API
         try
         {
-            using var content = new MultipartFormDataContent();
-            
-            // Add image file
-            var imageBytes = await File.ReadAllBytesAsync(imageFile);
-            var imageContent = new ByteArrayContent(imageBytes);
-            imageContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/" + Path.GetExtension(imageFile).TrimStart('.').ToLowerInvariant());
-            content.Add(imageContent, "Image", Path.GetFileName(imageFile));
-
-            // Add ground truth file
-            var textBytes = await File.ReadAllBytesAsync(textFile);
-            var textContent = new ByteArrayContent(textBytes);
-            textContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain");
-            content.Add(textContent, "GroundTruth", Path.GetFileName(textFile));
-
-            // Add other parameters
-            content.Add(new StringContent(language), "Language");
-            content.Add(new StringContent(AutoCrop.ToString().ToLowerInvariant()), "Autocrop");
-
-            var response = await HttpClient.PostAsync($"{ApiBaseUrl}{EvaluationEndpoint}", content);
-            
-            if (response.IsSuccessStatusCode)
+            if (isMultiPage && page2File != null)
             {
-                var evaluationResult = await response.Content.ReadFromJsonAsync<EvaluationResultResponse>();
-                if (evaluationResult != null)
-                {
-                    result.IsSuccessful = evaluationResult.IsSuccessful;
-                    result.ErrorMessage = evaluationResult.ErrorMessage;
-                    result.NormalizedScore = evaluationResult.Metrics.NormalizedScore;
-                    result.ExactMatchScore = evaluationResult.Metrics.ExactMatchScore;
-                    result.PositionalAccuracy = evaluationResult.Metrics.PositionalAccuracy;
-                    result.LevenshteinDistance = evaluationResult.Metrics.LevenshteinDistance;
-                    result.LongestCommonSubsequence = evaluationResult.Metrics.LongestCommonSubsequence;
-                    result.ProcessingTimeSeconds = evaluationResult.ProcessingTimeSeconds;
-                    result.GroundTruthMoves = evaluationResult.MoveCounts.GroundTruthMoves;
-                    result.ExtractedMoves = evaluationResult.MoveCounts.ExtractedMoves;
-                    result.ImageFileName = evaluationResult.ImageFileName;
-                    result.GroundTruthFileName = evaluationResult.GroundTruthFileName;
-                    result.GeneratedPgn = evaluationResult.GeneratedPgn;
-                    result.GroundTruthMoveList = evaluationResult.Moves.GroundTruth;
-                    result.ExtractedMoveList = evaluationResult.Moves.Extracted;
-                    result.DetectedLanguage = evaluationResult.DetectedLanguage ?? language;
-                    
-                    // Normalized move metrics
-                    if (evaluationResult.NormalizedMetrics != null)
-                    {
-                        result.NormalizedNormalizedScore = evaluationResult.NormalizedMetrics.NormalizedScore;
-                        result.NormalizedExactMatchScore = evaluationResult.NormalizedMetrics.ExactMatchScore;
-                        result.NormalizedPositionalAccuracy = evaluationResult.NormalizedMetrics.PositionalAccuracy;
-                        result.NormalizedLevenshteinDistance = evaluationResult.NormalizedMetrics.LevenshteinDistance;
-                        result.NormalizedLongestCommonSubsequence = evaluationResult.NormalizedMetrics.LongestCommonSubsequence;
-                        result.NormalizedMoves = evaluationResult.MoveCounts.NormalizedMoves;
-                        result.NormalizedMoveList = evaluationResult.Moves.Normalized;
-                    }
-                }
-                else
-                {
-                    result.IsSuccessful = false;
-                    result.ErrorMessage = "Failed to parse response";
-                }
+                return await ProcessDualPageEvaluation(result, page1File, page2File, textFile, language);
             }
             else
             {
-                var errorContent = await response.Content.ReadAsStringAsync();
-                result.IsSuccessful = false;
-                result.ErrorMessage = $"API error: {response.StatusCode} - {errorContent}";
+                return await ProcessSinglePageEvaluation(result, page1File, textFile, language);
             }
-            
-            // Rate limiting: Wait before next request to avoid hitting RPM limits
-            await Task.Delay(DelayBetweenRequestsMs);
         }
         catch (Exception ex)
         {
@@ -213,6 +164,195 @@ class Program
         }
 
         return result;
+    }
+
+    static (string page1, string? page2) DetectMultiPageImages(List<string> imageFiles, string gameName)
+    {
+        // Look for patterns like: Game11.jpg + Game11_2.jpg or Game11_page1.jpg + Game11_page2.jpg
+        if (imageFiles.Count < 2)
+        {
+            return (imageFiles[0], null);
+        }
+
+        // Sort files to find primary and secondary
+        var primaryPattern = new[] { "_1", "_page1", "page1" };
+        var secondaryPattern = new[] { "_2", "_page2", "page2" };
+
+        string? page1 = null;
+        string? page2 = null;
+
+        foreach (var file in imageFiles)
+        {
+            var fileNameWithoutExt = Path.GetFileNameWithoutExtension(file).ToLowerInvariant();
+            
+            // Check if it's explicitly marked as page 2
+            if (secondaryPattern.Any(p => fileNameWithoutExt.EndsWith(p)))
+            {
+                page2 = file;
+            }
+            // Check if it's explicitly marked as page 1
+            else if (primaryPattern.Any(p => fileNameWithoutExt.EndsWith(p)))
+            {
+                page1 = file;
+            }
+            // Otherwise, if we have 2 files and one ends with _2, the other is page 1
+            else if (page1 == null)
+            {
+                page1 = file;
+            }
+        }
+
+        // If we found a page2 but no explicit page1, use the first file as page1
+        if (page2 != null && page1 == null)
+        {
+            page1 = imageFiles.FirstOrDefault(f => f != page2) ?? imageFiles[0];
+        }
+
+        return (page1 ?? imageFiles[0], page2);
+    }
+
+    static async Task<EvaluationRunResult> ProcessSinglePageEvaluation(
+        EvaluationRunResult result, 
+        string imageFile, 
+        string textFile, 
+        string language)
+    {
+        using var content = new MultipartFormDataContent();
+        
+        // Add image file
+        var imageBytes = await File.ReadAllBytesAsync(imageFile);
+        var imageContent = new ByteArrayContent(imageBytes);
+        imageContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/" + Path.GetExtension(imageFile).TrimStart('.').ToLowerInvariant());
+        content.Add(imageContent, "Image", Path.GetFileName(imageFile));
+
+        // Add ground truth file
+        var textBytes = await File.ReadAllBytesAsync(textFile);
+        var textContent = new ByteArrayContent(textBytes);
+        textContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain");
+        content.Add(textContent, "GroundTruth", Path.GetFileName(textFile));
+
+        // Add other parameters
+        content.Add(new StringContent(language), "Language");
+        content.Add(new StringContent(AutoCrop.ToString().ToLowerInvariant()), "Autocrop");
+
+        var response = await HttpClient.PostAsync($"{ApiBaseUrl}{EvaluationEndpoint}", content);
+        
+        if (response.IsSuccessStatusCode)
+        {
+            var evaluationResult = await response.Content.ReadFromJsonAsync<EvaluationResultResponse>();
+            if (evaluationResult != null)
+            {
+                PopulateResultFromResponse(result, evaluationResult, language);
+            }
+            else
+            {
+                result.IsSuccessful = false;
+                result.ErrorMessage = "Failed to parse response";
+            }
+        }
+        else
+        {
+            var errorContent = await response.Content.ReadAsStringAsync();
+            result.IsSuccessful = false;
+            result.ErrorMessage = $"API error: {response.StatusCode} - {errorContent}";
+        }
+        
+        // Rate limiting: Wait before next request to avoid hitting RPM limits
+        await Task.Delay(DelayBetweenRequestsMs);
+
+        return result;
+    }
+
+    static async Task<EvaluationRunResult> ProcessDualPageEvaluation(
+        EvaluationRunResult result, 
+        string page1File, 
+        string page2File, 
+        string textFile, 
+        string language)
+    {
+        using var content = new MultipartFormDataContent();
+        
+        // Add page 1 image
+        var page1Bytes = await File.ReadAllBytesAsync(page1File);
+        var page1Content = new ByteArrayContent(page1Bytes);
+        page1Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/" + Path.GetExtension(page1File).TrimStart('.').ToLowerInvariant());
+        content.Add(page1Content, "Page1", Path.GetFileName(page1File));
+
+        // Add page 2 image
+        var page2Bytes = await File.ReadAllBytesAsync(page2File);
+        var page2Content = new ByteArrayContent(page2Bytes);
+        page2Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/" + Path.GetExtension(page2File).TrimStart('.').ToLowerInvariant());
+        content.Add(page2Content, "Page2", Path.GetFileName(page2File));
+
+        // Add ground truth file
+        var textBytes = await File.ReadAllBytesAsync(textFile);
+        var textContent = new ByteArrayContent(textBytes);
+        textContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain");
+        content.Add(textContent, "GroundTruth", Path.GetFileName(textFile));
+
+        // Add other parameters
+        content.Add(new StringContent(language), "Language");
+        content.Add(new StringContent(AutoCrop.ToString().ToLowerInvariant()), "Autocrop");
+
+        var response = await HttpClient.PostAsync($"{ApiBaseUrl}{DualEvaluationEndpoint}", content);
+        
+        if (response.IsSuccessStatusCode)
+        {
+            var evaluationResult = await response.Content.ReadFromJsonAsync<EvaluationResultResponse>();
+            if (evaluationResult != null)
+            {
+                PopulateResultFromResponse(result, evaluationResult, language);
+                result.IsMultiPage = true;
+            }
+            else
+            {
+                result.IsSuccessful = false;
+                result.ErrorMessage = "Failed to parse response";
+            }
+        }
+        else
+        {
+            var errorContent = await response.Content.ReadAsStringAsync();
+            result.IsSuccessful = false;
+            result.ErrorMessage = $"API error: {response.StatusCode} - {errorContent}";
+        }
+        
+        // Rate limiting: Wait before next request to avoid hitting RPM limits
+        await Task.Delay(DelayBetweenRequestsMs);
+
+        return result;
+    }
+
+    static void PopulateResultFromResponse(EvaluationRunResult result, EvaluationResultResponse evaluationResult, string language)
+    {
+        result.IsSuccessful = evaluationResult.IsSuccessful;
+        result.ErrorMessage = evaluationResult.ErrorMessage;
+        result.NormalizedScore = evaluationResult.Metrics.NormalizedScore;
+        result.ExactMatchScore = evaluationResult.Metrics.ExactMatchScore;
+        result.PositionalAccuracy = evaluationResult.Metrics.PositionalAccuracy;
+        result.LevenshteinDistance = evaluationResult.Metrics.LevenshteinDistance;
+        result.LongestCommonSubsequence = evaluationResult.Metrics.LongestCommonSubsequence;
+        result.ProcessingTimeSeconds = evaluationResult.ProcessingTimeSeconds;
+        result.GroundTruthMoves = evaluationResult.MoveCounts.GroundTruthMoves;
+        result.ExtractedMoves = evaluationResult.MoveCounts.ExtractedMoves;
+        result.ImageFileName = evaluationResult.ImageFileName;
+        result.GroundTruthFileName = evaluationResult.GroundTruthFileName;
+        result.GeneratedPgn = evaluationResult.GeneratedPgn;
+        result.GroundTruthMoveList = evaluationResult.Moves.GroundTruth;
+        result.ExtractedMoveList = evaluationResult.Moves.Extracted;
+        result.DetectedLanguage = evaluationResult.DetectedLanguage ?? language;
+        
+        // Normalized move metrics
+        if (evaluationResult.NormalizedMetrics != null)
+        {
+            result.NormalizedNormalizedScore = evaluationResult.NormalizedMetrics.NormalizedScore;
+            result.NormalizedExactMatchScore = evaluationResult.NormalizedMetrics.ExactMatchScore;
+            result.NormalizedPositionalAccuracy = evaluationResult.NormalizedMetrics.PositionalAccuracy;
+            result.NormalizedLevenshteinDistance = evaluationResult.NormalizedMetrics.LevenshteinDistance;
+            result.NormalizedLongestCommonSubsequence = evaluationResult.NormalizedMetrics.LongestCommonSubsequence;
+            result.NormalizedMoves = evaluationResult.MoveCounts.NormalizedMoves;
+            result.NormalizedMoveList = evaluationResult.Moves.Normalized;
+        }
     }
 
     static async Task GenerateHtmlReport(List<EvaluationRunResult> results, string outputPath)
@@ -613,6 +753,7 @@ class EvaluationRunResult
     public string GameName { get; set; } = string.Empty;
     public string GameFolder { get; set; } = string.Empty;
     public bool IsSuccessful { get; set; }
+    public bool IsMultiPage { get; set; }
     public string? ErrorMessage { get; set; }
     public double NormalizedScore { get; set; }
     public double ExactMatchScore { get; set; }

@@ -49,5 +49,5 @@ public interface IGameManagementService
     /// Get an image for a game if owned by the user.
     /// Falls back to original image if requested variant is unavailable.
     /// </summary>
-    Task<GameImageContentResult?> GetGameImageAsync(Guid gameId, string userId, string variant = "processed");
+    Task<GameImageContentResult?> GetGameImageAsync(Guid gameId, string userId, string variant = "processed", int? pageNumber = null);
 }

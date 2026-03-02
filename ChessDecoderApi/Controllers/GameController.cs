@@ -64,6 +64,129 @@ public class GameController : ControllerBase
     }
 
     /// <summary>
+    /// Upload and process two chess scoresheet pages as one game.
+    /// </summary>
+    [HttpPost("upload-dual")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> UploadDualGame([FromForm] DualGameUploadRequest request)
+    {
+        try
+        {
+            var response = await _gameProcessingService.ProcessDualGameUploadAsync(request);
+            return Ok(response);
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Invalid operation during dual game upload for user {UserId}", request.UserId);
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error processing dual game upload for user {UserId}", request.UserId);
+            return StatusCode(500, new { message = "Failed to process dual image upload" });
+        }
+    }
+
+    /// <summary>
+    /// Add a continuation page to an existing game.
+    /// </summary>
+    [HttpPost("{gameId}/continuation")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> UploadContinuation(Guid gameId, [FromForm] ContinuationUploadRequest request)
+    {
+        try
+        {
+            var response = await _gameProcessingService.AddContinuationAsync(gameId, request);
+            return Ok(response);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Invalid continuation upload for game {GameId}", gameId);
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error uploading continuation for game {GameId}", gameId);
+            return StatusCode(500, new { message = "Failed to upload continuation image" });
+        }
+    }
+
+    /// <summary>
+    /// Get page metadata for a game.
+    /// </summary>
+    [HttpGet("{gameId}/pages")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> GetGamePages(Guid gameId, [FromQuery] string userId)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                return BadRequest(new { message = "UserId is required" });
+            }
+
+            var response = await _gameProcessingService.GetGamePagesAsync(gameId, userId);
+            return Ok(response);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving pages for game {GameId}", gameId);
+            return StatusCode(500, new { message = "Failed to retrieve game pages" });
+        }
+    }
+
+    /// <summary>
+    /// Delete continuation page from a game and restore page 1 PGN.
+    /// </summary>
+    [HttpDelete("{gameId}/continuation")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> DeleteContinuation(Guid gameId, [FromQuery] string userId)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                return BadRequest(new { message = "UserId is required" });
+            }
+
+            var response = await _gameProcessingService.DeleteContinuationAsync(gameId, userId);
+            return Ok(response);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting continuation for game {GameId}", gameId);
+            return StatusCode(500, new { message = "Failed to delete continuation" });
+        }
+    }
+
+    /// <summary>
     /// Get a chess game by ID
     /// </summary>
     [HttpGet("{gameId}")]
@@ -247,7 +370,7 @@ public class GameController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-    public async Task<IActionResult> GetGameImage(Guid gameId, [FromQuery] string userId, [FromQuery] string variant = "processed")
+    public async Task<IActionResult> GetGameImage(Guid gameId, [FromQuery] string userId, [FromQuery] string variant = "processed", [FromQuery] int? pageNumber = null)
     {
         try
         {
@@ -256,7 +379,7 @@ public class GameController : ControllerBase
                 return BadRequest(new { message = "UserId is required" });
             }
 
-            var imageResult = await _gameManagementService.GetGameImageAsync(gameId, userId, variant);
+            var imageResult = await _gameManagementService.GetGameImageAsync(gameId, userId, variant, pageNumber);
             if (imageResult == null)
             {
                 return NotFound(new { message = "Game image not found or access denied" });

@@ -21,6 +21,7 @@ public class GameDetailsResponse
     public DateTime? GameDate { get; set; }
     public string? Round { get; set; }
     public string? Result { get; set; }
+    public bool HasContinuation { get; set; }
     public bool ProcessingCompleted { get; set; }
     public DateTime? LastEditedAt { get; set; }
     public int EditCount { get; set; }
@@ -45,4 +46,8 @@ public class GameImageDto
     public bool IsStoredInCloud { get; set; }
     public DateTime UploadedAt { get; set; }
     public string Variant { get; set; } = "original";
+    public int PageNumber { get; set; } = 1;
+    public int StartingMoveNumber { get; set; }
+    public int EndingMoveNumber { get; set; }
+    public Guid? ContinuationImageId { get; set; }
 }

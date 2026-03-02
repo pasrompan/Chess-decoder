@@ -25,22 +25,8 @@ public class FirestoreGameImageRepository : IGameImageRepository
         var snapshot = await docRef.GetSnapshotAsync();
         
         if (!snapshot.Exists) return null;
-        
-        var image = snapshot.ConvertTo<GameImage>();
-        image.Id = id;
-        if (string.IsNullOrWhiteSpace(image.Variant))
-        {
-            image.Variant = "original";
-        }
-        
-        // Manually parse chessGameId from string to Guid
-        if (snapshot.TryGetValue<string>("chessGameId", out var chessGameIdStr) &&
-            Guid.TryParse(chessGameIdStr, out var chessGameId))
-        {
-            image.ChessGameId = chessGameId;
-        }
-        
-        return image;
+
+        return MapDocumentToImage(snapshot);
     }
 
     public async Task<List<GameImage>> GetByChessGameIdAsync(Guid chessGameId)
@@ -49,25 +35,10 @@ public class FirestoreGameImageRepository : IGameImageRepository
             .WhereEqualTo("chessGameId", chessGameId.ToString());
         
         var snapshot = await query.GetSnapshotAsync();
-        
-        return snapshot.Documents.Select(doc =>
-        {
-            var image = doc.ConvertTo<GameImage>();
-            image.Id = Guid.Parse(doc.Id);
-            if (string.IsNullOrWhiteSpace(image.Variant))
-            {
-                image.Variant = "original";
-            }
-            
-            // Manually parse chessGameId from string to Guid
-            if (doc.TryGetValue<string>("chessGameId", out var chessGameIdStr) &&
-                Guid.TryParse(chessGameIdStr, out var parsedGameId))
-            {
-                image.ChessGameId = parsedGameId;
-            }
-            
-            return image;
-        }).ToList();
+
+        return snapshot.Documents
+            .Select(MapDocumentToImage)
+            .ToList();
     }
 
     public async Task<GameImage> CreateAsync(GameImage image)
@@ -92,7 +63,11 @@ public class FirestoreGameImageRepository : IGameImageRepository
             { "CloudStorageUrl", image.CloudStorageUrl ?? "" },
             { "CloudStorageObjectName", image.CloudStorageObjectName ?? "" },
             { "IsStoredInCloud", image.IsStoredInCloud },
-            { "Variant", image.Variant }
+            { "Variant", image.Variant },
+            { "PageNumber", image.PageNumber },
+            { "StartingMoveNumber", image.StartingMoveNumber },
+            { "EndingMoveNumber", image.EndingMoveNumber },
+            { "ContinuationImageId", image.ContinuationImageId?.ToString() ?? string.Empty }
         };
         
         var docRef = _firestoreDb.Collection(IMAGES_COLLECTION).Document(image.Id.ToString());
@@ -115,7 +90,11 @@ public class FirestoreGameImageRepository : IGameImageRepository
             { "CloudStorageUrl", image.CloudStorageUrl ?? "" },
             { "CloudStorageObjectName", image.CloudStorageObjectName ?? "" },
             { "IsStoredInCloud", image.IsStoredInCloud },
-            { "Variant", image.Variant }
+            { "Variant", image.Variant },
+            { "PageNumber", image.PageNumber },
+            { "StartingMoveNumber", image.StartingMoveNumber },
+            { "EndingMoveNumber", image.EndingMoveNumber },
+            { "ContinuationImageId", image.ContinuationImageId?.ToString() ?? string.Empty }
         };
         
         var docRef = _firestoreDb.Collection(IMAGES_COLLECTION).Document(image.Id.ToString());
@@ -167,5 +146,111 @@ public class FirestoreGameImageRepository : IGameImageRepository
         var docRef = _firestoreDb.Collection(IMAGES_COLLECTION).Document(id.ToString());
         var snapshot = await docRef.GetSnapshotAsync();
         return snapshot.Exists;
+    }
+
+    private static GameImage MapDocumentToImage(DocumentSnapshot doc)
+    {
+        Guid.TryParse(doc.Id, out var parsedImageId);
+
+        var image = new GameImage
+        {
+            Id = parsedImageId,
+            ChessGameId = ReadGuid(doc, "chessGameId") ?? Guid.Empty,
+            FileName = ReadString(doc, "FileName") ?? string.Empty,
+            FilePath = ReadString(doc, "FilePath") ?? string.Empty,
+            FileType = ReadString(doc, "FileType"),
+            FileSizeBytes = ReadInt64(doc, "FileSizeBytes"),
+            UploadedAt = ReadDateTime(doc, "UploadedAt"),
+            CloudStorageUrl = ReadString(doc, "CloudStorageUrl"),
+            CloudStorageObjectName = ReadString(doc, "CloudStorageObjectName"),
+            IsStoredInCloud = ReadBoolean(doc, "IsStoredInCloud"),
+            Variant = ReadString(doc, "Variant") ?? "original",
+            PageNumber = Math.Max(1, ReadInt32(doc, "PageNumber", 1)),
+            StartingMoveNumber = ReadInt32(doc, "StartingMoveNumber"),
+            EndingMoveNumber = ReadInt32(doc, "EndingMoveNumber"),
+            ContinuationImageId = ReadGuid(doc, "ContinuationImageId")
+        };
+
+        return image;
+    }
+
+    private static string? ReadString(DocumentSnapshot doc, string fieldName)
+    {
+        if (doc.TryGetValue<string>(fieldName, out var value))
+        {
+            return string.IsNullOrWhiteSpace(value) ? null : value;
+        }
+
+        return null;
+    }
+
+    private static bool ReadBoolean(DocumentSnapshot doc, string fieldName, bool fallback = false)
+    {
+        if (doc.TryGetValue<bool>(fieldName, out var value))
+        {
+            return value;
+        }
+
+        return fallback;
+    }
+
+    private static int ReadInt32(DocumentSnapshot doc, string fieldName, int fallback = 0)
+    {
+        if (doc.TryGetValue<int>(fieldName, out var intValue))
+        {
+            return intValue;
+        }
+
+        if (doc.TryGetValue<long>(fieldName, out var longValue))
+        {
+            return (int)longValue;
+        }
+
+        return fallback;
+    }
+
+    private static long ReadInt64(DocumentSnapshot doc, string fieldName, long fallback = 0L)
+    {
+        if (doc.TryGetValue<long>(fieldName, out var longValue))
+        {
+            return longValue;
+        }
+
+        if (doc.TryGetValue<int>(fieldName, out var intValue))
+        {
+            return intValue;
+        }
+
+        return fallback;
+    }
+
+    private static DateTime ReadDateTime(DocumentSnapshot doc, string fieldName)
+    {
+        if (doc.TryGetValue<DateTime>(fieldName, out var value))
+        {
+            return value;
+        }
+
+        if (doc.TryGetValue<Timestamp>(fieldName, out var timestamp))
+        {
+            return timestamp.ToDateTime();
+        }
+
+        return DateTime.UtcNow;
+    }
+
+    private static Guid? ReadGuid(DocumentSnapshot doc, string fieldName)
+    {
+        if (!doc.TryGetValue<string>(fieldName, out var value))
+        {
+            return null;
+        }
+
+        if (Guid.TryParse(value, out var guid))
+        {
+            return guid;
+        }
+
+        return null;
     }
 }

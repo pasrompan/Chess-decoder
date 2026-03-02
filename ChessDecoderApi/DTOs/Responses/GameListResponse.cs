@@ -18,7 +18,7 @@ public class GameSummaryDto
     public string Title { get; set; } = string.Empty;
     public DateTime ProcessedAt { get; set; }
     public bool IsValid { get; set; }
+    public bool HasContinuation { get; set; }
     public int TotalMoves { get; set; }
     public string? Opening { get; set; }
 }
-
