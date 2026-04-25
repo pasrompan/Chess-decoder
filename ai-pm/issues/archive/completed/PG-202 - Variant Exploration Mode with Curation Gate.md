@@ -1,6 +1,6 @@
 ---
 id: PG-202
-status: active
+status: completed
 priority_score: 3.0000
 effort: 2
 impact: 6

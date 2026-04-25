@@ -6,7 +6,7 @@ effort: 3
 impact: 8
 dependencies: []
 created_date: "2026-04-25"
-updated_date: "2026-04-25"
+updated_date: 2026-04-25
 plan_type: agent_plan
 executable: false
 ---
