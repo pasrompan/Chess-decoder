@@ -1,6 +1,6 @@
 ---
 id: PG-203
-status: active
+status: completed
 priority_score: .7000
 effort: 5
 impact: 6
@@ -116,16 +116,17 @@ The system should:
 **Deliverables:**
 - Working with-variants export, behind a clearly labeled button.
 
-### Phase 6 (optional, can be its own follow-up): Backend persistence
+### Phase 6 (delivered): Backend persistence
 
-**Agent should:**
-- Extend the backend game record to store `variants` JSON next to the curated PGN.
-- Sync from frontend on save; load on game open.
-- If effort spikes, file as a separate ticket and ship Phases 1–5 frontend-only.
-
-**Deliverables (if included):**
-- Backend column / field.
-- Sync paths.
+**Implemented:**
+- New nullable `VariantsJson` column on `ChessGames` (SQLite migration `20260425120000_AddChessGameVariantsJson` + `[FirestoreProperty]` so Firestore picks it up automatically); model snapshot updated.
+- `GameDetailsResponse.VariantsJson` returned from `GET /api/Game/{gameId}` via `MapToGameDetailsResponse`.
+- Dedicated endpoint `PUT /api/Game/{gameId}/variants?userId=...` with body `{ variantsJson: string | null }`. Mirrors the auth pattern of `/pgn` and `/complete` (ownership checked against `userId`; mismatched / missing game returns 404). Whitespace payloads clear the field; idempotent against unchanged JSON.
+- Frontend `imageService.updateGameVariants()` + `useVariants({ serverVariantsJson, onPersist })` reconciliation:
+  - localStorage hydrates instantly so the panel is never empty offline.
+  - When the server payload arrives, non-empty server state wins; empty server state preserves any local-only data which then gets PUT on the next change.
+  - Saves debounced (default 800ms) and skipped when payload is byte-identical to the last successful PUT; pending save is flushed on unmount.
+- Backend tests: `GameControllerTests` (5 new) + `GameManagementServiceTests` (5 new). Frontend test: `tests/unit/updateGameVariants.test.ts` (5 cases). All 240 backend / 40 frontend tests pass.
 
 ## Technical Specifications
 

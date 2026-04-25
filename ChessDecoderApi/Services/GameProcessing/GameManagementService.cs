@@ -78,6 +78,7 @@ public class GameManagementService : IGameManagementService
             ProcessingCompleted = game.ProcessingCompleted,
             LastEditedAt = game.LastEditedAt,
             EditCount = game.EditCount,
+            VariantsJson = game.VariantsJson,
             Statistics = statistics != null ? new GameStatisticsDto
             {
                 TotalMoves = statistics.TotalMoves,
@@ -384,6 +385,64 @@ public class GameManagementService : IGameManagementService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error marking game {GameId} as completed", gameId);
+            throw;
+        }
+    }
+
+    public async Task<GameDetailsResponse?> UpdateVariantsAsync(Guid gameId, string userId, string? variantsJson)
+    {
+        try
+        {
+            var gameRepo = await _repositoryFactory.CreateChessGameRepositoryAsync();
+            var imageRepo = await _repositoryFactory.CreateGameImageRepositoryAsync();
+            var statsRepo = await _repositoryFactory.CreateGameStatisticsRepositoryAsync();
+
+            var game = await gameRepo.GetByIdAsync(gameId);
+
+            if (game == null)
+            {
+                _logger.LogWarning("Game {GameId} not found for variants update", gameId);
+                return null;
+            }
+
+            // Verify the user owns this game (matches the pattern used by
+            // UpdatePgnContentAsync / MarkProcessingCompleteAsync).
+            if (game.UserId != userId)
+            {
+                _logger.LogWarning("User {UserId} does not own game {GameId} (variants update rejected)", userId, gameId);
+                return null;
+            }
+
+            // Normalize: empty/whitespace clears the field so we don't store
+            // meaningless payloads. Otherwise keep the JSON exactly as sent —
+            // the schema lives on the frontend and the API is intentionally opaque.
+            var normalized = string.IsNullOrWhiteSpace(variantsJson) ? null : variantsJson.Trim();
+
+            // Idempotent: skip the write when nothing actually changed. This avoids
+            // burning Firestore writes / EF round-trips for repeat saves with the
+            // same payload (common when the frontend debounces conservatively).
+            if (game.VariantsJson != normalized)
+            {
+                game.VariantsJson = normalized;
+                await gameRepo.UpdateAsync(game);
+                _logger.LogInformation(
+                    "Variants updated for game {GameId} (cleared: {Cleared}, length: {Length})",
+                    gameId,
+                    normalized == null,
+                    normalized?.Length ?? 0);
+            }
+            else
+            {
+                _logger.LogDebug("Variants payload for game {GameId} unchanged - skipping write", gameId);
+            }
+
+            var images = await imageRepo.GetByChessGameIdAsync(gameId);
+            var statistics = await statsRepo.GetByChessGameIdAsync(gameId);
+            return MapToGameDetailsResponse(game, images, statistics);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating variants for game {GameId}", gameId);
             throw;
         }
     }
