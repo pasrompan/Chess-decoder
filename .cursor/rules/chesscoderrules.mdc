@@ -7,7 +7,12 @@ alwaysApply: true
 
 When asked to create a new task or issue, the agent MUST:
 
-1. **Find the highest PG number**:
+1. **Prepare both repositories before creating the task**:
+   - In `Chess-decoder`, checkout `main` and pull the latest changes
+   - In `chess-scribe-convert`, checkout `main` and pull the latest changes
+   - Create a new branch in both repositories named after the task (use a consistent slug format such as `PG-XXX-short-task-name`)
+
+2. **Find the highest PG number**:
    - Search for all PG-XXX files in:
      - `ai-pm/issues/active/`
      - `ai-pm/issues/archive/completed/`
@@ -15,16 +20,16 @@ When asked to create a new task or issue, the agent MUST:
    - Extract the highest number (e.g., if PG-179 exists, use PG-180)
    - Use the next sequential number for the new issue
 
-2. **Use the template**:
+3. **Use the template**:
    - Copy `ai-pm/issues/templates/issue-template.md` as the base structure
    - Fill in all required sections following the agent plan format
    - Ensure frontmatter includes: `id`, `status: active`, `priority_score: 0.0`, `effort: 0`, `impact: 0`, `dependencies: []`, `created_date`, `updated_date`, `plan_type: agent_plan`, `executable: false`
 
-3. **Position the file**:
+4. **Position the file**:
    - Save the new issue file in `ai-pm/issues/active/` directory
    - Use naming format: `PG-XXX - [Issue Title].md`
 
-4. **Run prioritization**:
+5. **Run prioritization**:
    - After creating the issue file, ALWAYS run: `./ai-pm/scripts/update-prioritization.sh`
    - This will calculate the priority score and update the prioritized issues list
    - Update the issue file's `priority_score` and `updated_date` in frontmatter if needed
