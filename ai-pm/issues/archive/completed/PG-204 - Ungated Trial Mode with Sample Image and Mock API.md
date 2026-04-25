@@ -1,6 +1,6 @@
 ---
 id: PG-204
-status: active
+status: completed
 priority_score: 2.6666
 effort: 3
 impact: 8
@@ -21,12 +21,12 @@ Today the landing page (`/`) is wrapped in `ProtectedRoute`, so any unauthentica
 
 Add an **ungated trial experience** that:
 1. Lets a first-time visitor see the **whole flow** (image → OCR → editable PGN → board) **without signing in**.
-2. Auto-loads one of the existing **sample chess scoresheet images** (`/sample-images/...`).
+2. Auto-loads the bundled **sample chess scoresheet image** (`/sample-images/English/Game2.png`).
 3. Toggles the **mock API endpoint** (`/api/mock/upload`) for the trial session so we don’t spend OCR credits or hit the database on anonymous traffic.
 4. Lets the user explore the result (navigate moves, play through, see PGN), but **gates uploading their own file, saving, exporting to projects, marking complete** — those CTAs route to `/signin` with a return path so they continue seamlessly after auth.
 
 The plumbing is already partially in place:
-- Sample images live under `chess-scribe-convert/public/sample-images/` and are loaded by `handleSampleImage` in `ImageUpload.tsx`.
+- The single sample image lives at `chess-scribe-convert/public/sample-images/English/Game2.png` and is loaded by `handleSampleImage` in `ImageUpload.tsx`.
 - The mock API switch already exists: `useMockApi()` in `src/services/imageService.ts` reads `localStorage.chessDecoder_useMockApi` (priority) or `VITE_USE_MOCK_API`. Mock endpoint is `/api/mock/upload`.
 - Auth state is in `AuthContext` (`isAuthenticated`).
 
@@ -35,7 +35,7 @@ The plumbing is already partially in place:
 The system should:
 1. Add a public route `/try` (and link to it from `/signin`) that renders a **TrialMode** page wrapping the existing `Index` flow without `ProtectedRoute`.
 2. On entering `/try`, set `localStorage.chessDecoder_useMockApi = 'true'` for the duration of the trial, and **clear** it on exit / sign-in / leave.
-3. Auto-load a sample image immediately (reuse `handleSampleImage` logic, lifted into a shared util) so the user lands on a populated screen and can scrub through the experience.
+3. Auto-load the bundled sample image immediately (reuse `handleSampleImage` logic, lifted into a shared util) so the user lands on a populated screen and can scrub through the experience.
 4. Keep all read-only / in-page interactions enabled (navigate moves, auto-play, board, PGN preview, copy to clipboard).
 5. Gate write/persistent actions behind sign-in:
    - Custom file upload
@@ -79,9 +79,9 @@ The system should:
 ### Phase 3: Auto-load sample image
 
 **Agent should:**
-- Extract `handleSampleImage` selection + loading logic from `ImageUpload.tsx` into a shared util `src/utils/sampleImage.ts` (returns a `File` + display name). Keep the existing `ImageUpload` button working through the util.
-- In `Trial.tsx`, on mount, auto-load a sample image and feed it into the existing `ImageUpload` → `handleImageProcessed` pipeline so the trial page starts already mid-experience.
-- Add a small **“Try a different sample”** button in trial mode to rotate samples.
+- Extract `handleSampleImage` loading logic from `ImageUpload.tsx` into a shared util `src/utils/sampleImage.ts` (returns a `File` + display name). Keep the existing `ImageUpload` button working through the util.
+- Ship a **single, deterministic** sample image (`/sample-images/English/Game2.png`) — no randomization or "swap sample" affordance. Every visitor sees the same demo.
+- In `Trial.tsx`, on mount, auto-load that sample and feed it into the existing `ImageUpload` → `handleImageProcessed` pipeline so the trial page starts already mid-experience.
 
 **Key Integration Points:**
 - `chess-scribe-convert/src/components/ImageUpload.tsx` (`handleSampleImage`, ~line 376)
@@ -118,7 +118,7 @@ The system should:
 **Agent should:**
 - If a telemetry / analytics layer exists (check `src/`), add events:
   - `trial_started`
-  - `trial_sample_swapped`
+  - `trial_sample_loaded`
   - `trial_gate_hit` (with `action`)
   - `trial_signed_in` (when user converts from `/try`)
 - If no analytics exists, add structured `console.info` markers and log it as a follow-up enhancement.
@@ -221,14 +221,14 @@ chess-scribe-convert/tests/e2e/trial-mode.spec.ts          (new)
 ### Frontend
 
 - Existing `useMockApi` runtime override in `imageService.ts`.
-- Existing sample image set under `public/sample-images/`.
+- Existing sample scoresheet at `public/sample-images/English/Game2.png` (the single bundled sample).
 - Existing `AuthContext`, `ProtectedRoute`, `SignIn.tsx`.
 
 ## Impact Assessment
 
 **Impact Level**: High
 
-**Impact Description**: Directly attacks the activation funnel. Lets first-time visitors understand the product before being asked to sign in, which is the single biggest blocker to adoption today. Reuses already-built mock endpoint and sample images, so risk is low.
+**Impact Description**: Directly attacks the activation funnel. Lets first-time visitors understand the product before being asked to sign in, which is the single biggest blocker to adoption today. Reuses already-built mock endpoint and the bundled sample image, so risk is low.
 
 ## Effort Estimation
 
