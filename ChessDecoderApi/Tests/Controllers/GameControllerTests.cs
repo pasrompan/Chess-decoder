@@ -382,6 +382,114 @@ public class GameControllerTests
     }
 
     [Fact]
+    public async Task UpdateGameVariants_Success_ReturnsOkWithUpdatedGame()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+        var userId = "test-user";
+        var payload = "{\"nodes\":{},\"rootsByPly\":{}}";
+        var request = new UpdateVariantsRequest { VariantsJson = payload };
+        var expectedResponse = new GameDetailsResponse
+        {
+            GameId = gameId,
+            UserId = userId,
+            VariantsJson = payload
+        };
+
+        _gameManagementServiceMock
+            .Setup(x => x.UpdateVariantsAsync(gameId, userId, payload))
+            .ReturnsAsync(expectedResponse);
+
+        // Act
+        var result = await _controller.UpdateGameVariants(gameId, request, userId);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        var response = Assert.IsType<GameDetailsResponse>(okResult.Value);
+        Assert.Equal(payload, response.VariantsJson);
+    }
+
+    [Fact]
+    public async Task UpdateGameVariants_AllowsNullPayloadToClear()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+        var userId = "test-user";
+        var request = new UpdateVariantsRequest { VariantsJson = null };
+        var expectedResponse = new GameDetailsResponse
+        {
+            GameId = gameId,
+            UserId = userId,
+            VariantsJson = null
+        };
+
+        _gameManagementServiceMock
+            .Setup(x => x.UpdateVariantsAsync(gameId, userId, null))
+            .ReturnsAsync(expectedResponse);
+
+        // Act
+        var result = await _controller.UpdateGameVariants(gameId, request, userId);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        var response = Assert.IsType<GameDetailsResponse>(okResult.Value);
+        Assert.Null(response.VariantsJson);
+    }
+
+    [Fact]
+    public async Task UpdateGameVariants_MissingUserId_ReturnsBadRequest()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+        var request = new UpdateVariantsRequest { VariantsJson = "{}" };
+
+        // Act
+        var result = await _controller.UpdateGameVariants(gameId, request, "");
+
+        // Assert
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task UpdateGameVariants_GameNotFound_ReturnsNotFound()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+        var userId = "test-user";
+        var request = new UpdateVariantsRequest { VariantsJson = "{}" };
+
+        _gameManagementServiceMock
+            .Setup(x => x.UpdateVariantsAsync(gameId, userId, request.VariantsJson))
+            .ReturnsAsync((GameDetailsResponse?)null);
+
+        // Act
+        var result = await _controller.UpdateGameVariants(gameId, request, userId);
+
+        // Assert
+        Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task UpdateGameVariants_ServiceThrows_ReturnsInternalServerError()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+        var userId = "test-user";
+        var request = new UpdateVariantsRequest { VariantsJson = "{}" };
+
+        _gameManagementServiceMock
+            .Setup(x => x.UpdateVariantsAsync(gameId, userId, request.VariantsJson))
+            .ThrowsAsync(new Exception("boom"));
+
+        // Act
+        var result = await _controller.UpdateGameVariants(gameId, request, userId);
+
+        // Assert
+        var statusCodeResult = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(500, statusCodeResult.StatusCode);
+    }
+
+    [Fact]
     public async Task DeleteGame_Success_ReturnsOk()
     {
         // Arrange

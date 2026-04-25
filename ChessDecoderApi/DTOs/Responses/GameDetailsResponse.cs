@@ -25,6 +25,13 @@ public class GameDetailsResponse
     public bool ProcessingCompleted { get; set; }
     public DateTime? LastEditedAt { get; set; }
     public int EditCount { get; set; }
+
+    /// <summary>
+    /// Serialized variant tree (see <c>GameVariants</c> on the frontend).
+    /// <c>null</c> when no variants have been captured.
+    /// </summary>
+    public string? VariantsJson { get; set; }
+
     public GameStatisticsDto? Statistics { get; set; }
     public List<GameImageDto> Images { get; set; } = new();
 }

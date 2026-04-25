@@ -46,6 +46,18 @@ public interface IGameManagementService
     Task<GameDetailsResponse?> MarkProcessingCompleteAsync(Guid gameId, string userId);
 
     /// <summary>
+    /// Persist (or clear) the variant tree captured in Explore mode for a game.
+    /// </summary>
+    /// <param name="gameId">Target game id.</param>
+    /// <param name="userId">Owner of the game (mismatched ownership returns null).</param>
+    /// <param name="variantsJson">
+    /// Serialized variant tree (frontend <c>GameVariants</c> JSON). Pass
+    /// <c>null</c> or whitespace to clear all variants.
+    /// </param>
+    /// <returns>The refreshed <see cref="GameDetailsResponse"/>, or null if the game does not exist / is not owned by <paramref name="userId"/>.</returns>
+    Task<GameDetailsResponse?> UpdateVariantsAsync(Guid gameId, string userId, string? variantsJson);
+
+    /// <summary>
     /// Get an image for a game if owned by the user.
     /// Falls back to original image if requested variant is unavailable.
     /// </summary>

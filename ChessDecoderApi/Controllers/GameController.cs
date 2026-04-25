@@ -328,6 +328,50 @@ public class GameController : ControllerBase
     }
 
     /// <summary>
+    /// Update (or clear) the variant tree captured in Explore mode.
+    /// </summary>
+    /// <remarks>
+    /// Body is an opaque JSON blob (see <see cref="UpdateVariantsRequest.VariantsJson"/>).
+    /// Pass <c>null</c> / empty to clear all variants. Verifies game ownership
+    /// via the <c>userId</c> query parameter, mirroring <c>PUT /pgn</c> and
+    /// <c>PUT /complete</c>.
+    /// </remarks>
+    [HttpPut("{gameId}/variants")]
+    [ProducesResponseType(typeof(GameDetailsResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> UpdateGameVariants(Guid gameId, [FromBody] UpdateVariantsRequest request, [FromQuery] string userId)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                return BadRequest(new { message = "UserId is required" });
+            }
+
+            if (request == null)
+            {
+                return BadRequest(new { message = "Request body is required" });
+            }
+
+            var result = await _gameManagementService.UpdateVariantsAsync(gameId, userId, request.VariantsJson);
+
+            if (result == null)
+            {
+                return NotFound(new { message = "Game not found or access denied" });
+            }
+
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating variants for game {GameId}", gameId);
+            return StatusCode(500, new { message = "Failed to update variants" });
+        }
+    }
+
+    /// <summary>
     /// Mark a game's processing as completed (user exported to Lichess/Chess.com)
     /// </summary>
     [HttpPut("{gameId}/complete")]

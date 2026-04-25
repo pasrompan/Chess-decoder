@@ -358,6 +358,102 @@ this is [broken] notation";
     }
 
     [Fact]
+    public async Task UpdateVariantsAsync_StoresPayloadAndReturnsRefreshedGame()
+    {
+        // Arrange
+        var game = TestDataBuilder.CreateChessGame();
+        game.VariantsJson = null;
+        var payload = "{\"nodes\":{\"abc\":{\"id\":\"abc\"}},\"rootsByPly\":{\"3\":[\"abc\"]}}";
+
+        _gameRepositoryMock.Setup(x => x.GetByIdAsync(game.Id)).ReturnsAsync(game);
+        _gameRepositoryMock.Setup(x => x.UpdateAsync(It.IsAny<ChessGame>())).ReturnsAsync((ChessGame g) => g);
+        _imageRepositoryMock.Setup(x => x.GetByChessGameIdAsync(game.Id)).ReturnsAsync(new List<GameImage>());
+        _statsRepositoryMock.Setup(x => x.GetByChessGameIdAsync(game.Id)).ReturnsAsync((GameStatistics?)null);
+
+        // Act
+        var result = await _service.UpdateVariantsAsync(game.Id, game.UserId, payload);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(payload, result!.VariantsJson);
+        _gameRepositoryMock.Verify(x => x.UpdateAsync(It.Is<ChessGame>(g => g.VariantsJson == payload)), Times.Once);
+    }
+
+    [Fact]
+    public async Task UpdateVariantsAsync_WhitespacePayload_ClearsField()
+    {
+        // Arrange
+        var game = TestDataBuilder.CreateChessGame();
+        game.VariantsJson = "{\"nodes\":{},\"rootsByPly\":{}}";
+
+        _gameRepositoryMock.Setup(x => x.GetByIdAsync(game.Id)).ReturnsAsync(game);
+        _gameRepositoryMock.Setup(x => x.UpdateAsync(It.IsAny<ChessGame>())).ReturnsAsync((ChessGame g) => g);
+        _imageRepositoryMock.Setup(x => x.GetByChessGameIdAsync(game.Id)).ReturnsAsync(new List<GameImage>());
+        _statsRepositoryMock.Setup(x => x.GetByChessGameIdAsync(game.Id)).ReturnsAsync((GameStatistics?)null);
+
+        // Act
+        var result = await _service.UpdateVariantsAsync(game.Id, game.UserId, "   ");
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Null(result!.VariantsJson);
+        _gameRepositoryMock.Verify(x => x.UpdateAsync(It.Is<ChessGame>(g => g.VariantsJson == null)), Times.Once);
+    }
+
+    [Fact]
+    public async Task UpdateVariantsAsync_UnchangedPayload_DoesNotWrite()
+    {
+        // Arrange — guards against burning Firestore writes / EF round-trips on
+        // repeated saves of an unchanged payload (e.g. debounced auto-save fires
+        // back-to-back without any user edit in between).
+        var existingPayload = "{\"nodes\":{},\"rootsByPly\":{}}";
+        var game = TestDataBuilder.CreateChessGame();
+        game.VariantsJson = existingPayload;
+
+        _gameRepositoryMock.Setup(x => x.GetByIdAsync(game.Id)).ReturnsAsync(game);
+        _imageRepositoryMock.Setup(x => x.GetByChessGameIdAsync(game.Id)).ReturnsAsync(new List<GameImage>());
+        _statsRepositoryMock.Setup(x => x.GetByChessGameIdAsync(game.Id)).ReturnsAsync((GameStatistics?)null);
+
+        // Act
+        var result = await _service.UpdateVariantsAsync(game.Id, game.UserId, existingPayload);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(existingPayload, result!.VariantsJson);
+        _gameRepositoryMock.Verify(x => x.UpdateAsync(It.IsAny<ChessGame>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateVariantsAsync_NonExistingGame_ReturnsNull()
+    {
+        // Arrange
+        var gameId = Guid.NewGuid();
+        _gameRepositoryMock.Setup(x => x.GetByIdAsync(gameId)).ReturnsAsync((ChessGame?)null);
+
+        // Act
+        var result = await _service.UpdateVariantsAsync(gameId, "user", "{}");
+
+        // Assert
+        Assert.Null(result);
+        _gameRepositoryMock.Verify(x => x.UpdateAsync(It.IsAny<ChessGame>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateVariantsAsync_WrongUser_ReturnsNullWithoutWriting()
+    {
+        // Arrange
+        var game = TestDataBuilder.CreateChessGame();
+        _gameRepositoryMock.Setup(x => x.GetByIdAsync(game.Id)).ReturnsAsync(game);
+
+        // Act
+        var result = await _service.UpdateVariantsAsync(game.Id, "wrong-user", "{}");
+
+        // Assert
+        Assert.Null(result);
+        _gameRepositoryMock.Verify(x => x.UpdateAsync(It.IsAny<ChessGame>()), Times.Never);
+    }
+
+    [Fact]
     public async Task GetGameByIdAsync_ImageVariantMissing_DefaultsToOriginal()
     {
         // Arrange

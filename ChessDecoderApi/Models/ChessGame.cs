@@ -62,6 +62,14 @@ public class ChessGame
 
     [FirestoreProperty]
     public string? PrimaryPagePgnContent { get; set; }
+
+    /// <summary>
+    /// Serialized variant tree (see <c>GameVariants</c> on the frontend) captured
+    /// in Explore mode. Stored as a JSON blob so the schema can evolve without
+    /// migrations. <c>null</c> when the user has not added any variants.
+    /// </summary>
+    [FirestoreProperty]
+    public string? VariantsJson { get; set; }
     
     // Processing completion tracking
     [FirestoreProperty]
