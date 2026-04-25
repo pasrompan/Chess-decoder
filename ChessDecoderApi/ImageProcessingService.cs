@@ -204,7 +204,7 @@ return the result in the following json format::
                     Encoding.UTF8,
                     "application/json");
 
-                var response = await client.PostAsync("https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent", content);
+                var response = await client.PostAsync("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent", content);
                 
                 if (!response.IsSuccessStatusCode)
                 {
@@ -657,7 +657,7 @@ return the result in the following json format::
                 Encoding.UTF8,
                 "application/json");
 
-            var response = await client.PostAsync("https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent", content);
+            var response = await client.PostAsync("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent", content);
             
             if (!response.IsSuccessStatusCode)
             {
@@ -806,7 +806,7 @@ return the result in the following json format::
                 Encoding.UTF8,
                 "application/json");
 
-            var response = await client.PostAsync("https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent", content);
+            var response = await client.PostAsync("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent", content);
             
             if (!response.IsSuccessStatusCode)
             {
